@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { TreeColumnParams } from '../geometry/branch.ts'
-import type { ColumnOrder } from '../geometry/column.ts'
-import { meetingRadius, type VaultCellParams } from '../geometry/vault.ts'
+import { columnMetrics, type ColumnOrder } from '../geometry/column.ts'
+import type { VaultCellParams } from '../geometry/vault.ts'
 import type { Parts } from './parts.ts'
 
 /**
@@ -48,10 +48,92 @@ export interface Strip {
 }
 
 export type TreeShape = Omit<TreeColumnParams, 'order' | 'levels' | 'branchLength'>
-export type VaultShape = Omit<
-  VaultCellParams,
-  'cell' | 'springHeight' | 'crownHeight' | 'skylight'
->
+
+/**
+ * The vault's shape, as ratios rather than as metres.
+ *
+ * Everything that varies from cell to cell — its footprint, its crown, where
+ * it springs from, whether it is open — is a placement. What is left is the
+ * shape itself, and the two numbers that size the swelling over a column are
+ * ratios on purpose: a boss belongs to the column it stands on, so it is
+ * measured in that column's own girth and not in the cell's.
+ */
+export interface VaultShape {
+  skylightRadius: number
+  /** Throat of the swelling, as a multiple of the shaft's inner radius. */
+  bossScale: number
+  /** How far the swelling flares, as a multiple of its own throat. */
+  bossFlare: number
+  /** Height at which the two families meet, as a fraction of crown − spring. */
+  meetFraction: number
+  /** How far past its own half-diagonal a funnel reaches when it is free to. */
+  spread: number
+  /** Clear space left around a neighbouring skylight, past its own throat. */
+  skylightMargin: number
+}
+
+/**
+ * One cell's full parameters: the shape, placed, sized to its column, and
+ * fitted to its neighbours.
+ *
+ * The two reaches are decided here because both are questions about what
+ * stands next door, and the cell builder cannot see that.
+ *
+ * **The funnel** would like to reach its own half-diagonal, which covers its
+ * corners and leaves the swelling over each column nothing to prove. It may
+ * only do that if there is no opening within range: a funnel that passes
+ * under the next cell's throat seals it, and a nave whose funnels each cover
+ * their own corners is a nave with no skylights at all. So an open cell is
+ * held back to `clearance`, the distance to the nearest neighbouring centre,
+ * less that opening's own throat and a margin. A closed cell — the aisles,
+ * the ambulatory — has no such duty and takes the whole diagonal.
+ *
+ * **The swelling** then covers exactly what the funnel could not, and no more.
+ * Where the funnel reaches the corners that is nothing at all, and the boss
+ * is left at its natural girth: one and two-thirds of the shaft it stands on,
+ * flaring to twice that. Where the funnel is held back, the boss makes up the
+ * difference — which is honest work, rather than the four-metre collar that
+ * came of sizing it to the cell.
+ */
+export function cellFor(
+  shape: VaultShape,
+  at: {
+    cell: { x: number; z: number }
+    crownHeight: number
+    springHeight: number
+    order: ColumnOrder
+    skylight: boolean
+    /** Distance to the nearest neighbouring cell centre. */
+    clearance: number
+  },
+): VaultCellParams {
+  const half = { x: at.cell.x / 2, z: at.cell.z / 2 }
+  const diagonal = Math.hypot(half.x, half.z)
+
+  const wanted = diagonal * shape.spread
+  const allowed = at.clearance - shape.skylightRadius - shape.skylightMargin
+  const funnelReach = at.skylight ? Math.min(wanted, Math.max(diagonal * 0.5, allowed)) : wanted
+
+  // What the funnel leaves: the far corner, and either edge midpoint the
+  // funnel cannot reach — each of which is half the *other* side away from
+  // the nearest column.
+  let uncovered = Math.max(0, diagonal - funnelReach)
+  if (funnelReach < half.x) uncovered = Math.max(uncovered, half.z)
+  if (funnelReach < half.z) uncovered = Math.max(uncovered, half.x)
+
+  const throat = columnMetrics(at.order).inradius * shape.bossScale
+  return {
+    cell: at.cell,
+    crownHeight: at.crownHeight,
+    springHeight: at.springHeight,
+    skylightRadius: shape.skylightRadius,
+    funnelReach,
+    bossRadius: throat,
+    bossReach: Math.max(throat * shape.bossFlare, uncovered * 1.12),
+    meetFraction: shape.meetFraction,
+    skylight: at.skylight,
+  }
+}
 
 /** The full tree parameters for a band: plan decides three, shape the rest. */
 export function shapeOf(band: BandParams, tree: TreeShape): TreeColumnParams {
@@ -61,28 +143,6 @@ export function shapeOf(band: BandParams, tree: TreeShape): TreeColumnParams {
     levels: band.levels,
     branchLength: band.branchLength,
   }
-}
-
-/**
- * How wide the swelling over a column has to be.
- *
- * Scaled to the tree it stands on rather than typed in, but kept well inside
- * the radius where the two families meet. A throat that reaches all the way
- * out to the meeting radius has nothing left to flare through, and what gets
- * drawn is a thirteen-metre cylinder around every column instead of a
- * swelling — which on a 7.5 m grid is every column's cylinder inside its
- * neighbour's, and the canopy becomes a heap of slivers.
- *
- * Covering the branch tips is not this surface's job. See `Parts.column`:
- * the tips carry their own.
- */
-export function bossRadiusFor(
-  treeRadius: number,
-  cell: { x: number; z: number },
-  vault: VaultShape,
-): number {
-  const reach = meetingRadius(cell, vault.spread)
-  return Math.min(Math.max(vault.bossRadius, treeRadius * 0.45), reach * 0.6)
 }
 
 /** Where this band's branches hand off to its vault. */
@@ -122,21 +182,35 @@ export function buildStrip(
   const centreZ = (strip.near + strip.far) / 2
   const skylights: THREE.Vector3[] = []
 
+  const widthOf = (i: number): number => {
+    const band = strip.bands[i]
+    if (!band) return Infinity
+    return i === 0 ? band.outer * 2 : band.outer - strip.bands[i - 1]!.outer
+  }
+
   for (const [index, band] of strip.bands.entries()) {
     const inner = index === 0 ? 0 : strip.bands[index - 1]!.outer
-    const width = index === 0 ? band.outer * 2 : band.outer - inner
+    const width = widthOf(index)
     if (width <= 0) continue
 
-    const cell = { x: width, z: length }
+    // Nearest neighbouring cell centre: the next one along the strip, or the
+    // one across in either direction. Band 0 is a single run on the
+    // centreline, so its neighbour across is band 1 on both sides.
+    const clearance = Math.min(
+      length,
+      (width + widthOf(index - 1)) / 2,
+      (width + widthOf(index + 1)) / 2,
+    )
+
     const shaped = parts.treeLevels(shapeOf(band, tree))[0]!
-    const spec: VaultCellParams = {
-      ...vault,
-      cell,
+    const spec = cellFor(vault, {
+      cell: { x: width, z: length },
       crownHeight: band.crown,
       springHeight: shaped.totalHeight,
-      bossRadius: bossRadiusFor(shaped.radius, cell, vault),
+      order: band.order,
       skylight: band.skylight,
-    }
+      clearance,
+    })
 
     const centresX = index === 0 ? [0] : [-(inner + width / 2), inner + width / 2]
     for (const x of centresX) {

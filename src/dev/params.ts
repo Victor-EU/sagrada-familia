@@ -30,6 +30,10 @@ export interface RenderFlags {
   bounce: number
   /** Slope-scaled depth bias for the sun's occlusion pass, in metres. */
   sunOffset: number
+  /** Strength of the ambient occlusion term. 0 turns the pass off. */
+  occlusion: number
+  /** How far it looks for occluders, in metres. */
+  occlusionRadius: number
 }
 
 /**
@@ -121,9 +125,10 @@ export function buildPanel(ctx: ParamContext): Pane {
   vault.addBinding(ctx.plan, 'naveBays', { min: 1, max: 12, step: 1, label: 'nave bays' })
   vault.addBinding(ctx.plan, 'station', { min: 5, max: 30, step: 0.25, label: 'bay length m' })
   vault.addBinding(ctx.plan.vault, 'skylightRadius', { min: 0.2, max: 5, step: 0.05, label: 'skylight r' })
-  vault.addBinding(ctx.plan.vault, 'bossRadius', { min: 0.5, max: 8, step: 0.05, label: 'boss r' })
+  vault.addBinding(ctx.plan.vault, 'bossScale', { min: 0.5, max: 5, step: 0.05, label: 'boss ⁄ shaft' })
+  vault.addBinding(ctx.plan.vault, 'bossFlare', { min: 1.1, max: 5, step: 0.05, label: 'boss flare ×' })
   vault.addBinding(ctx.plan.vault, 'meetFraction', { min: 0.15, max: 0.9, step: 0.01, label: 'meet height' })
-  vault.addBinding(ctx.plan.vault, 'spread', { min: 0.8, max: 1.5, step: 0.01, label: 'overlap' })
+  vault.addBinding(ctx.plan.vault, 'spread', { min: 0.8, max: 1.8, step: 0.01, label: 'overlap' })
   vault.on('change', () => ctx.rebuild())
 
   const walls = pane.addFolder({ title: 'Walls and glass' })
@@ -234,6 +239,8 @@ export function buildPanel(ctx: ParamContext): Pane {
   rnd.addBinding(ctx.render, 'glassGain', { min: 1, max: 12, step: 0.05, label: 'glass glow' })
   rnd.addBinding(ctx.render, 'bounce', { min: 0, max: 2, step: 0.01, label: 'bounce fill' })
   rnd.addBinding(ctx.render, 'sunOffset', { min: 0, max: 0.4, step: 0.005, label: 'shadow bias m' })
+  rnd.addBinding(ctx.render, 'occlusion', { min: 0, max: 2, step: 0.01, label: 'occlusion' })
+  rnd.addBinding(ctx.render, 'occlusionRadius', { min: 0.2, max: 8, step: 0.1, label: 'occlusion m' })
   rnd.on('change', () => ctx.applyRender())
 
   buildPresets(pane, ctx, store)

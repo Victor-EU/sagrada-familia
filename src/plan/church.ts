@@ -123,13 +123,19 @@ export const defaultChurch: ChurchParams = {
     // 15 m across and 45 m up: two modules and six. Eight-pointed grey
     // granite, which the Basilica's own booklet states outright.
     //
-    // Two branchings, and they have to be: the trunk is sixteen metres and
-    // the vault is forty-five, so the limbs carry twenty of the twenty-nine
-    // between them. Branch length is a fraction of the branch's own order's
-    // height, and the taper in the tree shape is what keeps the second
-    // branching from being a copy of the first — six is the smallest order
-    // there is, so without it the limbs would never thin.
-    { name: 'central nave', outer: MODULE, crown: VAULT_HEIGHT.nave, order: 8, levels: 2, branchLength: 0.95, skylight: true },
+    // One branching, and it was two until the frame was measured. A trunk of
+    // sixteen metres under a forty-five metre vault can be spanned either
+    // way: two branchings put the springing at 35 m and one puts it at 27,
+    // leaving the vault eighteen metres of rise instead of ten. Twelve shafts
+    // per column against four is the difference, and on a 7.5 m grid every
+    // sightline crosses several canopies — so the second branching does not
+    // read as structure, it reads as thicket, and it hides the vault behind
+    // it. Measured on a frame looking up the nave: the central vault went
+    // from 2.6% of the picture to 14%, and the fraction of neighbouring
+    // pixels landing on different surfaces fell by a tenth. The booklet says
+    // the columns branch "in some cases several times" — the crossing is one
+    // of those cases, and the nave is not.
+    { name: 'central nave', outer: MODULE, crown: VAULT_HEIGHT.nave, order: 8, levels: 1, branchLength: 0.95, skylight: true },
     // 7.5 m aisles at 30 m. Six-pointed sandstone, which is documented, and
     // one branching, which is what a twelve-metre trunk needs to reach a
     // thirty-metre vault with rise to spare.
@@ -184,13 +190,18 @@ export const defaultChurch: ChurchParams = {
   },
   vault: {
     skylightRadius: 1.3,
-    bossRadius: 2.4,
-    meetFraction: 0.55,
-    // What closes a cell against its own diagonal, and no more. It was 1.7
-    // for a while, to let the swelling over a column grow wide enough to
-    // cover the branch tips; the rosette does that now, from the tips
-    // themselves, so the overlap can go back to what the geometry needs.
-    spread: 1.45,
+    // A swelling one and two-thirds of the shaft's own girth, flaring to
+    // twice that and stopping. Both are ratios on the column, not on the
+    // cell: a boss that is sized to its cell ends up four metres wide and
+    // standing in the next room.
+    bossScale: 1.7,
+    bossFlare: 2,
+    // The funnel comes most of the way down to the springing. It has the
+    // whole cell to cover now, so it may as well be a vault rather than a
+    // lid — and the branches reach up into it.
+    meetFraction: 0.35,
+    spread: 1.03,
+    skylightMargin: 0.6,
   },
   walls: {
     show: true,

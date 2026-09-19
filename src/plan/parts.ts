@@ -125,12 +125,20 @@ export class Parts {
     if (ring < 0.5) return
     const gap = (2 * Math.PI * ring) / tips.length
 
-    // The same meeting height as the rest of the cell, so the whole vault
-    // springs as one.
-    const rise = Math.max(1.5, (crown - tree.totalHeight) * vault.meetFraction)
     // A tip is a branch end, so its throat is a branch's own girth.
     const throat = Math.max(0.6, columnMetrics(shape.order).inradius * 0.9)
-    const reach = Math.max(throat * 1.6, (gap / 2) * vault.spread)
+    // Half the way to the next tip, and barely more. These want to *meet*,
+    // not to overlap: a petal wider than the gap it spans buries itself in
+    // its neighbours, and four of them on a small ring make a lump rather
+    // than a rosette.
+    const reach = Math.max(throat * 1.6, (gap / 2) * 1.06)
+    // As tall as it is wide, near enough. Given the whole storey to climb it
+    // becomes a spike, which is what a tip does not look like — and it would
+    // be climbing ground the swelling over the column already covers.
+    const rise = Math.min(
+      Math.max(1.2, reach * 1.6),
+      Math.max(1.2, (crown - tree.totalHeight) * vault.meetFraction),
+    )
     const key = `tip ${treeKey(shape)}:${crown}`
 
     for (const tip of tips) {

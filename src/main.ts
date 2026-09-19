@@ -12,6 +12,7 @@ import {
 } from './geometry/hyperboloid.ts'
 import { FreeCamera } from './camera/freecam.ts'
 import { PhotoOverlay } from './dev/overlay.ts'
+import { censusFrame, type FrameCensus } from './dev/probe.ts'
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
 import {
@@ -62,10 +63,15 @@ const render: RenderFlags = {
   // Measured, not guessed: at these two numbers the shadowed floor sits at
   // 0.15 of the open-sun floor, which is about what a clear day gives, and a
   // shaft through the red glazing lands red rather than pink.
-  environment: 0.18,
+  environment: 0.24,
   glassGain: 3.4,
-  bounce: 0.42,
+  bounce: 0.5,
   sunOffset: 0.06,
+  // White plaster under a uniform probe has almost no shading of its own, so
+  // this is not a subtle effect here — it is most of the form in the vaults.
+  // Two and a half metres is the scale of the crevices between them.
+  occlusion: 0.6,
+  occlusionRadius: 3,
 }
 
 /**
@@ -163,6 +169,7 @@ function applyRender(): void {
   stage.glass.uniforms.uGlow.value = render.glassGain
   stage.bounce.intensity = render.bounce
   stage.sun.offset = render.sunOffset
+  stage.setOcclusion({ intensity: render.occlusion, radius: render.occlusionRadius })
   stage.invalidateSun()
 }
 
@@ -250,6 +257,8 @@ declare global {
       applySun: () => void
       applyRender: () => void
       goTo: (index: number) => void
+      /** What is in this frame, by surface — see dev/probe.ts. */
+      census: () => FrameCensus | null
     }
   }
 }
@@ -268,6 +277,7 @@ window.harness = {
   applySun,
   applyRender,
   goTo,
+  census: () => (built ? censusFrame(stage, [built.field.group]) : null),
 }
 
 const clock = new THREE.Clock()

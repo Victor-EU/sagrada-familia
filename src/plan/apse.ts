@@ -1,10 +1,10 @@
 import * as THREE from 'three'
-import type { ColumnOrder } from '../geometry/column.ts'
-import { flareFor, vaultSurface, type VaultCellParams } from '../geometry/vault.ts'
+import { columnMetrics, type ColumnOrder } from '../geometry/column.ts'
+import { flareFor, vaultSurface } from '../geometry/vault.ts'
 import { LAYER_GLASS } from '../render/sunrig.ts'
 import { buildClerestory, defaultClerestory, type RegisterParams } from './clerestory.ts'
 import { upright, type Parts } from './parts.ts'
-import { bossRadiusFor, shapeOf, type BandParams, type TreeShape, type VaultShape } from './section.ts'
+import { cellFor, shapeOf, type BandParams, type TreeShape, type VaultShape } from './section.ts'
 
 /**
  * The apse: the head of the church, and the tallest thing inside it.
@@ -149,15 +149,14 @@ export function buildApse(
   // rather than on the grid. Radially it is the ambulatory's own depth;
   // around, the arc the two radii cut at mid-depth.
   const midRadius = p.radius + p.ambulatory / 2
-  const cell = { x: 2 * midRadius * Math.sin(step / 2), z: p.ambulatory }
-  const spec: VaultCellParams = {
-    ...vault,
-    cell,
+  const spec = cellFor(vault, {
+    cell: { x: 2 * midRadius * Math.sin(step / 2), z: p.ambulatory },
     crownHeight: p.ambulatoryCrown,
     springHeight: outerSpring,
-    bossRadius: bossRadiusFor(outerTree.radius, cell, vault),
+    order: p.ambulatoryOrder,
     skylight: false,
-  }
+    clearance: Infinity,
+  })
   for (let i = 0; i + 1 < angles.length; i++) {
     const mid = (angles[i]! + angles[i + 1]!) / 2
     const [x, z] = place(midRadius, mid)
@@ -192,8 +191,8 @@ export function buildApse(
 
   // A swelling over each column of the ring, where the branches arrive under
   // the rim of it.
-  const bossThroat = Math.max(vault.bossRadius, ringTree.radius * 1.04)
-  const bossReach = Math.max(bossThroat * 1.35, p.radius * Math.sin(step / 2) + p.overhang)
+  const bossThroat = columnMetrics(p.order).inradius * vault.bossScale
+  const bossReach = Math.max(bossThroat * vault.bossFlare, p.radius * Math.sin(step / 2))
   for (const angle of angles) {
     const [x, z] = place(p.radius, angle)
     parts.surface(

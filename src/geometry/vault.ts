@@ -29,11 +29,22 @@ export interface VaultCellParams {
   /** Where the vault takes the branches. */
   springHeight: number
   skylightRadius: number
+  /**
+   * How far the funnel reaches from the centre of its own cell.
+   *
+   * Decided by the plan rather than here, because it is a question about the
+   * neighbours. A funnel that covers its own corners has to reach its
+   * half-diagonal — but a cell 7.5 m from the next opening cannot reach 8.8 m
+   * without passing under that opening and sealing it, which is exactly what
+   * happened: the nave went from 1.7% open to 0.01%. See `cellFor`.
+   */
+  funnelReach: number
+  /** Throat of the swelling over a column — a girth, not a footprint. */
   bossRadius: number
+  /** How far that swelling flares, covering whatever the funnel could not. */
+  bossReach: number
   /** Height at which the two families meet, as a fraction of crown − spring. */
   meetFraction: number
-  /** Overlap multiplier on the meeting radius. 1 makes neighbours just touch. */
-  spread: number
   /**
    * Whether the funnel's throat is left open.
    *
@@ -50,9 +61,10 @@ export const defaultVaultCell: VaultCellParams = {
   crownHeight: 45,
   springHeight: 41.7,
   skylightRadius: 1.1,
-  bossRadius: 2.2,
-  meetFraction: 0.55,
-  spread: 1.06,
+  funnelReach: 5.5,
+  bossRadius: 1.4,
+  bossReach: 2.8,
+  meetFraction: 0.35,
   skylight: true,
 }
 
@@ -82,23 +94,6 @@ export interface VaultCell {
 }
 
 /**
- * How far out from its own centre each family has to reach before the two
- * meet.
- *
- * They meet along the diagonal, where centre and corner are furthest apart,
- * so each covers half of the half-diagonal. Stated this way it holds for the
- * 7.5 x 15 m nave cells as well as the square aisle ones: the long edge is
- * covered by the bosses at its ends rather than by the funnel, which is why
- * an elliptical funnel is not needed.
- *
- * Exported because the caller has to know it before it builds the cell — the
- * boss's throat is sized against it.
- */
-export function meetingRadius(cell: { x: number; z: number }, spread: number): number {
-  return (Math.hypot(cell.x, cell.z) / 2 / 2) * spread
-}
-
-/**
  * Flare c such that a hyperboloid of throat radius r0 reaches radius R after
  * rising (or falling) `depth`:  R = r0·√(1 + (depth/c)²).
  */
@@ -110,27 +105,31 @@ export function flareFor(throat: number, reach: number, depth: number): number {
 export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
   const rise = Math.max(0.5, p.crownHeight - p.springHeight)
   const meetHeight = p.springHeight + rise * p.meetFraction
-  const meetRadius = meetingRadius(p.cell, p.spread)
-
   // Skylight funnel: throat at the crown, flaring downward to the meeting level.
   const funnelDepth = p.crownHeight - meetHeight
   const funnel = vaultSurface(
     p.skylightRadius,
-    flareFor(p.skylightRadius, meetRadius, funnelDepth),
+    flareFor(p.skylightRadius, p.funnelReach, funnelDepth),
     -funnelDepth,
     0,
-    meetRadius,
+    p.funnelReach,
     detail,
   )
 
-  // Boss: throat at the springing, flaring up to meet the funnel.
+  // Boss: throat at the springing, flaring up under the funnel's skirt.
+  //
+  // It is no longer sized to the cell. With the funnel covering its own
+  // corners this surface has one job — to be the swelling where the branches
+  // arrive, and to hide the join — so it is sized to the column it stands on
+  // and stops well before it reaches anything else's airspace.
   const bossRise = meetHeight - p.springHeight
+  const bossReach = Math.max(p.bossReach, p.bossRadius * 1.2)
   const boss = vaultSurface(
     p.bossRadius,
-    flareFor(p.bossRadius, meetRadius, bossRise),
+    flareFor(p.bossRadius, bossReach, bossRise),
     0,
     bossRise,
-    meetRadius,
+    bossReach,
     detail,
   )
 

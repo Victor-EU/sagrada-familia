@@ -1,4 +1,9 @@
 import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { groundMaterial, plasterMaterial } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
 import { LAYER_GLASS, SunRig, patchForSunlight } from './sunrig.ts'
@@ -37,7 +42,58 @@ export interface Stage {
   render(): void
   resize(width: number, height: number): void
   setExposure(value: number): void
+  /** Strength and scale of the ambient occlusion term. */
+  setOcclusion(options: { intensity: number; radius: number }): void
   dispose(): void
+}
+
+/**
+ * Turns one layer off for the passes that follow it, and on again after.
+ *
+ * The occlusion pass has to re-render the scene to get depth and normals, and
+ * it renders whatever the camera can see — which includes the glass. Glass in
+ * a depth buffer is an opaque wall: everything behind a window would be
+ * occluded by it, and worse, the windows themselves would come back darkened
+ * at their frames. They are the brightest thing in the building and the last
+ * thing that should be shaded.
+ *
+ * Left out of the depth pass, the glass reads as infinitely far away, the
+ * occlusion there comes out as one, and the windows pass through untouched.
+ */
+/**
+ * The occlusion pass, run at half the frame's resolution.
+ *
+ * Ambient occlusion is a low-frequency quantity — it is how much sky a point
+ * can see, and that does not change from one pixel to the next — so resolving
+ * it per pixel spends the budget on detail nobody can find. At full size it
+ * cost fourteen milliseconds of a twenty-two millisecond frame, which is the
+ * whole budget for an effect that has no edges in it. Halved in each
+ * direction it costs a quarter of that, and the denoise pass that follows it
+ * would have blurred the difference away regardless.
+ *
+ * The frame was already known to be fill-bound rather than triangle-bound, so
+ * this is the lever that was always going to work.
+ */
+class HalfResGTAO extends GTAOPass {
+  override setSize(width: number, height: number): void {
+    super.setSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)))
+  }
+}
+
+class LayerGate extends Pass {
+  constructor(
+    private readonly camera: THREE.Camera,
+    private readonly layer: number,
+    private readonly on: boolean,
+  ) {
+    super()
+    this.needsSwap = false
+  }
+
+  render(): void {
+    if (this.on) this.camera.layers.enable(this.layer)
+    else this.camera.layers.disable(this.layer)
+  }
 }
 
 export { EYE_HEIGHT }
@@ -111,6 +167,39 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
   setSun(sunDirection)
 
+  // Ambient occlusion, and it is not a garnish here.
+  //
+  // Everything structural is one white Lambertian plaster under a nearly
+  // uniform sky probe, so a surface's brightness barely depends on which way
+  // it faces — and the inside of a twenty-metre funnel comes back exactly as
+  // bright as the outside of it. Measured on a frame looking up the nave, the
+  // vault is a sixth of the picture and reads as one flat value; the eye has
+  // nothing to separate the near canopy from the far. What is missing is the
+  // one term a white maquette cannot do without, which is how much sky each
+  // point can actually see.
+  //
+  // It costs a second pass over the geometry for depth and normals. At two
+  // million triangles that is affordable, and nothing else available buys as
+  // much form per millisecond.
+  const composer = new EffectComposer(renderer)
+  composer.addPass(new RenderPass(scene, camera))
+  composer.addPass(new LayerGate(camera, LAYER_GLASS, false))
+  const occlusion = new HalfResGTAO(scene, camera, 1, 1)
+  // Radius is in metres, because the scene is. The default is a quarter of
+  // one, which is tuned for a scene the size of a chair and finds nothing at
+  // all in a cathedral.
+  occlusion.updateGtaoMaterial({
+    radius: 3,
+    distanceExponent: 1,
+    thickness: 1,
+    scale: 1,
+    samples: 12,
+    screenSpaceRadius: false,
+  })
+  composer.addPass(occlusion)
+  composer.addPass(new LayerGate(camera, LAYER_GLASS, true))
+  composer.addPass(new OutputPass())
+
   return {
     renderer,
     scene,
@@ -147,19 +236,27 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       renderer.getDrawingBufferSize(drawingBuffer)
       for (const participant of passes) participant.prepareForView(camera, drawingBuffer.y)
       sun.syncView(camera)
-      renderer.render(scene, camera)
+      composer.render()
     },
     resize(width, height) {
       renderer.setSize(width, height, false)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
+      composer.setPixelRatio(renderer.getPixelRatio())
+      composer.setSize(width, height)
     },
     setExposure(value) {
       renderer.toneMappingExposure = value
     },
+    setOcclusion({ intensity, radius }) {
+      occlusion.enabled = intensity > 0
+      occlusion.blendIntensity = intensity
+      occlusion.updateGtaoMaterial({ radius })
+    },
     dispose() {
       sky.dispose()
       sun.dispose()
+      composer.dispose()
       renderer.dispose()
     },
   }
