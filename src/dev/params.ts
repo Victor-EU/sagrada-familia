@@ -1,6 +1,7 @@
 import { Pane } from 'tweakpane'
 import type { FolderApi } from 'tweakpane'
 import type { FreeCamera } from '../camera/freecam.ts'
+import type { ColumnParams } from '../geometry/column.ts'
 import type { HyperboloidParams, RulingFamily } from '../geometry/hyperboloid.ts'
 import type { PhotoOverlay } from './overlay.ts'
 import { PresetStore } from './presets.ts'
@@ -21,6 +22,7 @@ export interface RenderFlags {
 }
 
 export interface ParamContext {
+  column: ColumnParams
   hyper: HyperboloidParams
   view: ViewFlags
   render: RenderFlags
@@ -37,6 +39,16 @@ export interface ParamContext {
 export function buildPanel(ctx: ParamContext): Pane {
   const pane = new Pane({ title: 'Phase 0 harness' })
   const store = new PresetStore()
+
+  const col = pane.addFolder({ title: 'Double-twist column' })
+  col.addBinding(ctx.column, 'order', {
+    label: 'star points',
+    options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — porphyry': 12 },
+  })
+  col.addBinding(ctx.column, 'stages', { min: 1, max: 6, step: 1, label: 'twist stages' })
+  col.addBinding(ctx.column, 'radialSegments', { min: 24, max: 768, step: 8, label: 'radial' })
+  col.addBinding(ctx.column, 'heightSegments', { min: 8, max: 512, step: 4, label: 'height' })
+  col.on('change', () => ctx.rebuild())
 
   const geo = pane.addFolder({ title: 'Hyperboloid' })
   geo.addBinding(ctx.hyper, 'throatRadius', { min: 0.15, max: 6, step: 0.01, label: 'throat a' })
