@@ -103,6 +103,17 @@ export class ChurchEnvelope implements Envelope {
   resolve(position: THREE.Vector3, radius: number): void {
     if (radius <= 0) return
 
+    // Nothing holds anyone who is not in the building.
+    //
+    // This used to clamp unconditionally, which was harmless for as long as
+    // the outside was a grey disc nobody stood on: there was no reason to be
+    // out there at eye height. Phase 4 made the outside the point — its own
+    // bar is a street-level frame — and the Nativity viewpoint, set on the
+    // pavement seventy metres clear of the wall, was being dragged straight
+    // through it and dropped in the nave. The walls still hold from the
+    // inside, which is the direction that was ever being asked about.
+    if (!this.inHall(position.x, position.z) && !this.inApse(position.x, position.z)) return
+
     // The rim of a terrace is a wall to anyone standing below its top. The
     // flight needs no exception: its lowest tread starts at the rim, so by
     // the time you reach the rim you are a step and an eye height above the

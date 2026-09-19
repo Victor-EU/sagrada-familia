@@ -161,6 +161,12 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   1.25 m slabs, a heavier joint every 7.5 m running through the column axes, and
   inside the apse it turns polar about the apse centre, where its rings land on
   the presbytery ring at 15 m and the ambulatory at 22.5 m unasked.
+- The envelope holds the walls **from the inside only**. It used to clamp any
+  camera to the nave's rectangle whether or not it was in the nave, which was
+  harmless while the outside was a grey disc nobody stood on and fatal the
+  moment phase 4 put a viewpoint on the pavement: the Nativity view, set
+  seventy metres clear of the wall, was dragged through it and dropped in the
+  aisle. Walking out through a wall is now possible and is the smaller lie.
 - The plaster is `DoubleSide`, so **a face wound against its own normals is
   lit from exactly the wrong side** and nothing in the geometry says so: three
   flips the shading normal when a triangle faces away. The first towers were
