@@ -1,7 +1,7 @@
 import { Pane } from 'tweakpane'
 import type { FolderApi } from 'tweakpane'
 import type { FreeCamera } from '../camera/freecam.ts'
-import type { NaveParams } from '../plan/nave.ts'
+import type { ChurchParams } from '../plan/church.ts'
 import type { HyperboloidParams, RulingFamily } from '../geometry/hyperboloid.ts'
 import type { PhotoOverlay } from './overlay.ts'
 import { PresetStore } from './presets.ts'
@@ -46,7 +46,7 @@ export interface SunFlags {
 }
 
 export interface ParamContext {
-  plan: NaveParams
+  plan: ChurchParams
   hyper: HyperboloidParams
   view: ViewFlags
   render: RenderFlags
@@ -101,6 +101,7 @@ export function buildPanel(ctx: ParamContext): Pane {
   col.addBinding(ctx.plan.tree, 'phaseDeg', { min: 0, max: 90, step: 1, label: 'fan phase °' })
   col.addBinding(ctx.plan.tree, 'knotRadiusScale', { min: 1, max: 2.5, step: 0.01, label: 'knot width' })
   col.addBinding(ctx.plan.tree, 'knotHeightScale', { min: 0.4, max: 2.5, step: 0.01, label: 'knot height' })
+  col.addBinding(ctx.plan.tree, 'taper', { min: 0.3, max: 1, step: 0.01, label: 'taper / level' })
   col.addBinding(ctx.plan.tree, 'stages', { min: 1, max: 6, step: 1, label: 'twist stages' })
   col.on('change', () => ctx.rebuild())
 
@@ -116,7 +117,7 @@ export function buildPanel(ctx: ParamContext): Pane {
   lod.on('change', () => ctx.applyView())
 
   const vault = pane.addFolder({ title: 'Plan and vault' })
-  vault.addBinding(ctx.plan, 'bays', { min: 1, max: 12, step: 1, label: 'bays' })
+  vault.addBinding(ctx.plan, 'naveBays', { min: 1, max: 12, step: 1, label: 'nave bays' })
   vault.addBinding(ctx.plan, 'station', { min: 5, max: 30, step: 0.25, label: 'bay length m' })
   vault.addBinding(ctx.plan.vault, 'skylightRadius', { min: 0.2, max: 5, step: 0.05, label: 'skylight r' })
   vault.addBinding(ctx.plan.vault, 'bossRadius', { min: 0.5, max: 8, step: 0.05, label: 'boss r' })
@@ -134,9 +135,42 @@ export function buildPanel(ctx: ParamContext): Pane {
   walls.addBinding(ctx.plan.walls, 'clerestoryOffset', { min: 0.1, max: 3, step: 0.05, label: 'clerestory ±x' })
   walls.addBinding(ctx.plan.walls, 'lowSill', { min: 0, max: 20, step: 0.1, label: 'aisle sill m' })
   walls.addBinding(ctx.plan.walls, 'lowHead', { min: 2, max: 30, step: 0.1, label: 'aisle head m' })
-  walls.addBinding(ctx.plan.walls, 'highSill', { min: 5, max: 36, step: 0.1, label: 'clerestory sill m' })
-  walls.addBinding(ctx.plan.walls, 'highHead', { min: 6, max: 40, step: 0.1, label: 'clerestory head m' })
+  walls.addBinding(ctx.plan.walls, 'clerestoryRise', { min: 0, max: 0.6, step: 0.01, label: 'clerestory sill ⁄ storey' })
+  walls.addBinding(ctx.plan.walls, 'clerestoryCrest', { min: 0, max: 12, step: 0.1, label: 'crest m' })
+  walls.addBinding(ctx.plan.walls, 'glory', { label: 'Glory end' })
   walls.on('change', () => ctx.rebuild())
+
+  // The crossing is one strip of the same grid with the orders stepped up, so
+  // what it takes is which orders and how high — not another plan.
+  const cross = pane.addFolder({ title: 'Crossing and transept' })
+  cross.addBinding(ctx.plan.crossing, 'span', { min: 7.5, max: 30, step: 0.5, label: 'span m' })
+  cross.addBinding(ctx.plan.crossing, 'crown', { min: 30, max: 90, step: 0.5, label: 'crossing crown m' })
+  cross.addBinding(ctx.plan.crossing, 'armCrown', { min: 20, max: 80, step: 0.5, label: 'arm crown m' })
+  cross.addBinding(ctx.plan.crossing, 'coreOrder', {
+    label: 'core order',
+    options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — porphyry': 12 },
+  })
+  cross.addBinding(ctx.plan.crossing, 'coreLevels', { min: 0, max: 3, step: 1, label: 'core levels' })
+  cross.addBinding(ctx.plan.crossing, 'coreBranchLength', { min: 0.1, max: 1.4, step: 0.01, label: 'core branch' })
+  cross.addBinding(ctx.plan.crossing, 'armOrder', {
+    label: 'arm order',
+    options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — porphyry': 12 },
+  })
+  cross.addBinding(ctx.plan.crossing, 'armLevels', { min: 0, max: 3, step: 1, label: 'arm levels' })
+  cross.addBinding(ctx.plan.crossing, 'armBranchLength', { min: 0.1, max: 1.4, step: 0.01, label: 'arm branch' })
+  cross.on('change', () => ctx.rebuild())
+
+  const apse = pane.addFolder({ title: 'Apse' })
+  apse.addBinding(ctx.plan.apse, 'radius', { min: 7.5, max: 30, step: 0.5, label: 'ring radius m' })
+  apse.addBinding(ctx.plan.apse, 'columns', { min: 6, max: 16, step: 2, label: 'ring columns' })
+  apse.addBinding(ctx.plan.apse, 'chapels', { min: 3, max: 11, step: 1, label: 'chapels' })
+  apse.addBinding(ctx.plan.apse, 'ambulatory', { min: 3, max: 15, step: 0.5, label: 'ambulatory m' })
+  apse.addBinding(ctx.plan.apse, 'crown', { min: 40, max: 100, step: 0.5, label: 'crown m' })
+  apse.addBinding(ctx.plan.apse, 'ambulatoryCrown', { min: 15, max: 60, step: 0.5, label: 'ambulatory crown m' })
+  apse.addBinding(ctx.plan.apse, 'skylightRadius', { min: 0.5, max: 10, step: 0.1, label: 'skylight r' })
+  apse.addBinding(ctx.plan.apse, 'landing', { min: 2, max: 25, step: 0.5, label: 'landing m' })
+  apse.addBinding(ctx.plan.apse, 'overhang', { min: 0, max: 8, step: 0.1, label: 'overhang m' })
+  apse.on('change', () => ctx.rebuild())
 
   const sun = pane.addFolder({ title: 'Sun' })
   sun.addBinding(ctx.sun, 'dayOfYear', { min: 1, max: 365, step: 1, label: 'day of year' })

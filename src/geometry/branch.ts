@@ -42,6 +42,21 @@ export interface TreeColumnParams {
   phaseDeg: number
   /** Branch length as a fraction of that order's own full height. */
   branchLength: number
+  /**
+   * How much shorter each successive branching is than the one before it.
+   *
+   * Needed because the orders run out. Load falls as it divides and order is
+   * chosen by load, so a branch steps down an order at every knot — but six
+   * is the smallest there is, and a nave column that starts at eight reaches
+   * it after one split. Without this, every branch above that knot is the
+   * same length and the same thickness as the one below, and a tree whose
+   * limbs never thin reads as a bush.
+   *
+   * Thickness is not a second parameter: by the published 1:10 rule a shaft's
+   * inner diameter is its own length over ten, so shortening a branch thins
+   * it by exactly the same factor.
+   */
+  taper: number
   /** Ellipsoid semi-axes, as multiples of the shaft's inner radius. */
   knotRadiusScale: number
   knotHeightScale: number
@@ -55,6 +70,7 @@ export const defaultTreeColumn: TreeColumnParams = {
   splayDeg: 21,
   phaseDeg: 45,
   branchLength: 0.52,
+  taper: 0.72,
   // Narrow and tall: a wide sphere reads as a bead threaded on a stick, an
   // elongated ellipsoid as a swelling in the branch itself.
   knotRadiusScale: 1.14,
@@ -128,24 +144,39 @@ export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColum
 
   const splay = THREE.MathUtils.degToRad(params.splayDeg)
 
-  /** Adds a shaft, its knot, and recursively its branches, into `parent`. */
-  function grow(parent: THREE.Object3D, order: ColumnOrder, level: number, phase: number): void {
+  /**
+   * Adds a shaft, its knot, and recursively its branches, into `parent`.
+   *
+   * `fraction` is how much of its own order's full height this shaft is. It
+   * doubles as the thickness: the 1:10 rule ties a shaft's inner diameter to
+   * its own length, so a branch built at two thirds of its order's height is
+   * two thirds as thick as that order's trunk would be.
+   */
+  function grow(
+    parent: THREE.Object3D,
+    order: ColumnOrder,
+    level: number,
+    phase: number,
+    fraction: number,
+  ): void {
     const m = columnMetrics(order)
-    const isTrunk = level === 0
-    const fraction = isTrunk ? 1 : params.branchLength
     const length = m.height * fraction
+    const thickness = fraction
 
     const shaft = new THREE.Mesh(columnGeometry(order, fraction))
     shaft.rotation.x = -Math.PI / 2
+    // Scale before the quarter turn: the generator's axis is z, so thinning
+    // is x and y.
+    shaft.scale.set(thickness, thickness, 1)
     parent.add(shaft)
 
     // The knot sits on the capital so that its lower half swallows it.
     const knot = new THREE.Mesh(knotGeometry(order))
     knot.position.y = length
     knot.scale.set(
-      m.inradius * params.knotRadiusScale,
+      m.inradius * params.knotRadiusScale * thickness,
       m.inradius * params.knotHeightScale,
-      m.inradius * params.knotRadiusScale,
+      m.inradius * params.knotRadiusScale * thickness,
     )
     parent.add(knot)
 
@@ -174,11 +205,17 @@ export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColum
       tilt.rotation.z = -splay
       pivot.add(tilt)
 
-      grow(tilt, next, level + 1, phase + THREE.MathUtils.degToRad(params.phaseDeg))
+      grow(
+        tilt,
+        next,
+        level + 1,
+        phase + THREE.MathUtils.degToRad(params.phaseDeg),
+        params.branchLength * params.taper ** level,
+      )
     }
   }
 
-  grow(root, params.order, 0, 0)
+  grow(root, params.order, 0, 0, 1)
   root.updateMatrixWorld(true)
 
   const pieces: THREE.BufferGeometry[] = []

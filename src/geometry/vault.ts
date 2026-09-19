@@ -82,10 +82,27 @@ export interface VaultCell {
 }
 
 /**
+ * How far out from its own centre each family has to reach before the two
+ * meet.
+ *
+ * They meet along the diagonal, where centre and corner are furthest apart,
+ * so each covers half of the half-diagonal. Stated this way it holds for the
+ * 7.5 x 15 m nave cells as well as the square aisle ones: the long edge is
+ * covered by the bosses at its ends rather than by the funnel, which is why
+ * an elliptical funnel is not needed.
+ *
+ * Exported because the caller has to know it before it builds the cell — the
+ * boss's throat is sized against it.
+ */
+export function meetingRadius(cell: { x: number; z: number }, spread: number): number {
+  return (Math.hypot(cell.x, cell.z) / 2 / 2) * spread
+}
+
+/**
  * Flare c such that a hyperboloid of throat radius r0 reaches radius R after
  * rising (or falling) `depth`:  R = r0·√(1 + (depth/c)²).
  */
-function flareFor(throat: number, reach: number, depth: number): number {
+export function flareFor(throat: number, reach: number, depth: number): number {
   const ratio = Math.max(reach / Math.max(throat, 1e-4), 1.0001)
   return depth / Math.sqrt(ratio * ratio - 1)
 }
@@ -93,17 +110,11 @@ function flareFor(throat: number, reach: number, depth: number): number {
 export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
   const rise = Math.max(0.5, p.crownHeight - p.springHeight)
   const meetHeight = p.springHeight + rise * p.meetFraction
-  // The two families meet along the diagonal, where centre and corner are
-  // furthest apart, so each covers half of the half-diagonal. Stated this way
-  // it holds for the 7.5 × 15 m aisle cells as well as the square nave ones:
-  // the long edge is covered by the bosses at its ends rather than by the
-  // funnel, which is why an elliptical funnel is not needed.
-  const halfDiagonal = Math.hypot(p.cell.x, p.cell.z) / 2
-  const meetRadius = (halfDiagonal / 2) * p.spread
+  const meetRadius = meetingRadius(p.cell, p.spread)
 
   // Skylight funnel: throat at the crown, flaring downward to the meeting level.
   const funnelDepth = p.crownHeight - meetHeight
-  const funnel = surface(
+  const funnel = vaultSurface(
     p.skylightRadius,
     flareFor(p.skylightRadius, meetRadius, funnelDepth),
     -funnelDepth,
@@ -114,7 +125,7 @@ export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
 
   // Boss: throat at the springing, flaring up to meet the funnel.
   const bossRise = meetHeight - p.springHeight
-  const boss = surface(
+  const boss = vaultSurface(
     p.bossRadius,
     flareFor(p.bossRadius, meetRadius, bossRise),
     0,
@@ -136,11 +147,15 @@ export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
 /**
  * One hyperboloid, tessellated for the detail asked of it.
  *
+ * Exported because the apse is the same two families of surfaces on a radial
+ * plan rather than a rectangular one, and it has no business re-deriving how
+ * finely to sample them.
+ *
  * Counts come from the surface's own size — see `detail.ts` — rather than
  * from a parameter, so the same call serves the near view and the one
  * eighty metres down the nave.
  */
-function surface(
+export function vaultSurface(
   throatRadius: number,
   flare: number,
   zBottom: number,

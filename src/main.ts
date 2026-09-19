@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
 import { rulingMaterial } from './render/materials.ts'
 import { columnMetrics } from './geometry/column.ts'
-import { buildNave, defaultNave, type Nave, type NaveParams } from './plan/nave.ts'
+import { buildChurch, defaultChurch, type Church, type ChurchParams } from './plan/church.ts'
 import {
   buildHyperboloidRulings,
   buildHyperboloidSurface,
@@ -41,7 +41,7 @@ const stage = createStage(canvas)
 const cam = new FreeCamera(stage.camera, canvas)
 const overlay = new PhotoOverlay(overlayImg, document.body)
 
-const plan: NaveParams = structuredClone(defaultNave)
+const plan: ChurchParams = structuredClone(defaultChurch)
 const hyper: HyperboloidParams = { ...defaultHyperboloid }
 const view: ViewFlags = {
   showSurface: false,
@@ -88,9 +88,9 @@ const YEAR = 2026
 // variation to budget for, which is the point of choosing it.
 const plaster = stage.plaster
 
-const naveRoot = new THREE.Group()
-stage.scene.add(naveRoot)
-let built: Nave | null = null
+const churchRoot = new THREE.Group()
+stage.scene.add(churchRoot)
+let built: Church | null = null
 
 // Generators work in their natural frame with z as the axis; the world is
 // y-up. Placement rotates, the mathematics stays clean.
@@ -110,16 +110,16 @@ const rulings = new THREE.LineSegments(
 )
 funnel.add(rulings)
 
-function rebuildNave(): void {
+function rebuildChurch(): void {
   if (built) {
-    naveRoot.remove(built.group, built.field.group)
+    churchRoot.remove(built.group, built.field.group)
     for (const geometry of built.geometries) geometry.dispose()
     const seat = stage.passes.indexOf(built.field)
     if (seat >= 0) stage.passes.splice(seat, 1)
     built.field.dispose()
   }
-  built = buildNave(plan, plaster, stage.glass)
-  naveRoot.add(built.group, built.field.group)
+  built = buildChurch(plan, plaster, stage.glass)
+  churchRoot.add(built.group, built.field.group)
   // The field picks its level of detail once per pass, so the stage has to
   // know it exists.
   stage.passes.push(built.field)
@@ -133,7 +133,7 @@ function rebuildNave(): void {
 }
 
 function rebuild(): void {
-  rebuildNave()
+  rebuildChurch()
 
   surface.geometry.dispose()
   surface.geometry = buildHyperboloidSurface(hyper)
@@ -238,8 +238,8 @@ declare global {
     harness: {
       cam: FreeCamera
       overlay: PhotoOverlay
-      plan: NaveParams
-      built: () => Nave | null
+      plan: ChurchParams
+      built: () => Church | null
       hyper: HyperboloidParams
       view: ViewFlags
       render: RenderFlags
@@ -288,6 +288,7 @@ function frame(): void {
     const p = stage.camera.position
     const nave = plan.bands[0]!
     const cm = columnMetrics(nave.order)
+    const apse = plan.apse
 
     const field = built?.field.stats() ?? { pieces: 0, triangles: 0, draws: 0 }
     let tris = field.triangles
@@ -312,11 +313,14 @@ function frame(): void {
         `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
-      `tree  ${nave.levels} levels  ${plan.tree.branches} branches  ` +
+      `tree  ${nave.levels} levels  ${plan.tree.branches} branches  taper ${plan.tree.taper}  ` +
         `springs at ${(built?.springs ?? []).map((v) => v.toFixed(1)).join(' / ')} m`,
-      `nave  ${plan.bays} bays × ${plan.station} m  ` +
-        `${(built?.halfWidth ?? 0).toFixed(1)} m half-width  ` +
-        `crowns ${plan.bands.map((b) => b.crown).join(' / ')} m`,
+      `plan  ${plan.naveBays} × ${plan.station} m nave  ${plan.crossing.span} m crossing  ` +
+        `${(apse.radius * 2).toFixed(0)} m apse  ` +
+        `${(built?.halfWidth ?? 0).toFixed(1)} m half-width`,
+      `vault ${plan.bands.map((b) => b.crown).join(' / ')} nave  ` +
+        `${plan.crossing.armCrown} / ${plan.crossing.crown} crossing  ` +
+        `${apse.ambulatoryCrown} / ${apse.crown} apse  m`,
       `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
         `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,
