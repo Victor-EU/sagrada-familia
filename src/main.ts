@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
 import { rulingMaterial } from './render/materials.ts'
 import { columnMetrics } from './geometry/column.ts'
-import { buildBay, defaultBay, type Bay, type BayParams } from './plan/bay.ts'
+import { buildNave, defaultNave, type Nave, type NaveParams } from './plan/nave.ts'
 import {
   buildHyperboloidRulings,
   buildHyperboloidSurface,
@@ -41,7 +41,7 @@ const stage = createStage(canvas)
 const cam = new FreeCamera(stage.camera, canvas)
 const overlay = new PhotoOverlay(overlayImg, document.body)
 
-const bay: BayParams = structuredClone(defaultBay)
+const plan: NaveParams = structuredClone(defaultNave)
 const hyper: HyperboloidParams = { ...defaultHyperboloid }
 const view: ViewFlags = {
   showSurface: false,
@@ -88,9 +88,9 @@ const YEAR = 2026
 // variation to budget for, which is the point of choosing it.
 const plaster = stage.plaster
 
-const bayRoot = new THREE.Group()
-stage.scene.add(bayRoot)
-let built: Bay | null = null
+const naveRoot = new THREE.Group()
+stage.scene.add(naveRoot)
+let built: Nave | null = null
 
 // Generators work in their natural frame with z as the axis; the world is
 // y-up. Placement rotates, the mathematics stays clean.
@@ -110,16 +110,16 @@ const rulings = new THREE.LineSegments(
 )
 funnel.add(rulings)
 
-function rebuildBay(): void {
+function rebuildNave(): void {
   if (built) {
-    bayRoot.remove(built.group, built.field.group)
+    naveRoot.remove(built.group, built.field.group)
     for (const geometry of built.geometries) geometry.dispose()
     const seat = stage.passes.indexOf(built.field)
     if (seat >= 0) stage.passes.splice(seat, 1)
     built.field.dispose()
   }
-  built = buildBay(bay, plaster, stage.glass)
-  bayRoot.add(built.group, built.field.group)
+  built = buildNave(plan, plaster, stage.glass)
+  naveRoot.add(built.group, built.field.group)
   // The field picks its level of detail once per pass, so the stage has to
   // know it exists.
   stage.passes.push(built.field)
@@ -133,7 +133,7 @@ function rebuildBay(): void {
 }
 
 function rebuild(): void {
-  rebuildBay()
+  rebuildNave()
 
   surface.geometry.dispose()
   surface.geometry = buildHyperboloidSurface(hyper)
@@ -211,7 +211,7 @@ function goTo(index: number): void {
 }
 
 buildPanel({
-  bay, hyper, view, render, sun, cam, overlay,
+  plan, hyper, view, render, sun, cam, overlay,
   rebuild, applyView, applyRender, applySun, goTo,
 })
 
@@ -238,8 +238,8 @@ declare global {
     harness: {
       cam: FreeCamera
       overlay: PhotoOverlay
-      bay: BayParams
-      built: () => Bay | null
+      plan: NaveParams
+      built: () => Nave | null
       hyper: HyperboloidParams
       view: ViewFlags
       render: RenderFlags
@@ -256,7 +256,7 @@ declare global {
 window.harness = {
   cam,
   overlay,
-  bay,
+  plan,
   built: () => built,
   hyper,
   view,
@@ -286,7 +286,7 @@ function frame(): void {
   if (now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position
-    const cm = columnMetrics(bay.tree.order)
+    const cm = columnMetrics(plan.tree.order)
 
     const field = built?.field.stats() ?? { pieces: 0, triangles: 0, draws: 0 }
     let tris = field.triangles
@@ -295,7 +295,7 @@ function frame(): void {
       tris += (surface.geometry.index?.count ?? 0) / 3
       draws++
     }
-    built?.group.traverse((node) => {
+    built?.group.traverse((node: THREE.Object3D) => {
       if (!(node instanceof THREE.Mesh)) return
       draws++
       tris += (node.geometry.index?.count ?? 0) / 3
@@ -311,10 +311,10 @@ function frame(): void {
         `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
-      `tree  ${bay.tree.levels} levels  ${bay.tree.branches} branches  ` +
+      `tree  ${plan.tree.levels} levels  ${plan.tree.branches} branches  ` +
         `springs at ${(built?.springHeight ?? 0).toFixed(1)} m`,
-      `bay   ${bay.bay} m across  crown ${bay.vault.crownHeight} m  ` +
-        `(${(bay.vault.crownHeight / 7.5).toFixed(0)} modules)`,
+      `nave  ${plan.bays} bays  ${plan.bay} × ${plan.station} m cell  ` +
+        `crown ${plan.vault.crownHeight} m (${(plan.vault.crownHeight / 7.5).toFixed(0)} modules)`,
       `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
         `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,

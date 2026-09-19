@@ -22,11 +22,13 @@ export const EYE_HEIGHT = 1.65
 /** Shoulder width, near enough, for pushing out of columns. */
 export const BODY_RADIUS = 0.3
 
-export interface BayEnvelopeParams {
+export interface RoomEnvelopeParams {
   /** Half the distance between the inner faces of the two walls. */
   halfWidth: number
-  /** Half the bay's length, along the open axis. */
-  halfDepth: number
+  /** The open end toward the Glory façade, +z. */
+  near: number
+  /** The open end toward the crossing, −z. */
+  far: number
   /** Underside of the vault. */
   ceiling: number
   floor: number
@@ -34,24 +36,28 @@ export interface BayEnvelopeParams {
 }
 
 /**
- * The envelope of a single bay.
+ * The envelope of a room bounded by two walls and open at both ends.
  *
- * The bay is open at both ends, so `contains` is a box rather than a shell:
- * inside means between the two glazed walls, within the bay's length, and
- * under the vault. That is enough to decide whether someone is in the room.
+ * That is a box rather than a shell, and deliberately: a nave *is* open at
+ * both ends until the crossing and the Glory façade exist, so inside means
+ * between the two glazed walls, along the nave's length, and under the vault.
+ * That is enough to decide whether someone is in the room — which is the only
+ * question the camera asks.
  */
-export class BayEnvelope implements Envelope {
-  constructor(private readonly p: BayEnvelopeParams) {}
+export class RoomEnvelope implements Envelope {
+  constructor(private readonly p: RoomEnvelopeParams) {}
 
   floorAt(x: number, z: number): number | null {
-    if (Math.abs(x) > this.p.halfWidth + 6 || Math.abs(z) > this.p.halfDepth + 20) return null
+    if (Math.abs(x) > this.p.halfWidth + 6) return null
+    if (z > this.p.near + 20 || z < this.p.far - 20) return null
     return this.p.floor
   }
 
   contains(point: THREE.Vector3): boolean {
     return (
       Math.abs(point.x) < this.p.halfWidth &&
-      Math.abs(point.z) < this.p.halfDepth &&
+      point.z < this.p.near &&
+      point.z > this.p.far &&
       point.y < this.p.ceiling
     )
   }
@@ -74,9 +80,9 @@ export class BayEnvelope implements Envelope {
       }
     }
 
-    // The walls only exist over the bay's length; past the open ends there is
+    // The walls only exist over the nave's length; past the open ends there is
     // nothing to be pushed out of.
-    if (Math.abs(position.z) < this.p.halfDepth) {
+    if (position.z < this.p.near && position.z > this.p.far) {
       const limit = Math.max(0, this.p.halfWidth - radius)
       position.x = THREE.MathUtils.clamp(position.x, -limit, limit)
     }

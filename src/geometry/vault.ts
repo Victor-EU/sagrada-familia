@@ -22,8 +22,8 @@ import { buildHyperboloidSurface, type HyperboloidParams } from './hyperboloid.t
  * that gets there, and neighbours then touch by construction.
  */
 export interface VaultCellParams {
-  /** Column spacing — the cell is square. */
-  bay: number
+  /** The cell's footprint: column spacing across and along the nave. */
+  cell: { x: number; z: number }
   /** Underside of the skylight throat. */
   crownHeight: number
   /** Where the vault takes the branches. */
@@ -37,7 +37,7 @@ export interface VaultCellParams {
 }
 
 export const defaultVaultCell: VaultCellParams = {
-  bay: 15,
+  cell: { x: 15, z: 15 },
   crownHeight: 45,
   springHeight: 41.7,
   skylightRadius: 1.1,
@@ -81,8 +81,13 @@ function flareFor(throat: number, reach: number, depth: number): number {
 export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
   const rise = Math.max(0.5, p.crownHeight - p.springHeight)
   const meetHeight = p.springHeight + rise * p.meetFraction
-  // Cell centre to corner is bay/√2, so each family covers half of that.
-  const meetRadius = ((p.bay / Math.SQRT2) / 2) * p.spread
+  // The two families meet along the diagonal, where centre and corner are
+  // furthest apart, so each covers half of the half-diagonal. Stated this way
+  // it holds for the 7.5 × 15 m aisle cells as well as the square nave ones:
+  // the long edge is covered by the bosses at its ends rather than by the
+  // funnel, which is why an elliptical funnel is not needed.
+  const halfDiagonal = Math.hypot(p.cell.x, p.cell.z) / 2
+  const meetRadius = (halfDiagonal / 2) * p.spread
 
   // Skylight funnel: throat at the crown, flaring downward to the meeting level.
   const funnelDepth = p.crownHeight - meetHeight
@@ -148,13 +153,14 @@ function surface(
 }
 
 /** Where a cell's four bosses stand, relative to its centre. */
-export function bossOffsets(bay: number): [number, number][] {
-  const half = bay / 2
+export function bossOffsets(cell: { x: number; z: number }): [number, number][] {
+  const hx = cell.x / 2
+  const hz = cell.z / 2
   return [
-    [-half, -half],
-    [half, -half],
-    [-half, half],
-    [half, half],
+    [-hx, -hz],
+    [hx, -hz],
+    [-hx, hz],
+    [hx, hz],
   ]
 }
 

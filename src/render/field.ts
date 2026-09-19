@@ -88,8 +88,17 @@ interface Kind {
   name: string
   meshes: THREE.InstancedMesh[]
   placements: THREE.Matrix4[]
-  /** World-space bounding sphere of each placement. */
+  /** World-space bounding sphere of each placement, for culling. */
   spheres: THREE.Sphere[]
+  /**
+   * World-space bounding box of each placement, for distance.
+   *
+   * Not the sphere. A tree column is 36 m tall and 8 m wide, so its bounding
+   * sphere has a 19 m radius; measuring to the sphere's surface reports a
+   * column forty metres down the nave as twenty-one metres away and keeps the
+   * whole nave at full detail. The box is tight where it matters.
+   */
+  boxes: THREE.Box3[]
   /** Deviation each level introduces, metres. */
   error: number[]
   /** Pixels of that deviation this kind is allowed to show. */
@@ -122,7 +131,9 @@ export class InstancedField implements PassParticipant {
 
       const base = spec.levels[0]!.geometry
       if (!base.boundingSphere) base.computeBoundingSphere()
+      if (!base.boundingBox) base.computeBoundingBox()
       const local = base.boundingSphere!
+      const localBox = base.boundingBox!
 
       const meshes = spec.levels.map(({ geometry }) => {
         const mesh = new THREE.InstancedMesh(geometry, spec.material, spec.placements.length)
@@ -142,11 +153,14 @@ export class InstancedField implements PassParticipant {
         return sphere
       })
 
+      const boxes = spec.placements.map((matrix) => localBox.clone().applyMatrix4(matrix))
+
       this.kinds.push({
         name: spec.name,
         meshes,
         placements: spec.placements,
         spheres,
+        boxes,
         error: spec.levels.map((level) => level.error),
         tolerance: spec.tolerancePx ?? SWITCH_TOLERANCE_PX,
         triangles: spec.levels.map(
@@ -189,9 +203,9 @@ export class InstancedField implements PassParticipant {
         if (this.forceLevel >= 0) {
           level = Math.min(this.forceLevel, level)
         } else {
-          // Measure to the near side of the piece: a 24 m column whose base
+          // Measure to the near face of the piece: a 24 m column whose base
           // is at arm's length is not eighteen metres away.
-          const distance = Math.max(0.1, eye.distanceTo(sphere.center) - sphere.radius)
+          const distance = Math.max(0.1, kind.boxes[i]!.distanceToPoint(eye))
           for (let l = 0; l < kind.meshes.length - 1; l++) {
             // Use level l if the next one down would stray further than a
             // pixel or so at this distance.

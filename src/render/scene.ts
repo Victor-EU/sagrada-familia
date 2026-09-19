@@ -66,7 +66,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // Every opaque surface is the same plaster, and every one of them receives
   // the coloured sun the same way.
   const plaster = plasterMaterial()
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(160, 96), groundMaterial())
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(320, 128), groundMaterial())
   patchForSunlight(plaster, sun.uniforms)
   patchForSunlight(ground.material as THREE.MeshStandardMaterial, sun.uniforms)
 

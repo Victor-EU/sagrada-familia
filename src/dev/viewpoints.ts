@@ -32,13 +32,14 @@ export const VIEWPOINTS: Viewpoint[] = [
     key: '1',
     name: 'Under the crown',
     note:
-      'Eye height between the trees, looking into the vault. Steep on ' +
-      'purpose: a single bay is open at both ends, and a shallower look ' +
-      'fills a third of the frame with sky that adjacent bays will fill.',
-    position: [4.2, 1.65, 4.2],
-    target: [-3, 34, -3],
-    fov: 72,
-    shiftCorrection: 0.55,
+      'Eye height between the trees, looking up and along. The frame the ' +
+      'gate failed: it wanted a shallower look than one bay could give, ' +
+      'because a third of it came back sky. With neighbours either side it ' +
+      'is stone all the way to the skylights, and the vault recedes.',
+    position: [4.5, 1.65, 6],
+    target: [-1.5, 32, -18],
+    fov: 70,
+    shiftCorrection: 0.6,
     day: 262,
     hour: 16,
   },
@@ -82,14 +83,29 @@ export const VIEWPOINTS: Viewpoint[] = [
     key: '5',
     name: 'At the springing',
     note:
-      'The branching node, where the risk was — four fans meeting under the ' +
-      'vault. Taken from outside the open end at branch height, because from ' +
-      'inside a single cell there is no angle on a fan that is not also an ' +
-      'angle out of the building.',
-    position: [1.5, 30.5, 19],
-    target: [0, 35, -4],
-    fov: 58,
+      'The branching node, where the risk was — the fans meeting under the ' +
+      'vault. This used to be shot from outside the open end, because a ' +
+      'single cell offered no angle on a fan that was not also an angle out ' +
+      'of the building. It is now taken from inside, at branch height, ' +
+      'looking down the line of them.',
+    position: [0.8, 28, 16],
+    target: [0, 36, -28],
+    fov: 62,
     shiftCorrection: 0.8,
+    day: 262,
+    hour: 16,
+  },
+  {
+    key: '7',
+    name: 'Down the nave',
+    note:
+      'On the centreline from the Glory end, which is the frame phase 2 ' +
+      'exists for: you can see the length of the thing, and the columns ' +
+      'that carry it stand between you and the crossing.',
+    position: [0, 1.65, 19],
+    target: [0, 22, -60],
+    fov: 60,
+    shiftCorrection: 0.75,
     day: 262,
     hour: 16,
   },

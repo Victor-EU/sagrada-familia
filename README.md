@@ -9,15 +9,15 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phase 0 complete, phase 1 in progress
+## Status: phases 0 and 1 complete, phase 2 in progress
 
 Phase 0's bar was: *you can load a photo, match a camera to it, and tune a
 parameter live.* All three work, plus the straight-line ruling view.
 
-Phase 1 is the nave bay — the go/no-go. Columns, the branching node, the vault,
-the glazed walls, the solar model, the coloured transmittance pass and the
-walk/fly transition are in. What remains before the gate is judgement: stills
-from the app beside reference photographs.
+Phase 1 was the nave bay — the go/no-go. It passed on light and material and
+failed on framing, for a reason that was not the bay's fault: one cell is open
+at both ends, so a third of an eye-height frame came back sky. Phase 2 is that
+cell tiled the length of the nave, which is the fix.
 
 | Built | Where |
 | --- | --- |
@@ -30,13 +30,15 @@ from the app beside reference photographs.
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 | Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |
 | The 7.5 m module and the four vault heights | `src/plan/module.ts` |
-| Bay assembly — four columns and the vault they carry | `src/plan/bay.ts` |
+| Nave assembly — the cell, tiled, walls running the length | `src/plan/nave.ts` |
+| Tessellation from feature size, not from typed-in counts | `src/geometry/detail.ts` |
+| Instanced level of detail, switched on measured error | `src/render/field.ts` |
 | Solar position for 41.40° N, 2.17° E, with CET/CEST | `src/light/sun.ts` |
 | Analytic sky, and the environment light it casts | `src/light/sky.ts` |
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
 | Clerestory wall — stone frame, two registers, no holes cut | `src/plan/clerestory.ts` |
-| Six curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
+| Seven curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts`, `src/camera/envelope.ts` |
 
 ## Running
