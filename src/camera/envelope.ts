@@ -22,6 +22,23 @@ export const EYE_HEIGHT = 1.65
 /** Shoulder width, near enough, for pushing out of columns. */
 export const BODY_RADIUS = 0.3
 
+/**
+ * A raised floor with a way up onto it.
+ *
+ * The presbytery is the only one, and before this it was two metres of solid
+ * plaster the camera walked straight into and stood inside. It takes two
+ * answers, not one: where the floor is when you are on the steps or the
+ * platform, and a wall at the rim for everywhere you are not.
+ */
+export interface Terrace {
+  centreZ: number
+  radius: number
+  /** Height of the platform above the floor. */
+  top: number
+  /** The flight down the axis, descending as z increases. */
+  stair: { halfWidth: number; from: number; to: number; rise: number; tread: number }
+}
+
 export interface ChurchEnvelopeParams {
   /** Half the distance between the inner faces of the two nave walls. */
   halfWidth: number
@@ -35,6 +52,8 @@ export interface ChurchEnvelopeParams {
   ceiling: number
   floor: number
   columns: { x: number; z: number; radius: number }[]
+  /** Raised floors inside the shell. */
+  terraces?: Terrace[]
 }
 
 /**
@@ -68,7 +87,12 @@ export class ChurchEnvelope implements Envelope {
   }
 
   floorAt(x: number, z: number): number | null {
-    return this.inHall(x, z, 6) || this.inApse(x, z, 6) ? this.p.floor : null
+    if (!this.inHall(x, z, 6) && !this.inApse(x, z, 6)) return null
+    for (const terrace of this.p.terraces ?? []) {
+      const height = terraceHeight(terrace, x, z)
+      if (height !== null) return this.p.floor + height
+    }
+    return this.p.floor
   }
 
   contains(point: THREE.Vector3): boolean {
@@ -78,6 +102,23 @@ export class ChurchEnvelope implements Envelope {
 
   resolve(position: THREE.Vector3, radius: number): void {
     if (radius <= 0) return
+
+    // The rim of a terrace is a wall to anyone standing below its top. The
+    // flight needs no exception: its lowest tread starts at the rim, so by
+    // the time you reach the rim you are a step and an eye height above the
+    // height this test looks at.
+    for (const terrace of this.p.terraces ?? []) {
+      if (position.y > this.p.floor + terrace.top + 0.25) continue
+      const dx = position.x
+      const dz = position.z - terrace.centreZ
+      const distance = Math.hypot(dx, dz)
+      const minimum = terrace.radius + radius
+      if (distance < minimum && distance > 1e-5) {
+        const push = (minimum - distance) / distance
+        position.x += dx * push
+        position.z += dz * push
+      }
+    }
 
     for (const column of this.p.columns) {
       const dx = position.x - column.x
@@ -116,4 +157,14 @@ export class ChurchEnvelope implements Envelope {
       Math.max(this.p.far, this.p.near - radius),
     )
   }
+}
+
+/** How high this terrace holds the floor at (x, z), or null if it does not. */
+function terraceHeight(terrace: Terrace, x: number, z: number): number | null {
+  if (Math.hypot(x, z - terrace.centreZ) <= terrace.radius) return terrace.top
+
+  const stair = terrace.stair
+  if (Math.abs(x) > stair.halfWidth || z < stair.from || z > stair.to) return null
+  const tread = Math.floor((z - stair.from) / stair.tread)
+  return Math.max(0, terrace.top - (tread + 1) * stair.rise)
 }

@@ -8,7 +8,14 @@ import { LAYER_GLASS } from '../render/sunrig.ts'
 import { buildApse, type Apse, type ApseParams } from './apse.ts'
 import { buildClerestory, defaultClerestory } from './clerestory.ts'
 import { MODULE, VAULT_HEIGHT } from './module.ts'
-import { Parts } from './parts.ts'
+import {
+  buildPavement,
+  defaultFloor,
+  footprint,
+  type FloorParams,
+  type PavingPlan,
+} from './floor.ts'
+import { named, Parts } from './parts.ts'
 import {
   buildStation,
   buildStrip,
@@ -114,6 +121,7 @@ export interface ChurchParams {
   tree: TreeShape
   vault: VaultShape
   walls: WallParams
+  floor: FloorParams
 }
 
 export const defaultChurch: ChurchParams = {
@@ -171,6 +179,12 @@ export const defaultChurch: ChurchParams = {
     overhang: 1.5,
     landing: 9,
     wall: { show: true, thickness: 0.9, margin: 1.1, mullion: 0.55, sill: 3.2, head: 24 },
+    // Eight risers of a quarter of a metre. Steeper than a stair anyone
+    // would design for a corridor, and that is what the photographs of the
+    // real flight count: this is a ceremonial approach, not a circulation
+    // route. Eleven metres wide keeps it clear of the porphyry columns at
+    // ±7.5 by the better part of a metre.
+    platform: { overhang: 1, height: 2, risers: 8, tread: 0.44, width: 11 },
   },
   tree: {
     branches: 4,
@@ -217,6 +231,7 @@ export const defaultChurch: ChurchParams = {
     clerestoryCrest: 4,
     glory: true,
   },
+  floor: { ...defaultFloor },
 }
 
 export interface Church {
@@ -244,14 +259,17 @@ export interface Church {
   /** Where the crossing is, for framing. */
   crossingZ: number
   apse: Apse
+  /** What the paving pattern needs in order to be set out on the plan. */
+  paving: PavingPlan
 }
 
 export function buildChurch(
   p: ChurchParams,
   plaster: THREE.Material,
   glass: THREE.Material,
+  paving: THREE.Material,
 ): Church {
-  const parts = new Parts(plaster, glass)
+  const parts = new Parts(plaster, glass, paving)
 
   const bays = Math.max(1, Math.round(p.naveBays))
   // The nave is centred on the origin, because every curated view is framed
@@ -327,6 +345,24 @@ export function buildChurch(
     if (p.walls.glory) buildGloryWall(parts, p, gloryLine + p.walls.offset)
   }
 
+  // The pavement is laid last, because it is cut to the building's own
+  // outline and the outline is not known until the walls have been placed.
+  if (p.floor.show) {
+    const outline = footprint(
+      {
+        halfWidth: wallCentre + p.walls.thickness / 2,
+        near: gloryLine + p.walls.offset + p.walls.thickness / 2,
+        mouthZ: crossFar,
+        apseCentreZ: apse.centreZ,
+        apseRadius: apse.outerRadius + p.walls.thickness / 2,
+      },
+      p.floor.apron,
+    )
+    const { lid, skirt } = buildPavement(outline, p.floor.podium)
+    parts.piece(named('pavement', lid, parts.paving), lid)
+    parts.piece(named('podium', skirt, parts.plaster), skirt)
+  }
+
   const field = new InstancedField(parts.specs())
 
   const ceiling = Math.max(p.crossing.crown, p.apse.crown, ...p.bands.map((b) => b.crown))
@@ -338,6 +374,7 @@ export function buildChurch(
     floor: 0,
     apse: { centreZ: apse.centreZ, radius: apse.outerRadius - p.walls.thickness },
     columns: parts.columns,
+    terraces: [apse.terrace],
   })
 
   const reach = halfWidth + p.walls.thickness + 4
@@ -361,6 +398,15 @@ export function buildChurch(
     springs: [...springs, ...crossingSprings.slice(0, 2), ...apse.springs],
     crossingZ: (crossNear + crossFar) / 2,
     apse,
+    paving: {
+      apseCentreZ: apse.centreZ,
+      apseMouthZ: crossFar,
+      chapels: p.apse.chapels,
+      // Four to a chapel bay, so both the chapel divisions and the radii the
+      // ten columns stand on land on a joint rather than between two.
+      radialsPerChapel: 4,
+      crossingZ: (crossNear + crossFar) / 2,
+    },
   }
 }
 

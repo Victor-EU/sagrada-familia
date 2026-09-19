@@ -4,6 +4,7 @@ import { createStage } from './render/scene.ts'
 import { rulingMaterial } from './render/materials.ts'
 import { columnMetrics } from './geometry/column.ts'
 import { buildChurch, defaultChurch, type Church, type ChurchParams } from './plan/church.ts'
+import { tunePaving } from './plan/floor.ts'
 import {
   buildHyperboloidRulings,
   buildHyperboloidSurface,
@@ -124,8 +125,13 @@ function rebuildChurch(): void {
     if (seat >= 0) stage.passes.splice(seat, 1)
     built.field.dispose()
   }
-  built = buildChurch(plan, plaster, stage.glass)
+  built = buildChurch(plan, plaster, stage.glass, stage.paving)
   churchRoot.add(built.group, built.field.group)
+
+  // The pattern is set out on the plan, not on the pavement, so it has to be
+  // told where the apse turns it polar and where the crossing's roundel is.
+  tunePaving(stage.pavingUniforms, plan.floor, built.paving)
+  stage.setGroundLevel(plan.floor.show ? -plan.floor.podium : 0)
   // The field picks its level of detail once per pass, so the stage has to
   // know it exists.
   stage.passes.push(built.field)
@@ -331,6 +337,9 @@ function frame(): void {
       `vault ${plan.bands.map((b) => b.crown).join(' / ')} nave  ` +
         `${plan.crossing.armCrown} / ${plan.crossing.crown} crossing  ` +
         `${apse.ambulatoryCrown} / ${apse.crown} apse  m`,
+      `floor ${plan.floor.slab.toFixed(2)} m slabs on the ${plan.station} m module  ` +
+        `${apse.platform.height} m presbytery up ${apse.platform.risers} risers  ` +
+        `${plan.floor.podium} m podium`,
       `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
         `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,

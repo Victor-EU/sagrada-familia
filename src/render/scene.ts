@@ -4,12 +4,13 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { groundMaterial, plasterMaterial } from './materials.ts'
+import { groundMaterial, pavingMaterial, plasterMaterial } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
 import { LAYER_GLASS, SunRig, patchForSunlight } from './sunrig.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
 import { EYE_HEIGHT } from '../camera/envelope.ts'
+import { PAVING_PATCH, pavingUniforms, type PavingUniforms } from '../plan/floor.ts'
 
 export interface Stage {
   renderer: THREE.WebGLRenderer
@@ -20,6 +21,11 @@ export interface Stage {
   /** One material for everything structural — the point of a plaster maquette. */
   plaster: THREE.MeshStandardMaterial
   glass: GlassMaterial
+  /** Plaster that draws its own joints where it faces the sky. */
+  paving: THREE.MeshStandardMaterial
+  /** What the paving pattern is set out against. */
+  pavingUniforms: PavingUniforms
+  /** The plaza the church stands in, at the foot of the podium. */
   ground: THREE.Mesh
   figure: THREE.Mesh
   /** Stand-in for interreflection: warm from below, cool from above. */
@@ -37,6 +43,8 @@ export interface Stage {
   setSun(direction: THREE.Vector3): void
   /** Tell the rig the geometry changed, and what it now occupies. */
   setModelBounds(box: THREE.Box3): void
+  /** Drop the plaza to the foot of the podium. */
+  setGroundLevel(y: number): void
   /** Force the sun passes to re-run on the next frame. */
   invalidateSun(): void
   render(): void
@@ -126,6 +134,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   patchForSunlight(plaster, sun.uniforms)
   patchForSunlight(ground.material as THREE.MeshStandardMaterial, sun.uniforms)
 
+  // The pavement is the same plaster with one extra job: it knows where it is
+  // standing, so it can draw the building's own grid on itself.
+  const paving = pavingMaterial()
+  const pavingU = pavingUniforms()
+  patchForSunlight(paving, sun.uniforms, { ...PAVING_PATCH, uniforms: pavingU })
+
   const glass = glassMaterial()
 
   // An environment probe lights an interior as if the walls were not there,
@@ -208,6 +222,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     sun,
     plaster,
     glass,
+    paving,
+    pavingUniforms: pavingU,
     ground,
     figure,
     bounce,
@@ -247,6 +263,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     },
     setExposure(value) {
       renderer.toneMappingExposure = value
+    },
+    setGroundLevel(y) {
+      // The plaza sits at the foot of the podium, so the church stands on
+      // something rather than being pushed into the ground.
+      ground.position.y = y
     },
     setOcclusion({ intensity, radius }) {
       occlusion.enabled = intensity > 0

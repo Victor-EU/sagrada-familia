@@ -239,6 +239,78 @@ function sectionRadius(
   return minR
 }
 
+/**
+ * The foot of a column.
+ *
+ * Every shaft in the building used to end at the floor with nothing at all
+ * where the two met, and it showed the moment the floor stopped being a blank
+ * plane: the columns did not stand on it, they went into it. There was no
+ * shading to say otherwise either, because the ambient occlusion works over a
+ * three-metre radius and on a 7.5 m grid most of the floor has nothing within
+ * three metres of it — a flat plane beside a smooth vertical shaft has no
+ * crevice to find.
+ *
+ * So the crevice is built. A short block a fifth wider than the shaft, its top
+ * chamfered back in to meet it, which is what every stone column has for the
+ * same reason: the foot is where a shaft gets chipped. The section is the
+ * column's own star, untwisted — the double twist has not started at this
+ * height anyway, the first `plinthHeight` metres of the shaft hold the base
+ * polygon — so the base steps straight out of the shaft's own outline and
+ * needs no shape of its own.
+ */
+export interface ColumnBaseParams {
+  order: ColumnOrder
+  radialSegments: number
+}
+
+/** How far the base stands out past the shaft, and how tall it is. */
+const BASE_FLARE = 1.2
+const BASE_HEIGHT_RATIO = 0.5
+
+export function buildColumnBase(params: ColumnBaseParams): THREE.BufferGeometry {
+  const m = columnMetrics(params.order)
+  const polys = basePolygons(params.order)
+  const height = m.inradius * BASE_HEIGHT_RATIO
+
+  // Block, then chamfer. Three rings is all it takes and the middle one is
+  // what makes it read as a base rather than as a cone.
+  const rings: [number, number][] = [
+    [0, BASE_FLARE],
+    [height * 0.6, BASE_FLARE],
+    [height, 1],
+  ]
+
+  const cols = Math.max(12, Math.floor(params.radialSegments))
+  const dAlpha = (Math.PI * 2) / cols
+  const positions: number[] = []
+
+  const at = (ring: number, col: number): [number, number, number] => {
+    const [z, factor] = rings[ring]!
+    const alpha = (col % cols) * dAlpha
+    const r = sectionRadius(alpha, [0], polys, m.polygonInradius) * factor
+    return [r * Math.cos(alpha), r * Math.sin(alpha), z]
+  }
+
+  for (let ring = 0; ring + 1 < rings.length; ring++) {
+    for (let col = 0; col < cols; col++) {
+      const a = at(ring, col)
+      const b = at(ring, col + 1)
+      const c = at(ring + 1, col + 1)
+      const d = at(ring + 1, col)
+      positions.push(...a, ...b, ...c, ...a, ...c, ...d)
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  // Generated with z up, like every column; the tree stands its shafts upright
+  // itself, and a base placed by the column's own matrix has to arrive already
+  // turned.
+  geometry.rotateX(-Math.PI / 2)
+  return geometry
+}
+
 export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
   const m = columnMetrics(params.order)
   const polys = basePolygons(params.order)

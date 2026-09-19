@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { buildTreeColumn, type TreeColumn, type TreeColumnParams } from '../geometry/branch.ts'
 import type { VaultShape } from './section.ts'
-import { columnMetrics } from '../geometry/column.ts'
-import { DETAIL_LEVELS } from '../geometry/detail.ts'
+import { buildColumnBase, columnMetrics, type ColumnOrder } from '../geometry/column.ts'
+import { DETAIL_LEVELS, shaftRadial } from '../geometry/detail.ts'
 import {
   bossOffsets,
   buildVaultCell,
@@ -47,6 +47,8 @@ export class Parts {
   constructor(
     readonly plaster: THREE.Material,
     readonly glass: THREE.Material,
+    /** Plaster that knows it is a floor and draws its own joints. */
+    readonly paving: THREE.Material,
   ) {}
 
   /**
@@ -101,10 +103,38 @@ export class Parts {
       COLUMN_TOLERANCE_PX,
     )
     this.columns.push({ x, z, radius: columnMetrics(shape.order).innerDiameter / 2 })
+    this.base(shape.order, matrix, trees)
 
     const tree = trees[0]!
     if (opts.crown !== undefined && opts.vault) this.rosette(shape, tree, matrix, opts.crown, opts.vault)
     return tree.totalHeight
+  }
+
+  /**
+   * The block at the foot of a shaft.
+   *
+   * One kind per order, however many columns of that order there are, and it
+   * rides the column's own placement. Its error is the column's rather than
+   * its own — a base is smaller than the shaft it stands under, so borrowing
+   * the shaft's number switches it a level early, which costs nothing and is
+   * the safe direction to be wrong in.
+   */
+  private base(order: ColumnOrder, matrix: THREE.Matrix4, trees: TreeColumn[]): void {
+    const key = `base ${order}`
+    const kind = this.kinds.get(key)
+    if (kind) {
+      kind.placements.push(matrix)
+      return
+    }
+    this.add(
+      key,
+      DETAIL_LEVELS.map((detail, level) => ({
+        geometry: buildColumnBase({ order, radialSegments: shaftRadial(order, detail) }),
+        error: trees[level]!.error,
+      })),
+      matrix,
+      COLUMN_TOLERANCE_PX,
+    )
   }
 
   /** One hyperboloid rising from each of a tree's branch tips. */
@@ -259,6 +289,24 @@ function treeKey(shape: TreeColumnParams): string {
     shape.knotHeightScale,
     shape.stages,
   ].join(':')
+}
+
+/**
+ * A one-off mesh that says what it is.
+ *
+ * Instanced pieces already carry their full parameters in their names so a
+ * frame can be interrogated; the meshes drawn once had nothing, and came back
+ * from a census lumped together as "wall". A name costs nothing and the
+ * measurements get sharper.
+ */
+export function named(
+  name: string,
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = name
+  return mesh
 }
 
 /** A placement with no rotation or scale. */

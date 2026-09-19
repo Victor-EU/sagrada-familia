@@ -176,7 +176,28 @@ export function buildPanel(ctx: ParamContext): Pane {
   apse.addBinding(ctx.plan.apse, 'skylightRadius', { min: 0.5, max: 10, step: 0.1, label: 'skylight r' })
   apse.addBinding(ctx.plan.apse, 'landing', { min: 2, max: 25, step: 0.5, label: 'landing m' })
   apse.addBinding(ctx.plan.apse, 'overhang', { min: 0, max: 8, step: 0.1, label: 'overhang m' })
+  apse.addBinding(ctx.plan.apse.platform, 'height', { min: 0, max: 5, step: 0.1, label: 'presbytery m' })
+  apse.addBinding(ctx.plan.apse.platform, 'risers', { min: 2, max: 16, step: 1, label: 'risers' })
+  apse.addBinding(ctx.plan.apse.platform, 'tread', { min: 0.2, max: 1.2, step: 0.01, label: 'tread m' })
+  apse.addBinding(ctx.plan.apse.platform, 'width', { min: 3, max: 20, step: 0.5, label: 'flight wide m' })
   apse.on('change', () => ctx.rebuild())
+
+  const floor = pane.addFolder({ title: 'Floor' })
+  floor.addBinding(ctx.plan.floor, 'show', { label: 'pavement' })
+  floor.addBinding(ctx.plan.floor, 'slab', { min: 0.4, max: 7.5, step: 0.05, label: 'slab m' })
+  floor.addBinding(ctx.plan.floor, 'joint', { min: 0, max: 0.1, step: 0.002, label: 'joint m' })
+  floor.addBinding(ctx.plan.floor, 'moduleJoint', { min: 0, max: 0.2, step: 0.005, label: 'module joint m' })
+  floor.addBinding(ctx.plan.floor, 'shade', { min: 0, max: 0.5, step: 0.01, label: 'joint dark' })
+  floor.addBinding(ctx.plan.floor, 'moduleShade', { min: 0, max: 0.6, step: 0.01, label: 'module dark' })
+  floor.addBinding(ctx.plan.floor, 'grain', { min: 0, max: 0.12, step: 0.005, label: 'slab grain' })
+  floor.addBinding(ctx.plan.floor, 'warmth', { min: 0, max: 1, step: 0.01, label: 'sky out of it' })
+  floor.addBinding(ctx.plan.floor, 'roundel', { min: 0, max: 6, step: 0.1, label: 'JMJ roundel r' })
+  floor.addBinding(ctx.plan.floor, 'podium', { min: 0, max: 6, step: 0.05, label: 'podium m' })
+  floor.addBinding(ctx.plan.floor, 'apron', { min: 0, max: 8, step: 0.1, label: 'apron m' })
+  // Everything but the outline is a uniform, so most of this folder does not
+  // need the building rebuilt — but two of them do, and telling them apart in
+  // the panel would buy a rebuild that already takes a fifth of a second.
+  floor.on('change', () => ctx.rebuild())
 
   const sun = pane.addFolder({ title: 'Sun' })
   sun.addBinding(ctx.sun, 'dayOfYear', { min: 1, max: 365, step: 1, label: 'day of year' })

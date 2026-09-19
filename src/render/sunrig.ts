@@ -293,6 +293,26 @@ const SUN_APPLY = /* glsl */ `
 `
 
 /**
+ * Something a particular surface adds to the patched shader.
+ *
+ * The sun patch owns `onBeforeCompile`, and a material only has one, so a
+ * surface that needs its own shader work — the pavement is the only one so
+ * far — hands it over rather than fighting for the slot.
+ */
+export interface SurfacePatch {
+  /** Uniforms merged in alongside the rig's own. */
+  uniforms?: Record<string, THREE.IUniform>
+  /** Declarations, added to the top of the fragment shader. */
+  pars?: string
+  /** Statements run where `diffuseColor` is still open to change. */
+  colour?: string
+  /** Statements run once `reflectedLight` is complete and before it is summed. */
+  light?: string
+  /** What makes this patch a different program from the plain one. */
+  key?: string
+}
+
+/**
  * Teach a standard material about the rig.
  *
  * The sun is added as its own term rather than by rewriting three's light
@@ -303,9 +323,10 @@ const SUN_APPLY = /* glsl */ `
 export function patchForSunlight(
   material: THREE.MeshStandardMaterial,
   uniforms: SunUniforms,
+  extra: SurfacePatch = {},
 ): void {
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms)
+    Object.assign(shader.uniforms, uniforms, extra.uniforms ?? {})
 
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vSunWorld;')
@@ -326,9 +347,20 @@ export function patchForSunlight(
       )
 
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${SUN_PARS}`)
+      .replace('#include <common>', `#include <common>\n${SUN_PARS}\n${extra.pars ?? ''}`)
+      // `diffuseColor` is live from here until the light loop reads it, so a
+      // surface that wants to decide its own albedo per fragment says so
+      // here and nothing downstream has to know.
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${extra.colour ?? ''}`)
       .replace('#include <lights_fragment_end>', `${SUN_APPLY}\n#include <lights_fragment_end>`)
+      // Everything that lights this fragment has arrived by here, direct and
+      // indirect both, and nothing has yet been added up.
+      .replace('#include <aomap_fragment>', `${extra.light ?? ''}\n#include <aomap_fragment>`)
   }
-  material.customProgramCacheKey = () => 'sf-sunlight-3'
+  // Three caches compiled programs by this key, so two materials that patch
+  // the same base shader differently have to name themselves differently or
+  // the second one silently gets the first one's program.
+  const key = `sf-sunlight-3${extra.key ? `-${extra.key}` : ''}`
+  material.customProgramCacheKey = () => key
   material.needsUpdate = true
 }

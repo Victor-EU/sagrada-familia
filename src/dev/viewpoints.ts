@@ -146,6 +146,24 @@ export const VIEWPOINTS: Viewpoint[] = [
     hour: 10,
   },
   {
+    key: '0',
+    name: 'The floor of the crossing',
+    note:
+      'The view the floor exists for, and the one it is regressed against. ' +
+      'Standing in the crossing looking at the presbytery: the slabs running ' +
+      'out on the 7.5 m module, the heavy joints passing through the column ' +
+      'axes, the roundel at the dead centre of the crossing where the ' +
+      'booklet puts the JMJ ceramic, and the flight up onto the platform — ' +
+      'which was two metres of solid plaster with no way onto it until the ' +
+      'floor got looked at.',
+    position: [4.2, 1.65, -22],
+    target: [-1.2, 2.6, -46],
+    fov: 62,
+    shiftCorrection: 0.45,
+    day: 172,
+    hour: 10,
+  },
+  {
     key: '6',
     name: 'Passion elevation',
     note:

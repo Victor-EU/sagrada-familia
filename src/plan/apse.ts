@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 import { columnMetrics, type ColumnOrder } from '../geometry/column.ts'
 import { flareFor, vaultSurface } from '../geometry/vault.ts'
+import type { Terrace } from '../camera/envelope.ts'
 import { LAYER_GLASS } from '../render/sunrig.ts'
 import { buildClerestory, defaultClerestory, type RegisterParams } from './clerestory.ts'
-import { upright, type Parts } from './parts.ts'
+import { named, upright, type Parts } from './parts.ts'
 import { cellFor, shapeOf, type BandParams, type TreeShape, type VaultShape } from './section.ts'
 
 /**
@@ -66,6 +67,18 @@ export interface ApseParams {
   landing: number
   /** The chevet wall. */
   wall: { show: boolean; thickness: number; margin: number; mullion: number; sill: number; head: number }
+  /** The raised presbytery floor and the flight that climbs it. */
+  platform: {
+    /** How far the rim reaches past the ring of ten. */
+    overhang: number
+    /** Two metres, and the booklet says so. */
+    height: number
+    /** Risers in the flight. Eight, which is what the photographs count. */
+    risers: number
+    tread: number
+    /** Width of the flight, kept clear of the crossing's own columns. */
+    width: number
+  }
 }
 
 export interface Apse {
@@ -79,6 +92,8 @@ export interface Apse {
   springs: number[]
   /** Centre of the great skylight. */
   skylight: THREE.Vector3
+  /** The presbytery platform and its flight, as the camera needs to read them. */
+  terrace: Terrace
 }
 
 /**
@@ -210,10 +225,29 @@ export function buildApse(
     )
   }
 
-  // The presbytery floor, raised two metres, as it is.
-  const platform = new THREE.CylinderGeometry(p.radius - 2, p.radius - 2, 2, 96)
-  platform.translate(0, 1, centreZ)
-  parts.piece(new THREE.Mesh(platform, parts.plaster), platform)
+  // "The presbytery is a platform delineated by ten columns and raised two
+  // metres above the Basilica floor" — booklet 9, and so it is: the rim runs
+  // an overhang past the ring so the ten stand on it rather than at its edge.
+  //
+  // It used to be a bare two-metre cylinder with no way up, which is a wall,
+  // not a platform. The camera walked into it and stood buried to the
+  // shoulders in plaster. A flight down the axis into the crossing fixes both
+  // halves of that: the approach the photographs show, and something the
+  // envelope can read as a floor.
+  const terraceRadius = p.radius + p.platform.overhang
+  const platform = new THREE.CylinderGeometry(terraceRadius, terraceRadius, p.platform.height, 96)
+  platform.translate(0, p.platform.height / 2, centreZ)
+  parts.piece(named('presbytery', platform, parts.paving), platform)
+
+  const rise = p.platform.height / p.platform.risers
+  const stairFrom = centreZ + terraceRadius
+  // The last tread is the floor itself, so it is a step and not a box.
+  for (let k = 0; k + 1 < p.platform.risers; k++) {
+    const top = p.platform.height - (k + 1) * rise
+    const step = new THREE.BoxGeometry(p.platform.width, top, p.platform.tread)
+    step.translate(0, top / 2, stairFrom + (k + 0.5) * p.platform.tread)
+    parts.piece(named('presbytery steps', step, parts.paving), step)
+  }
 
   // Two rings of wall: the chevet that closes the ambulatory at 30 m, and the
   // drum that carries the lantern above the presbytery.
@@ -292,5 +326,17 @@ export function buildApse(
     outerRadius,
     springs: [ringSpring, outerSpring],
     skylight: new THREE.Vector3(0, p.crown, centreZ),
+    terrace: {
+      centreZ,
+      radius: terraceRadius,
+      top: p.platform.height,
+      stair: {
+        halfWidth: p.platform.width / 2,
+        from: stairFrom,
+        to: stairFrom + p.platform.risers * p.platform.tread,
+        rise,
+        tread: p.platform.tread,
+      },
+    },
   }
 }

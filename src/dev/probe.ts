@@ -102,7 +102,14 @@ export function censusFrame(
   // sits on its own layer, which the eye camera does not render.
   stage.scene.traverse((node) => {
     if (node instanceof THREE.Mesh && node.layers.mask === 1 && !(node instanceof THREE.InstancedMesh)) {
-      paint(node, node === stage.ground ? 'ground' : node === stage.figure ? 'figure' : 'wall')
+      paint(
+        node,
+        node === stage.ground
+          ? 'plaza'
+          : node === stage.figure
+            ? 'figure'
+            : node.name || 'wall',
+      )
     }
   })
 

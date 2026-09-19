@@ -28,6 +28,15 @@ grid right the crossing places itself — four columns of red porphyry at the
 corners of a 15 m square and eight of basalt around them, which is the twelve
 the sources count.
 
+Since then, the floor. It was one grey disc of radius 320 doing two jobs at one
+height with nothing on it — and measured on a frame taken standing in the nave,
+**16 %** of the picture, the third largest thing in it after two orders of
+column, every pixel the same number. It is now paved on the building's own
+module, the church stands on a podium instead of being pushed into the plaza,
+every shaft has a foot, and the presbytery — two metres of solid plaster the
+camera used to walk into and stand inside up to the shoulders — has a flight up
+onto it.
+
 | Built | Where |
 | --- | --- |
 | Hyperboloid generator — surface + straight generators | `src/geometry/hyperboloid.ts` |
@@ -42,6 +51,7 @@ the sources count.
 | Church assembly — nave, crossing, transept arms, Glory end | `src/plan/church.ts` |
 | One transverse station and the cells between two of them | `src/plan/section.ts` |
 | Apse — ten columns on a semicircle, ambulatory, drum, lantern | `src/plan/apse.ts` |
+| Floor — paving set out on the module, podium, the apse turning polar | `src/plan/floor.ts` |
 | Part registry, so every region shares one instanced field | `src/plan/parts.ts` |
 | Tessellation from feature size, not from typed-in counts | `src/geometry/detail.ts` |
 | Instanced level of detail, switched on measured error | `src/render/field.ts` |
@@ -52,9 +62,9 @@ the sources count.
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
 | Walls — stone frames, no holes cut; aisle and clerestory | `src/plan/clerestory.ts` |
-| Nine curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
+| Ten curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
-| Envelope: a rectangle for the nave and a disc for the apse | `src/camera/envelope.ts` |
+| Envelope: a rectangle for the nave, a disc for the apse, a terrace you can climb | `src/camera/envelope.ts` |
 
 ## Running
 
@@ -126,3 +136,16 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   without it the inside of a twenty-metre funnel is exactly as bright as the
   outside. It runs at half resolution: how much sky a point can see does not
   change from one pixel to the next.
+- The pavement draws its joints analytically from world position — no texture,
+  so nothing to filter and no moiré. Each line knows its own filter width and
+  retires once a whole slab is down to a few pixels, which is what makes ninety
+  metres of receding floor survive a grazing angle. The grid is the building's:
+  1.25 m slabs, a heavier joint every 7.5 m running through the column axes, and
+  inside the apse it turns polar about the apse centre, where its rings land on
+  the presbytery ring at 15 m and the ambulatory at 22.5 m unasked.
+- `material.envMapIntensity` does nothing in this project and never has. Where a
+  material has no `envMap` of its own and the scene has an `environment`, three
+  overwrites that uniform with `scene.environmentIntensity` every frame, so the
+  per-material values in `materials.ts` are decorative. The pavement takes the
+  sky out of its ambient in the shader instead, which is where the floor's blue
+  cast was coming from.
