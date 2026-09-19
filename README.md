@@ -39,6 +39,17 @@ every shaft has a foot, and the presbytery — two metres of solid plaster the
 camera used to walk into and stand inside up to the shoulders — has a flight up
 onto it.
 
+Then the transept, which until now was not one: the crossing was fifteen
+metres of the nave with its vaults raised, ending on the nave's own wall line,
+and a Latin cross with no arms is a cross drawn in section only. The published
+figures fix how far they should stand out — **90 m long, 60 m wide, 45 m of
+nave** — and the difference is 7.5 m a side, which is one module exactly. So
+an arm is not a new kind of thing here. It is one more **band** on the
+crossing's own two stations: two more columns a station, one more cell a
+strip, and the wall and the clerestory that fall out of a band being lower
+than the one inside it. The transept is a room sixty-two metres tip to tip
+that you can walk, against forty-eight before.
+
 Phase 4 put an outside on it. Until now every vault in the model was a surface
 with nothing over it: from anywhere above forty metres you looked straight down
 into the nave. What closes it is not a lid but the **terraces** the real
@@ -61,7 +72,7 @@ front.
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 | Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |
 | The 7.5 m module and the four vault heights | `src/plan/module.ts` |
-| Church assembly — nave, crossing, transept arms, Glory end | `src/plan/church.ts` |
+| Church assembly — nave, crossing, projecting arms, Glory end | `src/plan/church.ts` |
 | One transverse station and the cells between two of them | `src/plan/section.ts` |
 | Apse — ten columns on a semicircle, ambulatory, drum, lantern | `src/plan/apse.ts` |
 | Floor — paving set out on the module, podium, the apse turning polar | `src/plan/floor.ts` |
@@ -161,6 +172,16 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   1.25 m slabs, a heavier joint every 7.5 m running through the column axes, and
   inside the apse it turns polar about the apse centre, where its rings land on
   the presbytery ring at 15 m and the ambulatory at 22.5 m unasked.
+- Gaudí's own published plan **does not draw the transept projecting**.
+  Measured off it — the scale bar gives 7.03 px to the metre, and on that
+  scale the column lines land on ±7.5, ±15 and ±22.5 to within a quarter of a
+  metre, which is what makes the rest of the reading trustworthy — the body
+  walls run straight from the Glory end to the chevet, and the published sixty
+  metres is made up by seven and a half metres of wall, chapel and stair
+  turret on each flank rather than by an arm you can stand in. Both readings
+  give the same outside width. This model takes the arm, because a transept
+  you can walk across is the thing the plan is for; the other reading is
+  recorded in the design doc rather than lost.
 - The envelope holds the walls **from the inside only**. It used to clamp any
   camera to the nave's rectangle whether or not it was in the nave, which was
   harmless while the outside was a grey disc nobody stood on and fatal the

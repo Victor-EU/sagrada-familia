@@ -124,7 +124,7 @@ export interface TowerPlan {
   crossingCrown: number
   armCrown: number
   naveCrown: number
-  /** Outside face of the side walls, and of the Glory wall. */
+  /** Outside face of the Glory wall, and of whatever closes the transept. */
   wallX: number
   gloryZ: number
   /** Apse centre and the height of its lantern. */

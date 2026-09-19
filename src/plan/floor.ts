@@ -103,17 +103,22 @@ export interface FootprintParams {
   apseCentreZ: number
   /** Outside face of the chevet, from that centre. */
   apseRadius: number
+  /** The transept arms, where they stand out past the nave walls. */
+  arm?: { halfWidth: number; near: number; far: number }
 }
 
 /**
- * The outline of the building at floor level: a hall with a half circle on the
- * end of it, which is what a Latin cross whose arms do not project measures.
+ * The outline of the building at floor level: a hall with two arms and a half
+ * circle on the end of it — a Latin cross, drawn as one polygon.
  *
- * The two do not meet flush. A transept forty-five metres across is wider than
- * a chevet of twenty-three metres' radius, so the plan steps inward at the
- * mouth — and that re-entrant corner is the building's, not an artefact. The
- * arc is the part of the circle beyond the mouth line, found by where the
- * chord cuts it rather than assumed to be a clean half.
+ * The hall and the chevet do not meet flush. A nave forty-five metres across
+ * is wider than a chevet of twenty-three metres' radius, so the plan steps
+ * inward at the mouth — and that re-entrant corner is the building's, not an
+ * artefact. The arc is the part of the circle beyond the mouth line, found by
+ * where the chord cuts it rather than assumed to be a clean half.
+ *
+ * The apron is a skirt all the way round, so it pushes the arms out along
+ * their own three sides and not only along the flanks.
  */
 export function footprint(p: FootprintParams, apron: number, arc = 64): THREE.Vector2[] {
   const halfWidth = p.halfWidth + apron
@@ -121,11 +126,28 @@ export function footprint(p: FootprintParams, apron: number, arc = 64): THREE.Ve
   const radius = p.apseRadius + apron
   const points: THREE.Vector2[] = [new THREE.Vector2(halfWidth, near)]
 
+  /** One flank, from the Glory end toward the apse, with its arm on the way. */
+  const flank = (side: 1 | -1): THREE.Vector2[] => {
+    if (!p.arm) return []
+    const out = (p.arm.halfWidth + apron) * side
+    const edge = halfWidth * side
+    // The apron stops at the mouth: past it the chevet is the outline, and an
+    // arm that overshot would cut a notch out of the apse.
+    const far = Math.max(p.arm.far - apron, p.mouthZ)
+    return [
+      new THREE.Vector2(edge, p.arm.near + apron),
+      new THREE.Vector2(out, p.arm.near + apron),
+      new THREE.Vector2(out, far),
+      new THREE.Vector2(edge, far),
+    ]
+  }
+
   // Angle at which the mouth line cuts the circle, measured from +x about the
   // apse centre with the church's axis running to -z.
   const reach = (p.apseCentreZ - p.mouthZ) / radius
   const start = Math.abs(reach) < 1 ? Math.asin(reach) : 0
 
+  points.push(...flank(1))
   points.push(new THREE.Vector2(halfWidth, p.mouthZ))
   for (let i = 0; i <= arc; i++) {
     const angle = start + (i / arc) * (Math.PI - 2 * start)
@@ -134,8 +156,16 @@ export function footprint(p: FootprintParams, apron: number, arc = 64): THREE.Ve
     )
   }
   points.push(new THREE.Vector2(-halfWidth, p.mouthZ))
+  points.push(...flank(-1).reverse())
   points.push(new THREE.Vector2(-halfWidth, near))
-  return points
+
+  // An arm whose far side lands on the mouth line repeats the point the arc
+  // starts from, and a polygon with a zero-length edge in it triangulates
+  // badly. Drop them once, here, rather than in every caller.
+  return points.filter((point, i) => {
+    const previous = points[(i - 1 + points.length) % points.length]!
+    return point.distanceToSquared(previous) > 1e-6
+  })
 }
 
 /**

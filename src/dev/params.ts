@@ -199,6 +199,17 @@ export function buildPanel(ctx: ParamContext): Pane {
   // the panel would buy a rebuild that already takes a fifth of a second.
   floor.on('change', () => ctx.rebuild())
 
+  const transept = pane.addFolder({ title: 'Transept' })
+  transept.addBinding(ctx.plan.transept, 'show', { label: 'arms project' })
+  transept.addBinding(ctx.plan.transept, 'reach', { min: 0, max: 22.5, step: 0.25, label: 'reach m' })
+  transept.addBinding(ctx.plan.transept, 'crown', { min: 15, max: 60, step: 0.5, label: 'crown m' })
+  transept.addBinding(ctx.plan.transept, 'order', {
+    label: 'order',
+    options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — red porphyry': 12 },
+  })
+  transept.addBinding(ctx.plan.transept, 'levels', { min: 0, max: 3, step: 1, label: 'branch levels' })
+  transept.on('change', () => ctx.rebuild())
+
   const shell = pane.addFolder({ title: 'Shell' })
   shell.addBinding(ctx.plan.shell, 'show', { label: 'terraces' })
   shell.addBinding(ctx.plan.shell, 'parapet', { min: 0, max: 6, step: 0.1, label: 'parapet m' })

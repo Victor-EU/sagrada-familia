@@ -85,6 +85,17 @@ export interface ShellPlan {
   aisleCrown: number
   crossingCrown: number
   armCrown: number
+  /**
+   * The transept arms where they project: the outer wall face, the
+   * clerestory line inboard of them, their two ends, and their own crown.
+   */
+  transept: {
+    outerX: number
+    innerX: number
+    near: number
+    far: number
+    crown: number
+  } | null
   /** The apse: drum, chevet, and the height its ambulatory is roofed at. */
   apseCentreZ: number
   apseInner: number
@@ -160,10 +171,19 @@ export function buildShell(
   deck(rect(p.clerX, p.wallX, p.crossNear, p.gloryZ), p.aisleCrown)
   deck(rect(-p.wallX, -p.clerX, p.crossNear, p.gloryZ), p.aisleCrown)
 
-  // The crossing, fifteen metres higher, and the two arms either side of it.
+  // The crossing, fifteen metres higher, and the vessels either side of it.
+  // Where the transept projects, the 45 m deck stops on the clerestory that
+  // stands over the arm and the arm carries its own at 30.
+  const crossOuter = p.transept ? p.transept.innerX : p.wallX
   deck(rect(-p.clerX, p.clerX, p.crossFar, p.crossNear), p.crossingCrown)
-  deck(rect(p.clerX, p.wallX, p.crossFar, p.crossNear), p.armCrown)
-  deck(rect(-p.wallX, -p.clerX, p.crossFar, p.crossNear), p.armCrown)
+  deck(rect(p.clerX, crossOuter, p.crossFar, p.crossNear), p.armCrown)
+  deck(rect(-crossOuter, -p.clerX, p.crossFar, p.crossNear), p.armCrown)
+
+  if (p.transept) {
+    const t = p.transept
+    deck(rect(t.innerX, t.outerX, t.far, t.near), t.crown)
+    deck(rect(-t.outerX, -t.innerX, t.far, t.near), t.crown)
+  }
 
   // The ambulatory, which is an annulus and not a rectangle.
   deck(
@@ -228,15 +248,18 @@ export function buildShell(
   }
 
   const facadeWidth = MODULE * 4
+  // The transept fronts close the arms, so they stand on whatever line the
+  // arms reach — the nave's own wall only when there are none.
+  const frontX = p.transept ? p.transept.outerX : p.wallX
   front(
-    new THREE.Vector2(p.wallX, p.crossingZ),
+    new THREE.Vector2(frontX, p.crossingZ),
     new THREE.Vector2(0, 1),
     new THREE.Vector2(1, 0),
     facadeWidth,
     p.armCrown,
   )
   front(
-    new THREE.Vector2(-p.wallX, p.crossingZ),
+    new THREE.Vector2(-frontX, p.crossingZ),
     new THREE.Vector2(0, 1),
     new THREE.Vector2(-1, 0),
     facadeWidth,
@@ -257,8 +280,10 @@ export function buildShell(
     const inset = s.parapet * 0.5
     for (const side of [1, -1]) {
       for (let z = p.gloryZ - MODULE / 2; z > p.crossFar; z -= MODULE) {
-        const crown = z < p.crossNear ? p.armCrown : p.aisleCrown
-        pinnacles.push(new THREE.Vector3(side * (p.wallX - inset), crown + s.parapet, z))
+        const inArm = p.transept !== null && z <= p.transept.near && z >= p.transept.far
+        const crown = inArm ? p.transept!.crown : z < p.crossNear ? p.armCrown : p.aisleCrown
+        const edge = inArm ? p.transept!.outerX : p.wallX
+        pinnacles.push(new THREE.Vector3(side * (edge - inset), crown + s.parapet, z))
       }
       for (let z = p.gloryZ - MODULE / 2; z > p.crossFar; z -= MODULE) {
         const crown = z < p.crossNear ? p.crossingCrown : p.naveCrown
@@ -305,7 +330,10 @@ export function buildShell(
     s.parapet +
     (s.pinnacles ? s.pinnacleHeight : 0)
 
-  return { peak, reach: p.wallX + s.project + 1 }
+  return {
+    peak,
+    reach: Math.max(p.wallX, p.transept?.outerX ?? 0) + s.project + 1,
+  }
 }
 
 /**

@@ -116,6 +116,40 @@ export interface CrossingParams {
   armCrown: number
 }
 
+/**
+ * The transept arms.
+ *
+ * A Latin cross has arms, and until now this one had none: the crossing was
+ * fifteen metres of the nave with its vaults raised, ending on the nave's own
+ * wall line. The published figures settle how far it should stand out — the
+ * Basilica is **90 m long and 60 m wide** against a nave of **45 m**, and the
+ * difference is 7.5 m a side, which is one module exactly.
+ *
+ * So an arm is not a new kind of thing here. It is one more **band** on the
+ * crossing's own two stations, outboard of the outer aisle: two more columns
+ * a station, one more cell a strip, and the wall and the clerestory that
+ * `buildWalls` already derives from a band being lower than the one inside
+ * it. The grid does the rest.
+ *
+ * Worth recording against it: Gaudí's own published plan does **not** draw
+ * the projection. Measured off it — the scale bar gives 7.03 px to the metre
+ * and the column lines land on ±7.5, ±15 and ±22.5 to within a quarter of a
+ * metre — the body walls run straight from the Glory end to the chevet, and
+ * the sixty metres is made up by seven and a half metres of wall, chapel and
+ * stair turret on each flank rather than by an arm you can stand in. Both
+ * readings give the same outside width. This one gives a transept.
+ */
+export interface TranseptParams {
+  show: boolean
+  /** How far the arms stand out past the outermost nave band. */
+  reach: number
+  order: ColumnOrder
+  levels: number
+  branchLength: number
+  /** Crown of the arm's vault — an aisle's, so a clerestory appears above it. */
+  crown: number
+}
+
 export interface ChurchParams {
   /** The module, and the distance between columns in both directions. */
   station: number
@@ -129,6 +163,8 @@ export interface ChurchParams {
   tree: TreeShape
   vault: VaultShape
   walls: WallParams
+  /** The arms of the cross, and how far they stand out. */
+  transept: TranseptParams
   floor: FloorParams
   /** Terraces, parapets and the three fronts. */
   shell: ShellParams
@@ -243,6 +279,16 @@ export const defaultChurch: ChurchParams = {
     clerestoryCrest: 4,
     glory: true,
   },
+  // One module out, and the aisle's own order and crown: an arm is an aisle
+  // that happens to run the other way.
+  transept: {
+    show: true,
+    reach: MODULE,
+    order: 6,
+    levels: 1,
+    branchLength: 0.95,
+    crown: VAULT_HEIGHT.sideAisle,
+  },
   floor: { ...defaultFloor },
   shell: { ...defaultShell },
   towers: { ...defaultTowers },
@@ -275,6 +321,8 @@ export interface Church {
   apse: Apse
   /** What the paving pattern needs in order to be set out on the plan. */
   paving: PavingPlan
+  /** The transept arms, inside faces, or null where they do not project. */
+  arm: { halfWidth: number; near: number; far: number } | null
   /** The eighteen, where they stand and how tall. */
   towers: TowerSite[]
   /** The top of the tallest thing in the model. */
@@ -321,6 +369,24 @@ export function buildChurch(
         },
   )
 
+  // The arms: one more band outboard of the outer aisle, on the crossing's
+  // own two stations. Everything that follows — two more columns a station,
+  // one more cell a strip, the wall at the arm's end and the clerestory over
+  // it — falls out of the band being there.
+  const arms = p.transept.show && p.transept.reach > 0
+  const armOuter = outermost + p.transept.reach
+  if (arms) {
+    crossingBands.push({
+      name: 'transept arm',
+      outer: armOuter,
+      crown: p.transept.crown,
+      order: p.transept.order,
+      levels: p.transept.levels,
+      branchLength: p.transept.branchLength,
+      skylight: false,
+    })
+  }
+
   // Transverse lines: the nave's, then the two that bound the crossing. The
   // line at `crossNear` is shared — it is the nave's last and the crossing's
   // first — and it carries the crossing's orders, which is why the twelve
@@ -355,13 +421,19 @@ export function buildChurch(
   const wallCentre = outermost + p.walls.offset
   const halfWidth = p.walls.show ? wallCentre - p.walls.thickness / 2 : outermost + 12
 
+  const armWallCentre = armOuter + p.walls.offset
+
   if (p.walls.show) {
     for (const [index, strip] of strips.entries()) {
       // 0 at the Glory end, 1 at the crossing.
       const along = strips.length > 1 ? index / (strips.length - 1) : 1
-      buildWalls(parts, p, strip, wallCentre, along, index)
+      buildWalls(parts, p, strip, along, index, index === strips.length - 1)
     }
     if (p.walls.glory) buildGloryWall(parts, p, gloryLine + p.walls.offset)
+    // The two short returns that close an arm along the nave axis. Without
+    // them the building has a seven-and-a-half metre hole at each of the
+    // four re-entrant corners of the cross.
+    if (arms) buildArmReturns(parts, p, wallCentre, armWallCentre, crossNear, crossFar)
   }
 
   // The pavement is laid last, because it is cut to the building's own
@@ -374,6 +446,13 @@ export function buildChurch(
         mouthZ: crossFar,
         apseCentreZ: apse.centreZ,
         apseRadius: apse.outerRadius + p.walls.thickness / 2,
+        arm: arms
+          ? {
+              halfWidth: armWallCentre + p.walls.thickness / 2,
+              near: crossNear,
+              far: crossFar,
+            }
+          : undefined,
       },
       p.floor.apron,
     )
@@ -393,7 +472,7 @@ export function buildChurch(
   const apseOuter = apse.outerRadius + p.apse.wall.thickness / 2
 
   let peak = ceilingOf(p)
-  let reach = wallOuter + 4
+  let reach = Math.max(wallOuter, arms ? armWallCentre + p.walls.thickness / 2 : 0) + 4
 
   if (p.shell.show) {
     const shell = buildShell(
@@ -409,6 +488,15 @@ export function buildChurch(
         aisleCrown,
         crossingCrown: p.crossing.crown,
         armCrown: p.crossing.armCrown,
+        transept: arms
+          ? {
+              outerX: armWallCentre + p.walls.thickness / 2,
+              innerX: outermost + p.walls.clerestoryOffset,
+              near: crossNear,
+              far: crossFar,
+              crown: p.transept.crown,
+            }
+          : null,
         apseCentreZ: apse.centreZ,
         apseInner: p.apse.radius + p.apse.overhang,
         apseOuter,
@@ -428,6 +516,7 @@ export function buildChurch(
     reach = Math.max(reach, shell.reach)
   }
 
+  const transeptFace = arms ? armWallCentre + p.walls.thickness / 2 : wallOuter
   const sites = towerSites({
     crossingZ: (crossNear + crossFar) / 2,
     crossNear,
@@ -435,7 +524,7 @@ export function buildChurch(
     crossingCrown: p.crossing.crown,
     armCrown: p.crossing.armCrown,
     naveCrown: p.bands[0]!.crown,
-    wallX: wallOuter,
+    wallX: transeptFace,
     gloryZ: gloryOuter,
     apseCentreZ: apse.centreZ,
     apseCrown: p.apse.crown,
@@ -446,6 +535,14 @@ export function buildChurch(
     ? buildTowers(parts, sites, p.towers)
     : { sites: [] as TowerSite[], peak: 0 }
   peak = Math.max(peak, towers.peak)
+
+  const armInside = arms
+    ? {
+        halfWidth: armWallCentre - p.walls.thickness / 2,
+        near: crossNear,
+        far: crossFar,
+      }
+    : null
 
   const field = new InstancedField(parts.specs())
 
@@ -459,6 +556,7 @@ export function buildChurch(
     apse: { centreZ: apse.centreZ, radius: apse.outerRadius - p.walls.thickness },
     columns: parts.columns,
     terraces: [apse.terrace],
+    arm: armInside ?? undefined,
   })
 
   // What the whole thing occupies, towers included — the sun rig fits its
@@ -493,6 +591,7 @@ export function buildChurch(
       radialsPerChapel: 4,
       crossingZ: (crossNear + crossFar) / 2,
     },
+    arm: armInside,
     towers: towers.sites,
     peak,
   }
@@ -515,15 +614,19 @@ function buildWalls(
   parts: Parts,
   p: ChurchParams,
   strip: Strip,
-  wallCentre: number,
   along: number,
   seed: number,
+  /** Whether this strip is the one the transept fronts close. */
+  transeptEnd: boolean,
 ): void {
   const span = Math.abs(strip.near - strip.far)
   const centre = (strip.near + strip.far) / 2
   const w = p.walls
   const outerBand = strip.bands[strip.bands.length - 1]!
   const grade = strip.bands[0]!.crown
+  // Each strip closes on its own outermost band, which is how the wall
+  // follows the plan out into an arm without being told that arms exist.
+  const wallCentre = outerBand.outer + w.offset
 
   for (const [sign, side] of [
     [1, 'nativity'],
@@ -547,12 +650,12 @@ function buildWalls(
         panesUp: 12,
       },
     ]
-    // A wall that closes a 45 m transept arm is not an aisle wall with a
-    // taller top; it gets a second register, which is what makes the
-    // Nativity and Passion ends read as façades.
-    if (outerBand.crown > 35) {
+    // A wall that closes a transept end is not an aisle wall with a taller
+    // top; it gets a second register, which is what makes the Nativity and
+    // Passion fronts read as façades from inside as well as out.
+    if (outerBand.crown > 35 || transeptEnd) {
       outer.registers.push({
-        sill: outerBand.crown - 13,
+        sill: Math.max(outerBand.crown - 13, w.lowHead + 2),
         head: outerBand.crown - 4,
         lights: w.lights,
         panesAcross: 3,
@@ -585,6 +688,49 @@ function buildWalls(
         },
       ]
       addWall(parts, high, sign * (inner.outer + w.clerestoryOffset), centre, (sign * Math.PI) / 2)
+    }
+  }
+}
+
+/**
+ * The two short walls that close an arm along the nave axis.
+ *
+ * They span exactly the arm's reach, from the nave's wall line out to the
+ * arm's, and they stand as high as the arm's own vault. Nothing here is
+ * glazed twice: these face along the building rather than out of it, so they
+ * take one register like an aisle wall.
+ */
+function buildArmReturns(
+  parts: Parts,
+  p: ChurchParams,
+  wallCentre: number,
+  armWallCentre: number,
+  near: number,
+  far: number,
+): void {
+  const w = p.walls
+  const span = armWallCentre - wallCentre
+  if (span <= 0) return
+
+  for (const sign of [1, -1] as const) {
+    for (const [index, z] of [near, far].entries()) {
+      const panel = defaultClerestory(span, p.transept.crown, sign > 0 ? 'nativity' : 'passion')
+      panel.thickness = w.thickness
+      panel.margin = w.margin
+      panel.mullion = w.mullion
+      panel.gradeHeight = p.bands[0]!.crown
+      panel.along = 1
+      panel.seed += 211 + index * 13 + (sign > 0 ? 5 : 0)
+      panel.registers = [
+        {
+          sill: w.lowSill,
+          head: Math.min(w.lowHead, p.transept.crown - 3),
+          lights: 2,
+          panesAcross: 4,
+          panesUp: 12,
+        },
+      ]
+      addWall(parts, panel, sign * (wallCentre + span / 2), z, 0)
     }
   }
 }

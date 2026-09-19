@@ -54,6 +54,13 @@ export interface ChurchEnvelopeParams {
   columns: { x: number; z: number; radius: number }[]
   /** Raised floors inside the shell. */
   terraces?: Terrace[]
+  /**
+   * The transept arms, which stand out past the nave walls.
+   *
+   * One entry describes both, because they are mirrored: a half width and the
+   * two lines that bound them along the nave axis.
+   */
+  arm?: { halfWidth: number; near: number; far: number }
 }
 
 /**
@@ -72,13 +79,17 @@ export interface ChurchEnvelopeParams {
 export class ChurchEnvelope implements Envelope {
   constructor(private readonly p: ChurchEnvelopeParams) {}
 
-  /** Whether (x, z) is over the nave's rectangle, with a margin. */
+  /** Whether (x, z) is over the nave's rectangle or an arm, with a margin. */
   private inHall(x: number, z: number, margin = 0): boolean {
-    return (
-      Math.abs(x) <= this.p.halfWidth + margin &&
-      z <= this.p.near + margin &&
-      z >= this.p.far - margin
-    )
+    if (z > this.p.near + margin || z < this.p.far - margin) return false
+    return Math.abs(x) <= this.widthAt(z) + margin
+  }
+
+  /** Half width of the hall at this z — wider where the transept projects. */
+  private widthAt(z: number): number {
+    const arm = this.p.arm
+    if (arm && z <= arm.near && z >= arm.far) return arm.halfWidth
+    return this.p.halfWidth
   }
 
   /** Whether (x, z) is under the apse, with a margin. */
@@ -160,8 +171,24 @@ export class ChurchEnvelope implements Envelope {
       return
     }
 
-    const limit = Math.max(0, this.p.halfWidth - radius)
-    position.x = THREE.MathUtils.clamp(position.x, -limit, limit)
+    // Out past the nave wall there is only one place to be, which is in an
+    // arm — so the arm's own three walls hold rather than the nave's, and
+    // walking off the end of one puts you back in it instead of snapping you
+    // seven and a half metres sideways into the aisle.
+    const nave = Math.max(0, this.p.halfWidth - radius)
+    const arm = this.p.arm
+    if (arm && Math.abs(position.x) > nave) {
+      const wide = Math.max(nave, arm.halfWidth - radius)
+      position.x = THREE.MathUtils.clamp(position.x, -wide, wide)
+      position.z = THREE.MathUtils.clamp(
+        position.z,
+        Math.min(arm.near, arm.far + radius),
+        Math.max(arm.far, arm.near - radius),
+      )
+      return
+    }
+
+    position.x = THREE.MathUtils.clamp(position.x, -nave, nave)
     position.z = THREE.MathUtils.clamp(
       position.z,
       this.p.far,

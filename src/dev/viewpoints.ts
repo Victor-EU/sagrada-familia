@@ -118,16 +118,18 @@ export const VIEWPOINTS: Viewpoint[] = [
     key: '8',
     name: 'Across the crossing',
     note:
-      'From the Nativity arm, straight through the crossing and out the ' +
-      'Passion one — the only line in the building that sees the transept ' +
-      'as a room rather than as a widening. The four columns of red ' +
-      'porphyry stand either side of it and the sixty-metre vault is above. ' +
-      'None of the twelve is placed by hand: two transverse lines fifteen ' +
-      'metres apart is where the grid puts them.',
-    position: [19, 1.65, -30],
-    target: [-8, 34, -30.5],
-    fov: 68,
-    shiftCorrection: 0.6,
+      'From inside the Nativity arm, straight through the crossing and out ' +
+      'the Passion one — the only line in the building that sees the ' +
+      'transept as a room rather than as a widening, and until the arms ' +
+      'projected it was not quite true: the camera stood in the outer ' +
+      'aisle, because there was nowhere further out to stand. There is now. ' +
+      'Sixty-two metres of walk tip to tip, the four columns of red ' +
+      'porphyry either side of the middle of it, and the Passion glazing ' +
+      'square on at four o’clock.',
+    position: [28.5, 1.65, -29.2],
+    target: [-18, 13, -30.6],
+    fov: 72,
+    shiftCorrection: 0.55,
     day: 262,
     hour: 16,
   },

@@ -334,7 +334,8 @@ function frame(): void {
         `springs at ${(built?.springs ?? []).map((v) => v.toFixed(1)).join(' / ')} m`,
       `plan  ${plan.naveBays} × ${plan.station} m nave  ${plan.crossing.span} m crossing  ` +
         `${(apse.radius * 2).toFixed(0)} m apse  ` +
-        `${(built?.halfWidth ?? 0).toFixed(1)} m half-width`,
+        `${(built?.halfWidth ?? 0).toFixed(1)} m half-width  ` +
+        `${built?.arm ? `${(built.arm.halfWidth * 2).toFixed(1)} m across the transept` : 'no arms'}`,
       `vault ${plan.bands.map((b) => b.crown).join(' / ')} nave  ` +
         `${plan.crossing.armCrown} / ${plan.crossing.crown} crossing  ` +
         `${apse.ambulatoryCrown} / ${apse.crown} apse  m`,
