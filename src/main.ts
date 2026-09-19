@@ -1,7 +1,7 @@
 import './style.css'
 import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
-import { plasterMaterial, rulingMaterial } from './render/materials.ts'
+import { rulingMaterial } from './render/materials.ts'
 import { columnMetrics } from './geometry/column.ts'
 import { buildBay, defaultBay, type Bay, type BayParams } from './plan/bay.ts'
 import {
@@ -12,7 +12,17 @@ import {
 } from './geometry/hyperboloid.ts'
 import { FreeCamera } from './camera/freecam.ts'
 import { PhotoOverlay } from './dev/overlay.ts'
-import { buildPanel, type RenderFlags, type ViewFlags } from './dev/params.ts'
+import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
+import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
+import {
+  BUILDING_BEARING_DEG,
+  barcelonaTime,
+  dayLabel,
+  isSummerTime,
+  solarPosition,
+  sunDirection,
+  type SolarPosition,
+} from './light/sun.ts'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#view')!
 const overlayImg = document.querySelector<HTMLImageElement>('#overlay')!
@@ -34,7 +44,7 @@ const overlay = new PhotoOverlay(overlayImg, document.body)
 const bay: BayParams = structuredClone(defaultBay)
 const hyper: HyperboloidParams = { ...defaultHyperboloid }
 const view: ViewFlags = {
-  showSurface: true,
+  showSurface: false,
   wireframe: false,
   showRulings: false,
   rulingCount: 48,
@@ -42,11 +52,39 @@ const view: ViewFlags = {
   showFigure: true,
   showGround: true,
 }
-const render: RenderFlags = { exposure: 1, environment: 0.9 }
+const render: RenderFlags = {
+  exposure: 1,
+  // Low on purpose. An environment probe lights the interior as if the walls
+  // were not there, and every point of ambient it adds is a point of contrast
+  // taken off the sun shafts, which are the entire subject.
+  // Measured, not guessed: at these two numbers the shadowed floor sits at
+  // 0.15 of the open-sun floor, which is about what a clear day gives, and a
+  // shaft through the red glazing lands red rather than pink.
+  environment: 0.18,
+  glassGain: 3.4,
+  bounce: 0.42,
+  sunOffset: 0.06,
+}
+
+/**
+ * Late September, four in the afternoon — the hour the sun stands square on
+ * the Passion wall at an altitude low enough to throw the shafts right across
+ * the bay. Found by scanning, not guessed.
+ */
+const sun: SunFlags = {
+  dayOfYear: 262,
+  hour: 16,
+  bearingDeg: BUILDING_BEARING_DEG,
+  intensity: 1,
+  skyBrightness: 1,
+}
+
+/** Any year does; the sun repeats to well inside a pixel. */
+const YEAR = 2026
 
 // One material across the whole assembly: the plaster maquette has no material
 // variation to budget for, which is the point of choosing it.
-const plaster = plasterMaterial()
+const plaster = stage.plaster
 
 const bayRoot = new THREE.Group()
 stage.scene.add(bayRoot)
@@ -75,8 +113,12 @@ function rebuildBay(): void {
     bayRoot.remove(built.group)
     for (const geometry of built.geometries) geometry.dispose()
   }
-  built = buildBay(bay, plaster)
+  built = buildBay(bay, plaster, stage.glass)
   bayRoot.add(built.group)
+
+  // The sun rig fits itself to what is actually built, so it has to be told.
+  built.group.updateMatrixWorld(true)
+  stage.setModelBounds(new THREE.Box3().setFromObject(built.group))
 }
 
 function rebuild(): void {
@@ -103,6 +145,20 @@ function applyView(): void {
 function applyRender(): void {
   stage.setExposure(render.exposure)
   stage.scene.environmentIntensity = render.environment
+  stage.glass.uniforms.uGlow.value = render.glassGain
+  stage.bounce.intensity = render.bounce
+  stage.sun.offset = render.sunOffset
+  stage.invalidateSun()
+}
+
+let solar: SolarPosition = solarPosition(barcelonaTime(YEAR, sun.dayOfYear, sun.hour))
+
+function applySun(): void {
+  stage.sky.brightness = sun.skyBrightness
+  const when = barcelonaTime(YEAR, sun.dayOfYear, sun.hour)
+  solar = solarPosition(when)
+  stage.setSun(sunDirection(solar, sun.bearingDeg))
+  stage.sun.uniforms.uSunRadiance.value.multiplyScalar(sun.intensity)
 }
 
 function layout(): void {
@@ -134,16 +190,31 @@ function layout(): void {
 overlay.onChange = layout
 window.addEventListener('resize', layout)
 
-buildPanel({ bay, hyper, view, render, cam, overlay, rebuild, applyView, applyRender })
+function goTo(index: number): void {
+  const viewpoint = VIEWPOINTS[index]
+  if (viewpoint) applyViewpoint(viewpoint, cam, sun, applySun)
+}
+
+buildPanel({
+  bay, hyper, view, render, sun, cam, overlay,
+  rebuild, applyView, applyRender, applySun, goTo,
+})
+
+// Number keys jump to the curated views, which is how the same six frames get
+// compared after a change.
+window.addEventListener('keydown', (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return
+  const index = VIEWPOINTS.findIndex((v) => v.key === event.key)
+  if (index >= 0) goTo(index)
+})
 
 rebuild()
 applyRender()
+applySun()
 layout()
 
 // Open standing in the bay looking up, which is the whole point of the space.
-cam.camera.position.set(bay.bay * 0.9, 1.65, bay.bay * 1.25)
-cam.shiftCorrection = 1
-cam.lookAt(new THREE.Vector3(0, bay.vault.crownHeight * 0.62, 0))
+goTo(0)
 
 // Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
@@ -156,8 +227,14 @@ declare global {
       built: () => Bay | null
       hyper: HyperboloidParams
       view: ViewFlags
+      render: RenderFlags
+      sun: SunFlags
+      solar: () => SolarPosition
       stage: typeof stage
       rebuild: () => void
+      applySun: () => void
+      applyRender: () => void
+      goTo: (index: number) => void
     }
   }
 }
@@ -168,8 +245,14 @@ window.harness = {
   built: () => built,
   hyper,
   view,
+  render,
+  sun,
+  solar: () => solar,
   stage,
   rebuild,
+  applySun,
+  applyRender,
+  goTo,
 }
 
 const clock = new THREE.Clock()
@@ -180,7 +263,7 @@ function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1)
 
   cam.update(dt)
-  stage.renderer.render(stage.scene, stage.camera)
+  stage.render()
 
   reticle.classList.toggle('on', cam.isLocked)
 
@@ -211,12 +294,21 @@ function frame(): void {
         `springs at ${(built?.springHeight ?? 0).toFixed(1)} m`,
       `bay   ${bay.bay} m across  crown ${bay.vault.crownHeight} m  ` +
         `(${(bay.vault.crownHeight / 7.5).toFixed(0)} modules)`,
+      `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
+        `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
+        `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,
     ].join('\n')
   }
 }
 
 function deg(radians: number): string {
   return ((radians * 180) / Math.PI).toFixed(1)
+}
+
+function wallClock(hour: number): string {
+  const h = Math.floor(hour)
+  const m = Math.round((hour - h) * 60)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 frame()
