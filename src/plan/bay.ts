@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { buildTreeColumn, type TreeColumnParams } from '../geometry/branch.ts'
+import { columnMetrics } from '../geometry/column.ts'
+import { BayEnvelope } from '../camera/envelope.ts'
 import { buildVaultCell, type VaultCellParams } from '../geometry/vault.ts'
 import { buildClerestory, defaultClerestory } from './clerestory.ts'
 import { LAYER_GLASS } from '../render/sunrig.ts'
@@ -94,6 +96,8 @@ export interface Bay {
   /** Centre of the skylight, for placing the light later. */
   skylight: THREE.Vector3
   columnPositions: THREE.Vector3[]
+  /** What the camera needs in order to walk here. */
+  envelope: BayEnvelope
 }
 
 export function buildBay(
@@ -163,5 +167,23 @@ export function buildBay(
     }
   }
 
-  return { group, geometries, springHeight, skylight: vault.skylight, columnPositions }
+  // The walls stand outboard of the columns, so the room is wider than the bay.
+  const wallInner = p.walls.show ? half + p.walls.offset - p.walls.thickness / 2 : half + 12
+  const columnRadius = columnMetrics(p.tree.order).innerDiameter / 2
+  const envelope = new BayEnvelope({
+    halfWidth: wallInner,
+    halfDepth: half,
+    ceiling: p.vault.crownHeight,
+    floor: 0,
+    columns: columnPositions.map((c) => ({ x: c.x, z: c.z, radius: columnRadius })),
+  })
+
+  return {
+    group,
+    geometries,
+    springHeight,
+    skylight: vault.skylight,
+    columnPositions,
+    envelope,
+  }
 }

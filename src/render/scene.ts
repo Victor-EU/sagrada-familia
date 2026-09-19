@@ -3,6 +3,7 @@ import { groundMaterial, plasterMaterial } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
 import { LAYER_GLASS, SunRig, patchForSunlight } from './sunrig.ts'
 import { Sky } from '../light/sky.ts'
+import { EYE_HEIGHT } from '../camera/envelope.ts'
 
 export interface Stage {
   renderer: THREE.WebGLRenderer
@@ -31,8 +32,7 @@ export interface Stage {
   dispose(): void
 }
 
-/** Eye height used for walk mode, and the height of the scale figure. */
-export const EYE_HEIGHT = 1.65
+export { EYE_HEIGHT }
 
 export function createStage(canvas: HTMLCanvasElement): Stage {
   const renderer = new THREE.WebGLRenderer({

@@ -15,8 +15,9 @@ Phase 0's bar was: *you can load a photo, match a camera to it, and tune a
 parameter live.* All three work, plus the straight-line ruling view.
 
 Phase 1 is the nave bay — the go/no-go. Columns, the branching node, the vault,
-the glazed walls, the solar model and the coloured transmittance pass are in.
-What remains is the walk/fly transition and tiling the bay into a nave.
+the glazed walls, the solar model, the coloured transmittance pass and the
+walk/fly transition are in. What remains before the gate is judgement: stills
+from the app beside reference photographs.
 
 | Built | Where |
 | --- | --- |
@@ -36,6 +37,7 @@ What remains is the walk/fly transition and tiling the bay into a nave.
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
 | Clerestory wall — stone frame, two registers, no holes cut | `src/plan/clerestory.ts` |
 | Six curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
+| Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts`, `src/camera/envelope.ts` |
 
 ## Running
 

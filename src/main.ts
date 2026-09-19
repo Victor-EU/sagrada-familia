@@ -119,6 +119,7 @@ function rebuildBay(): void {
   // The sun rig fits itself to what is actually built, so it has to be told.
   built.group.updateMatrixWorld(true)
   stage.setModelBounds(new THREE.Box3().setFromObject(built.group))
+  cam.envelope = built.envelope
 }
 
 function rebuild(): void {
@@ -285,7 +286,8 @@ function frame(): void {
       `pos   ${p.x.toFixed(2)}  ${p.y.toFixed(2)}  ${p.z.toFixed(2)}`,
       `look  yaw ${deg(cam.yaw)}°   pitch ${deg(cam.pitch)}°`,
       `lens  ${stage.camera.fov.toFixed(1)}° fov   shift ${(cam.shiftCorrection * 100).toFixed(0)}%`,
-      `move  ${cam.speed.toFixed(2)} m/s`,
+      `move  ${modeLabel()}  ${cam.speed.toFixed(2)} m/s fly  ` +
+        `${cam.walkSpeed.toFixed(2)} m/s walk`,
       `mesh  ${Math.round(tris).toLocaleString()} tris  ${meshes} meshes  ` +
         `${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
@@ -299,6 +301,13 @@ function frame(): void {
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,
     ].join('\n')
   }
+}
+
+/** What the camera is currently doing, and how far through it is. */
+function modeLabel(): string {
+  const mode = cam.mode
+  if (mode === 'settling') return `settling ${(cam.grounded * 100).toFixed(0)}%`
+  return mode === 'walk' ? 'walking' : 'flying'
 }
 
 function deg(radians: number): string {

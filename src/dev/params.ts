@@ -154,7 +154,9 @@ export function buildPanel(ctx: ParamContext): Pane {
     step: 0.01,
     label: 'vertical correction',
   }).on('change', () => ctx.cam.refresh())
-  cam.addBinding(ctx.cam, 'speed', { min: 0.15, max: 400, step: 0.05, label: 'speed m/s' })
+  cam.addBinding(ctx.cam, 'speed', { min: 0.15, max: 400, step: 0.05, label: 'fly m/s' })
+  cam.addBinding(ctx.cam, 'walkSpeed', { min: 0.4, max: 4, step: 0.05, label: 'walk m/s' })
+  cam.addBinding(ctx.cam, 'grounding', { label: 'ground indoors' })
   cam.addButton({ title: 'Copy camera JSON' }).on('click', () => {
     void copy(JSON.stringify(ctx.cam.getState(), null, 2))
   })
