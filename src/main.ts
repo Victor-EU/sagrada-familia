@@ -2,12 +2,13 @@ import './style.css'
 import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
 import { plasterMaterial, rulingMaterial } from './render/materials.ts'
+import { columnMetrics } from './geometry/column.ts'
 import {
-  buildColumn,
-  columnMetrics,
-  defaultColumn,
-  type ColumnParams,
-} from './geometry/column.ts'
+  buildTreeColumn,
+  defaultTreeColumn,
+  type TreeColumn,
+  type TreeColumnParams,
+} from './geometry/branch.ts'
 import {
   buildHyperboloidRulings,
   buildHyperboloidSurface,
@@ -28,12 +29,14 @@ const reticle = document.querySelector<HTMLDivElement>('#reticle')!
 const PANEL_GUTTER = 310
 /** The funnel's lower rim sits at this height, so tuning z doesn't move it. */
 const FUNNEL_BASE_HEIGHT = 2.6
+/** Keeps the funnel clear of the tree while both are on screen. */
+const FUNNEL_OFFSET_X = 16
 
 const stage = createStage(canvas)
 const cam = new FreeCamera(stage.camera, canvas)
 const overlay = new PhotoOverlay(overlayImg, document.body)
 
-const column: ColumnParams = { ...defaultColumn }
+const tree: TreeColumnParams = { ...defaultTreeColumn }
 const hyper: HyperboloidParams = { ...defaultHyperboloid }
 const view: ViewFlags = {
   showSurface: true,
@@ -46,24 +49,22 @@ const view: ViewFlags = {
 }
 const render: RenderFlags = { exposure: 1, environment: 0.9 }
 
-// Generators work in their natural frame with z as the axis of revolution;
-// the world is y-up. Placement rotates, the mathematics stays clean.
+// One material across the whole assembly: the plaster maquette has no material
+// variation to budget for, which is the point of choosing it.
+const plaster = plasterMaterial()
+
+const treeRoot = new THREE.Group()
+stage.scene.add(treeRoot)
+let treeColumn: TreeColumn | null = null
+
+// Generators work in their natural frame with z as the axis; the world is
+// y-up. Placement rotates, the mathematics stays clean.
 const funnel = new THREE.Group()
 funnel.rotation.x = -Math.PI / 2
-funnel.position.x = 9
+funnel.position.x = FUNNEL_OFFSET_X
 stage.scene.add(funnel)
 
-// Generators work with z as the axis; the world is y-up, so placement rotates.
-const columnGroup = new THREE.Group()
-columnGroup.rotation.x = -Math.PI / 2
-stage.scene.add(columnGroup)
-
-const columnMesh = new THREE.Mesh(buildColumn(column), plasterMaterial())
-columnMesh.castShadow = true
-columnMesh.receiveShadow = true
-columnGroup.add(columnMesh)
-
-const surface = new THREE.Mesh(buildHyperboloidSurface(hyper), plasterMaterial())
+const surface = new THREE.Mesh(buildHyperboloidSurface(hyper), plaster)
 surface.castShadow = true
 surface.receiveShadow = true
 funnel.add(surface)
@@ -74,9 +75,17 @@ const rulings = new THREE.LineSegments(
 )
 funnel.add(rulings)
 
+function rebuildTree(): void {
+  if (treeColumn) {
+    treeRoot.remove(treeColumn.group)
+    for (const geometry of treeColumn.geometries) geometry.dispose()
+  }
+  treeColumn = buildTreeColumn(tree, plaster)
+  treeRoot.add(treeColumn.group)
+}
+
 function rebuild(): void {
-  columnMesh.geometry.dispose()
-  columnMesh.geometry = buildColumn(column)
+  rebuildTree()
 
   surface.geometry.dispose()
   surface.geometry = buildHyperboloidSurface(hyper)
@@ -91,8 +100,7 @@ function rebuild(): void {
 function applyView(): void {
   surface.visible = view.showSurface
   rulings.visible = view.showRulings
-  ;(surface.material as THREE.MeshStandardMaterial).wireframe = view.wireframe
-  ;(columnMesh.material as THREE.MeshStandardMaterial).wireframe = view.wireframe
+  plaster.wireframe = view.wireframe
   stage.figure.visible = view.showFigure
   stage.ground.visible = view.showGround
 }
@@ -131,25 +139,27 @@ function layout(): void {
 overlay.onChange = layout
 window.addEventListener('resize', layout)
 
-buildPanel({ column, hyper, view, render, cam, overlay, rebuild, applyView, applyRender })
+buildPanel({ tree, hyper, view, render, cam, overlay, rebuild, applyView, applyRender })
 
 rebuild()
 applyRender()
 layout()
 
-// Open on the column — it is 24 m tall, so the camera has to stand well back.
-cam.camera.position.set(22, 11, 33)
-cam.lookAt(new THREE.Vector3(0, columnMetrics(column.order).height * 0.45, 0))
+// Open on the whole tree — an order-12 column is 24 m before it even branches.
+const apex = treeColumn ? (treeColumn as TreeColumn).totalHeight : 24
+cam.camera.position.set(20, apex * 0.42, 30)
+cam.shiftCorrection = 1
+cam.lookAt(new THREE.Vector3(0, apex * 0.55, 0))
 
-// Dev convenience: drive the harness from the console, and from automated
+// Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
 declare global {
   interface Window {
     harness: {
       cam: FreeCamera
       overlay: PhotoOverlay
-      column: ColumnParams
-      columnMesh: THREE.Mesh
+      tree: TreeColumnParams
+      treeColumn: () => TreeColumn | null
       hyper: HyperboloidParams
       view: ViewFlags
       stage: typeof stage
@@ -157,7 +167,16 @@ declare global {
     }
   }
 }
-window.harness = { cam, overlay, column, hyper, view, stage, columnMesh, rebuild }
+window.harness = {
+  cam,
+  overlay,
+  tree,
+  treeColumn: () => treeColumn,
+  hyper,
+  view,
+  stage,
+  rebuild,
+}
 
 const clock = new THREE.Clock()
 let hudAt = 0
@@ -175,17 +194,28 @@ function frame(): void {
   if (now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position
-    const cm = columnMetrics(column.order)
-    const tris =
-      ((surface.geometry.index?.count ?? 0) + (columnMesh.geometry.index?.count ?? 0)) / 3
+    const cm = columnMetrics(tree.order)
+
+    let tris = (surface.geometry.index?.count ?? 0) / 3
+    let meshes = 1
+    treeColumn?.group.traverse((node) => {
+      if (!(node instanceof THREE.Mesh)) return
+      meshes++
+      tris += (node.geometry.index?.count ?? 0) / 3
+    })
+
     hudEl.textContent = [
       `pos   ${p.x.toFixed(2)}  ${p.y.toFixed(2)}  ${p.z.toFixed(2)}`,
       `look  yaw ${deg(cam.yaw)}°   pitch ${deg(cam.pitch)}°`,
       `lens  ${stage.camera.fov.toFixed(1)}° fov   shift ${(cam.shiftCorrection * 100).toFixed(0)}%`,
       `move  ${cam.speed.toFixed(2)} m/s`,
-      `mesh  ${tris.toLocaleString()} tris   ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
-      `col   order ${cm.order}  ${cm.height} m tall  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
+      `mesh  ${Math.round(tris).toLocaleString()} tris  ${meshes} meshes  ` +
+        `${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
+      `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
+      `tree  ${tree.levels} levels  ${tree.branches} branches  ` +
+        `apex ${(treeColumn?.totalHeight ?? 0).toFixed(1)} m  ` +
+        `${treeColumn?.tips.length ?? 0} tips`,
     ].join('\n')
   }
 }

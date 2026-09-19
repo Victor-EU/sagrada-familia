@@ -9,10 +9,13 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phase 0 (harness) complete
+## Status: phase 0 complete, phase 1 in progress
 
 Phase 0's bar was: *you can load a photo, match a camera to it, and tune a
 parameter live.* All three work, plus the straight-line ruling view.
+
+Phase 1 is the nave bay — the go/no-go. Columns and the branching node are in;
+the vault, glass and the coloured transmittance pass are not yet.
 
 | Built | Where |
 | --- | --- |
@@ -21,6 +24,8 @@ parameter live.* All three work, plus the straight-line ruling view.
 | Live parameter panel, camera and geometry presets | `src/dev/params.ts`, `src/dev/presets.ts` |
 | Free-fly camera with vertical-line correction | `src/camera/freecam.ts` |
 | Plaster maquette material, studio ambient, ACES tonemap | `src/render/` |
+| Double-twist column, all four orders, from the published rule | `src/geometry/column.ts` |
+| Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 
 ## Running
 

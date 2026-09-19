@@ -42,6 +42,12 @@ export interface ColumnParams {
   stages: number
   radialSegments: number
   heightSegments: number
+  /**
+   * Build only the lower fraction of the column. Branches are shorter pieces
+   * of the same form, so the twist schedule stays keyed to the full height and
+   * a truncated branch simply shows fewer stages.
+   */
+  lengthFraction?: number
 }
 
 export const defaultColumn: ColumnParams = {
@@ -236,10 +242,13 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
   const polys = basePolygons(params.order)
   const stages = stageSchedule(m, params.stages)
 
+  const fraction = Math.min(1, Math.max(0.02, params.lengthFraction ?? 1))
+  const buildHeight = m.height * fraction
+
   const cols = Math.max(12, Math.floor(params.radialSegments))
-  const rows = Math.max(4, Math.floor(params.heightSegments))
+  const rows = Math.max(4, Math.floor(params.heightSegments * fraction))
   const dAlpha = (Math.PI * 2) / cols
-  const dZ = m.height / rows
+  const dZ = buildHeight / rows
 
   // Radius grid first, so normals can come from finite differences on it
   // rather than from averaging face normals.
@@ -304,7 +313,7 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
 
   // Caps. The top one goes away once the branching node lands on it.
   addCap(positions, normals, uvs, indices, grid[0]!, cols, dAlpha, 0, -1)
-  addCap(positions, normals, uvs, indices, grid[rows]!, cols, dAlpha, m.height, 1)
+  addCap(positions, normals, uvs, indices, grid[rows]!, cols, dAlpha, buildHeight, 1)
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
