@@ -45,6 +45,8 @@ the sources count.
 | Part registry, so every region shares one instanced field | `src/plan/parts.ts` |
 | Tessellation from feature size, not from typed-in counts | `src/geometry/detail.ts` |
 | Instanced level of detail, switched on measured error | `src/render/field.ts` |
+| Ambient occlusion — GTAO at half res, glass gated out | `src/render/scene.ts` |
+| Frame census: what is in this picture, by surface | `src/dev/probe.ts` |
 | Solar position for 41.40° N, 2.17° E, with CET/CEST | `src/light/sun.ts` |
 | Analytic sky, and the environment light it casts | `src/light/sky.ts` |
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
@@ -114,7 +116,13 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
 - Instanced meshes carry their kind as a `name`, so a frame can be interrogated
   rather than guessed at: raycast a pixel and ask what it hit. That is how the
   bosses were caught pretending to be cylinders.
-- Open, and the honest state of the thing: the model is right at plan scale and
-  not yet beautiful at close range. On a 7.5 m grid every sightline crosses
-  several canopies, and the vault zone between the springing and the crown still
-  reads as noise rather than as a forest.
+- The canopy was fixed by measuring it rather than by looking at it. Run
+  `window.harness.census()` in the console: it gives the share of the frame each
+  kind of surface covers and how fragmented the picture is. A view up the
+  central nave whose largest object is the *aisle* vault is a view of the wrong
+  thing, and the number says so where squinting at the render does not.
+- Ambient occlusion is load-bearing here, not a garnish. One white Lambertian
+  plaster under a near-uniform sky probe has almost no shading of its own, so
+  without it the inside of a twenty-metre funnel is exactly as bright as the
+  outside. It runs at half resolution: how much sky a point can see does not
+  change from one pixel to the next.
