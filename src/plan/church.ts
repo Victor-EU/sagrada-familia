@@ -168,6 +168,7 @@ export const defaultChurch: ChurchParams = {
   },
   tree: {
     branches: 4,
+    subBranches: 2,
     // Twelve degrees, not the twenty-one a single bay could afford. The
     // constraint is the grid: columns stand 7.5 m apart, so a canopy that
     // reaches further than half of that crosses the axis of the next column
@@ -185,11 +186,11 @@ export const defaultChurch: ChurchParams = {
     skylightRadius: 1.3,
     bossRadius: 2.4,
     meetFraction: 0.55,
-    // 1.45 is what closes a cell against its own diagonal, and 1.7 is what
-    // lets the swelling over a column be wide enough to swallow the branch
-    // tips underneath it — see `bossRadiusFor`. The extra overlap is not
-    // waste: it is the only reason the tips do not show.
-    spread: 1.7,
+    // What closes a cell against its own diagonal, and no more. It was 1.7
+    // for a while, to let the swelling over a column grow wide enough to
+    // cover the branch tips; the rosette does that now, from the tips
+    // themselves, so the overlap can go back to what the geometry needs.
+    spread: 1.45,
   },
   walls: {
     show: true,
@@ -277,10 +278,10 @@ export function buildChurch(
   // first — and it carries the crossing's orders, which is why the twelve
   // apostles stand where they do without anyone placing them.
   for (let i = 0; i < bays; i++) {
-    buildStation(parts, { z: gloryLine - i * p.station, bands: p.bands }, p.tree)
+    buildStation(parts, { z: gloryLine - i * p.station, bands: p.bands }, p.tree, p.vault)
   }
-  buildStation(parts, { z: crossNear, bands: crossingBands }, p.tree)
-  buildStation(parts, { z: crossFar, bands: crossingBands }, p.tree)
+  buildStation(parts, { z: crossNear, bands: crossingBands }, p.tree, p.vault)
+  buildStation(parts, { z: crossFar, bands: crossingBands }, p.tree, p.vault)
 
   const strips: Strip[] = []
   for (let i = 0; i < bays; i++) {

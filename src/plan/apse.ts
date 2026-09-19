@@ -140,9 +140,9 @@ export function buildApse(
 
   for (const angle of angles) {
     const [ix, iz] = place(p.radius, angle)
-    parts.column(shapeOf(ring, tree), ix, iz, -angle)
+    parts.column(shapeOf(ring, tree), ix, iz, { turn: -angle, crown: p.lanternFoot, vault })
     const [ox, oz] = place(outerRadius, angle)
-    parts.column(shapeOf(outer, tree), ox, oz, -angle)
+    parts.column(shapeOf(outer, tree), ox, oz, { turn: -angle, crown: p.ambulatoryCrown, vault })
   }
 
   // The ambulatory: one cell between each pair of radii, laid on the radius

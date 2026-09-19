@@ -135,8 +135,12 @@ export class InstancedField implements PassParticipant {
       const local = base.boundingSphere!
       const localBox = base.boundingBox!
 
-      const meshes = spec.levels.map(({ geometry }) => {
+      const meshes = spec.levels.map(({ geometry }, level) => {
         const mesh = new THREE.InstancedMesh(geometry, spec.material, spec.placements.length)
+        // Named so that a frame can be interrogated rather than guessed at:
+        // picking a pixel and asking what it hit is the only reliable way to
+        // find out which of a hundred surfaces is the one misbehaving.
+        mesh.name = `${spec.name} @${level}`
         // We cull each instance ourselves below; three's own test would use a
         // bounding volume over all of them, which for a nave-long line of
         // columns is the whole nave.

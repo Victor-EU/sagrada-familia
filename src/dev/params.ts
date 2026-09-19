@@ -96,7 +96,8 @@ export function buildPanel(ctx: ParamContext): Pane {
   }
 
   const col = pane.addFolder({ title: 'Tree shape' })
-  col.addBinding(ctx.plan.tree, 'branches', { min: 2, max: 6, step: 1, label: 'branches / knot' })
+  col.addBinding(ctx.plan.tree, 'branches', { min: 2, max: 6, step: 1, label: 'branches / trunk' })
+  col.addBinding(ctx.plan.tree, 'subBranches', { min: 1, max: 5, step: 1, label: 'branches / knot' })
   col.addBinding(ctx.plan.tree, 'splayDeg', { min: 0, max: 60, step: 0.5, label: 'splay °' })
   col.addBinding(ctx.plan.tree, 'phaseDeg', { min: 0, max: 90, step: 1, label: 'fan phase °' })
   col.addBinding(ctx.plan.tree, 'knotRadiusScale', { min: 1, max: 2.5, step: 0.01, label: 'knot width' })

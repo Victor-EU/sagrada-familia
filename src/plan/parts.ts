@@ -1,10 +1,13 @@
 import * as THREE from 'three'
 import { buildTreeColumn, type TreeColumn, type TreeColumnParams } from '../geometry/branch.ts'
+import type { VaultShape } from './section.ts'
 import { columnMetrics } from '../geometry/column.ts'
 import { DETAIL_LEVELS } from '../geometry/detail.ts'
 import {
   bossOffsets,
   buildVaultCell,
+  flareFor,
+  vaultSurface,
   type VaultCell,
   type VaultCellParams,
   type VaultSurface,
@@ -63,9 +66,30 @@ export class Parts {
     return built
   }
 
-  /** Stand a tree on the floor at (x, z). Returns where its branches end. */
-  column(shape: TreeColumnParams, x: number, z: number, turn = 0): number {
+  /**
+   * Stand a tree on the floor at (x, z). Returns where its branches end.
+   *
+   * Given a crown and a vault shape it also plants the rosette: one small
+   * hyperboloid rising from each branch tip. That is not decoration. A tree
+   * ends in eight tips standing five or six metres out from its axis, each
+   * finished with its own knot, and the swelling over the column is nowhere
+   * near them at the height they stop — so without this they hang under the
+   * vault like eggs on sticks. Widening the swelling until it covers them
+   * turns it into a cylinder and is worse.
+   *
+   * The building's own answer is the one taken here: the vault springs from
+   * the branch tips. Each tip gets a throat about its own thickness, flaring
+   * up until it meets its neighbours around the ring, by which height the
+   * swelling over the column has opened wide enough to take over.
+   */
+  column(
+    shape: TreeColumnParams,
+    x: number,
+    z: number,
+    opts: { turn?: number; crown?: number; vault?: VaultShape } = {},
+  ): number {
     const trees = this.treeLevels(shape)
+    const turn = opts.turn ?? 0
     const matrix = new THREE.Matrix4().makeRotationY(turn).premultiply(at(x, 0, z))
     this.add(
       `column ${treeKey(shape)}`,
@@ -77,7 +101,47 @@ export class Parts {
       COLUMN_TOLERANCE_PX,
     )
     this.columns.push({ x, z, radius: columnMetrics(shape.order).innerDiameter / 2 })
-    return trees[0]!.totalHeight
+
+    const tree = trees[0]!
+    if (opts.crown !== undefined && opts.vault) this.rosette(shape, tree, matrix, opts.crown, opts.vault)
+    return tree.totalHeight
+  }
+
+  /** One hyperboloid rising from each of a tree's branch tips. */
+  private rosette(
+    shape: TreeColumnParams,
+    tree: TreeColumn,
+    placement: THREE.Matrix4,
+    crown: number,
+    vault: VaultShape,
+  ): void {
+    const tips = tree.tips
+    if (tips.length < 2) return
+
+    // Tips stand on a ring about the axis; what each has to reach is half the
+    // way to the next one round it.
+    let ring = 0
+    for (const tip of tips) ring = Math.max(ring, Math.hypot(tip.x, tip.z))
+    if (ring < 0.5) return
+    const gap = (2 * Math.PI * ring) / tips.length
+
+    // The same meeting height as the rest of the cell, so the whole vault
+    // springs as one.
+    const rise = Math.max(1.5, (crown - tree.totalHeight) * vault.meetFraction)
+    // A tip is a branch end, so its throat is a branch's own girth.
+    const throat = Math.max(0.6, columnMetrics(shape.order).inradius * 0.9)
+    const reach = Math.max(throat * 1.6, (gap / 2) * vault.spread)
+    const key = `tip ${treeKey(shape)}:${crown}`
+
+    for (const tip of tips) {
+      const spot = tip.clone().applyMatrix4(placement)
+      this.surface(
+        key,
+        (detail) =>
+          vaultSurface(throat, flareFor(throat, reach, rise), 0, rise, reach, detail),
+        upright(spot.x, spot.y, spot.z),
+      )
+    }
   }
 
   /** The vault cell of this shape, at every level of detail. */

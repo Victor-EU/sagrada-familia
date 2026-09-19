@@ -66,16 +66,15 @@ export function shapeOf(band: BandParams, tree: TreeShape): TreeColumnParams {
 /**
  * How wide the swelling over a column has to be.
  *
- * Not a number anyone should be typing. A tree ends in four branch tips
- * standing a few metres out from its axis, each finished with its own knot,
- * and a boss narrower than that leaves them poking out of the vault like
- * eggs on sticks. So the throat is sized to swallow the tips — the same
- * argument the ellipsoid knot makes about the capital it hides, and the
- * reason there is still no boolean geometry in this project.
+ * Scaled to the tree it stands on rather than typed in, but kept well inside
+ * the radius where the two families meet. A throat that reaches all the way
+ * out to the meeting radius has nothing left to flare through, and what gets
+ * drawn is a thirteen-metre cylinder around every column instead of a
+ * swelling — which on a 7.5 m grid is every column's cylinder inside its
+ * neighbour's, and the canopy becomes a heap of slivers.
  *
- * Bounded above by the radius at which the two families of the vault meet:
- * past that the boss would have to flare inwards to reach it, which is not a
- * hyperboloid of one sheet and not a vault.
+ * Covering the branch tips is not this surface's job. See `Parts.column`:
+ * the tips carry their own.
  */
 export function bossRadiusFor(
   treeRadius: number,
@@ -83,7 +82,7 @@ export function bossRadiusFor(
   vault: VaultShape,
 ): number {
   const reach = meetingRadius(cell, vault.spread)
-  return Math.min(Math.max(vault.bossRadius, treeRadius * 1.04), reach * 0.92)
+  return Math.min(Math.max(vault.bossRadius, treeRadius * 0.45), reach * 0.6)
 }
 
 /** Where this band's branches hand off to its vault. */
@@ -92,11 +91,16 @@ export function springOf(parts: Parts, band: BandParams, tree: TreeShape): numbe
 }
 
 /** Stand one transverse line of columns, two per band. */
-export function buildStation(parts: Parts, station: Station, tree: TreeShape): void {
+export function buildStation(
+  parts: Parts,
+  station: Station,
+  tree: TreeShape,
+  vault: VaultShape,
+): void {
   for (const band of station.bands) {
     const shape = shapeOf(band, tree)
     for (const sign of [-1, 1]) {
-      parts.column(shape, sign * band.outer, station.z)
+      parts.column(shape, sign * band.outer, station.z, { crown: band.crown, vault })
     }
   }
 }

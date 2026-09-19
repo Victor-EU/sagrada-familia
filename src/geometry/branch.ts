@@ -34,8 +34,19 @@ export interface TreeColumnParams {
   order: ColumnOrder
   /** Levels of branching. 0 is a bare shaft with a capital knot. */
   levels: number
-  /** Branches leaving each knot. */
+  /** Branches leaving the trunk's own knot. */
   branches: number
+  /**
+   * Branches leaving every knot above that one.
+   *
+   * Four at the first knot and four again at the second is sixteen sticks per
+   * column, and on a 7.5 m grid that is twenty shafts across every sightline
+   * — the canopy stops being a forest and becomes noise. It is also wrong
+   * about the load: it halves at every division, and the section has to halve
+   * with it, so a knot that throws as many limbs as the one below it is
+   * claiming the branches carry what the trunk did.
+   */
+  subBranches: number
   /** Tilt from vertical, degrees. */
   splayDeg: number
   /** Rotation of each fan, degrees — keeps successive levels from aligning. */
@@ -67,6 +78,7 @@ export const defaultTreeColumn: TreeColumnParams = {
   order: 12,
   levels: 2,
   branches: 4,
+  subBranches: 2,
   splayDeg: 21,
   phaseDeg: 45,
   branchLength: 0.52,
@@ -191,8 +203,9 @@ export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColum
     }
 
     const next = childOrder(order)
-    for (let i = 0; i < params.branches; i++) {
-      const azimuth = (i / params.branches) * Math.PI * 2 + phase
+    const count = Math.max(1, Math.round(level === 0 ? params.branches : params.subBranches))
+    for (let i = 0; i < count; i++) {
+      const azimuth = (i / count) * Math.PI * 2 + phase
 
       const pivot = new THREE.Group()
       pivot.position.y = length
