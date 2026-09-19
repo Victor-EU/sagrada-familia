@@ -132,9 +132,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // finished at a 108 m radius and 10.5 cm to the texel; the towers take the
   // fit to 180 m, and at 2048 that is 17.6 cm — every shadow in the building
   // coarsened by two thirds to pay for eighteen objects nobody is standing
-  // next to. 3072 puts it back to 11.7 cm, within a tenth of what the
-  // interior was tuned against. Cascades are the real answer and remain a
-  // phase 5 problem; this is the one number that buys the same thing today.
+  // next to. 3072 puts it back to 11.7 cm on the seven curated suns the
+  // interior was tuned against, and never more than a fifth off the old
+  // figure on any of the thirteen — the worst is a low June sun, where the
+  // ground shadow balloons and 16.3 cm becomes 19.7. Cascades are the real
+  // answer and remain a phase 5 problem; this is the one number that buys
+  // most of the same thing today.
   const sun = new SunRig(3072)
 
   // Every opaque surface is the same plaster, and every one of them receives

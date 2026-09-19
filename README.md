@@ -180,8 +180,12 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   ground its shadow lands on, so the texel size is set by the largest thing
   built. The towers took the fit from a 108 m radius to 180 m, which at 2048
   coarsened every shadow in the interior from 10.5 cm to 17.6 cm to pay for
-  eighteen objects nobody is standing next to. The map is 3072 now, which puts
-  it back to 11.7 cm. Cascades are the real answer and are a phase 5 problem.
+  eighteen objects nobody is standing next to. The map is 3072 now: measured
+  across all thirteen curated suns that is 11.7 cm on the seven the interior
+  was tuned against, against 10.5 before, and never worse than a fifth off the
+  old figure — the worst case is a low June sun, where the ground shadow
+  balloons and 16.3 cm becomes 19.7. Cascades are the real answer and are a
+  phase 5 problem.
 - `material.envMapIntensity` does nothing in this project and never has. Where a
   material has no `envMap` of its own and the scene has an `environment`, three
   overwrites that uniform with `scene.environmentIntensity` every frame, so the
