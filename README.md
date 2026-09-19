@@ -9,15 +9,24 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phases 0 and 1 complete, phase 2 in progress
+## Status: phases 0 to 3 complete
 
-Phase 0's bar was: *you can load a photo, match a camera to it, and tune a
-parameter live.* All three work, plus the straight-line ruling view.
+Each phase carried its own bar. Phase 0: *you can load a photo, match a camera
+to it, and tune a parameter live.* Phase 1, the nave bay and the go/no-go: it
+passed on light and material and failed on framing, because one cell is open at
+both ends and a third of an eye-height frame came back sky. Phase 2 tiled that
+cell into a nave. Phase 3's bar was *the interior is continuous and navigable
+throughout*, and it is met — 96.8 m of walk from the Glory wall to the chevet,
+at a constant 1.65 m, stopped only where the plan says.
 
-Phase 1 was the nave bay — the go/no-go. It passed on light and material and
-failed on framing, for a reason that was not the bay's fault: one cell is open
-at both ends, so a third of an eye-height frame came back sky. Phase 2 is that
-cell tiled the length of the nave, which is the fix.
+Phase 3 began by taking phase 2 apart. Three of the nave's numbers were wrong
+and the Basilica's own information booklets say so: the column grid is 7.5 m in
+**both** directions, so the nave is 45 m long and not 90; 90 is the whole
+church, being 45 of nave, 15 of crossing and 30 of apse; and the central nave is
+eight-pointed grey granite, not the ten phase 2 argued itself into. With the
+grid right the crossing places itself — four columns of red porphyry at the
+corners of a 15 m square and eight of basalt around them, which is the twelve
+the sources count.
 
 | Built | Where |
 | --- | --- |
@@ -30,7 +39,10 @@ cell tiled the length of the nave, which is the fix.
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 | Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |
 | The 7.5 m module and the four vault heights | `src/plan/module.ts` |
-| Nave assembly — five naves on the module, tiled the length | `src/plan/nave.ts` |
+| Church assembly — nave, crossing, transept arms, Glory end | `src/plan/church.ts` |
+| One transverse station and the cells between two of them | `src/plan/section.ts` |
+| Apse — ten columns on a semicircle, ambulatory, drum, lantern | `src/plan/apse.ts` |
+| Part registry, so every region shares one instanced field | `src/plan/parts.ts` |
 | Tessellation from feature size, not from typed-in counts | `src/geometry/detail.ts` |
 | Instanced level of detail, switched on measured error | `src/render/field.ts` |
 | Solar position for 41.40° N, 2.17° E, with CET/CEST | `src/light/sun.ts` |
@@ -38,8 +50,9 @@ cell tiled the length of the nave, which is the fix.
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
 | Walls — stone frames, no holes cut; aisle and clerestory | `src/plan/clerestory.ts` |
-| Seven curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
-| Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts`, `src/camera/envelope.ts` |
+| Nine curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
+| Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
+| Envelope: a rectangle for the nave and a disc for the apse | `src/camera/envelope.ts` |
 
 ## Running
 
@@ -98,3 +111,10 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
 - Deferred from phase 0: wrap-lighting / thin-edge scattering on the plaster.
   Pure Lambertian white reads as paper, but patching three's shader chunks is
   version-fragile and belongs with the phase 1 look work.
+- Instanced meshes carry their kind as a `name`, so a frame can be interrogated
+  rather than guessed at: raycast a pixel and ask what it hit. That is how the
+  bosses were caught pretending to be cylinders.
+- Open, and the honest state of the thing: the model is right at plan scale and
+  not yet beautiful at close range. On a 7.5 m grid every sightline crosses
+  several canopies, and the vault zone between the springing and the crown still
+  reads as noise rather than as a forest.
