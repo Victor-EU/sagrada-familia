@@ -228,8 +228,9 @@ buildPanel({
   rebuild, applyView, applyRender, applySun, goTo,
 })
 
-// Number keys jump to the curated views, which is how the same six frames get
-// compared after a change.
+// Number and letter keys jump to the curated views, which is how the same
+// frames get compared after a change. The digits ran out at ten, and phase 4
+// needed the outside of the building in the harness.
 window.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return
   const index = VIEWPOINTS.findIndex((v) => v.key === event.key)
@@ -340,11 +341,22 @@ function frame(): void {
       `floor ${plan.floor.slab.toFixed(2)} m slabs on the ${plan.station} m module  ` +
         `${apse.platform.height} m presbytery up ${apse.platform.risers} risers  ` +
         `${plan.floor.podium} m podium`,
+      `shell ${(built?.towers.length ?? 0)} towers  ` +
+        `${towerRange(built)}  ` +
+        `peak ${(built?.peak ?? 0).toFixed(1)} m  ` +
+        `${plan.shell.parapet} m parapet`,
       `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
         `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,
     ].join('\n')
   }
+}
+
+/** The shortest and tallest of the eighteen, which is how they are published. */
+function towerRange(church: Church | null): string {
+  const tops = (church?.towers ?? []).map((t) => t.top)
+  if (tops.length === 0) return 'none'
+  return `${Math.min(...tops).toFixed(1)}–${Math.max(...tops).toFixed(1)} m`
 }
 
 /** What the camera is currently doing, and how far through it is. */

@@ -125,7 +125,17 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   camera.layers.enable(LAYER_GLASS)
 
   const sky = new Sky(renderer)
-  const sun = new SunRig(2048)
+  // Three thousand, not two.
+  //
+  // The rig fits one orthographic map to the model and the ground its shadow
+  // falls on, so the texel size is set by the largest thing built. Phase 3
+  // finished at a 108 m radius and 10.5 cm to the texel; the towers take the
+  // fit to 180 m, and at 2048 that is 17.6 cm — every shadow in the building
+  // coarsened by two thirds to pay for eighteen objects nobody is standing
+  // next to. 3072 puts it back to 11.7 cm, within a tenth of what the
+  // interior was tuned against. Cascades are the real answer and remain a
+  // phase 5 problem; this is the one number that buys the same thing today.
+  const sun = new SunRig(3072)
 
   // Every opaque surface is the same plaster, and every one of them receives
   // the coloured sun the same way.

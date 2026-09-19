@@ -149,10 +149,17 @@ export function footprint(p: FootprintParams, apron: number, arc = 64): THREE.Ve
 export function buildPavement(
   outline: THREE.Vector2[],
   podium: number,
+  /** Round openings in the lid: the roof terraces need them for skylights. */
+  holes: { x: number; z: number; r: number }[] = [],
 ): { lid: THREE.BufferGeometry; skirt: THREE.BufferGeometry } {
   // ShapeGeometry lives in xy with its normal on +z, and the mesh that
   // carries it is turned a quarter turn about x, which sends y to -z.
   const shape = new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, -p.y)))
+  for (const hole of holes) {
+    const path = new THREE.Path()
+    path.absarc(hole.x, -hole.z, hole.r, 0, Math.PI * 2, true)
+    shape.holes.push(path)
+  }
   const lid = new THREE.ShapeGeometry(shape)
   lid.rotateX(-Math.PI / 2)
 

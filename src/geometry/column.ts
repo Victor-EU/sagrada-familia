@@ -311,6 +311,27 @@ export function buildColumnBase(params: ColumnBaseParams): THREE.BufferGeometry 
   return geometry
 }
 
+/**
+ * The base star of an order, as a radial function normalised to an inscribed
+ * circle of 1.
+ *
+ * The towers need the same construction the columns are made of — the bell
+ * towers' documented twelve-pointed section is three superimposed squares,
+ * which is exactly the order-12 base star — but they are not columns and have
+ * no business knowing about plinths, twist schedules or stages. So the star
+ * itself is published here and the towers take a plain r(alpha) from it.
+ *
+ * Normalised on the *inscribed* circle rather than the points, because that
+ * is the radius a caller means when it says how thick its shaft is; the
+ * points then stand out past it by whatever the order gives, 22% for twelve.
+ */
+export function starProfile(order: ColumnOrder): (alpha: number) => number {
+  const polys = basePolygons(order)
+  const unit = unitStarExtent(order)
+  const scale = 1 / unit.min
+  return (alpha: number) => sectionRadius(alpha, [0], polys, scale)
+}
+
 export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
   const m = columnMetrics(params.order)
   const polys = basePolygons(params.order)

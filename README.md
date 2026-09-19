@@ -9,15 +9,17 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phases 0 to 3 complete
+## Status: phases 0 to 4 complete
 
 Each phase carried its own bar. Phase 0: *you can load a photo, match a camera
 to it, and tune a parameter live.* Phase 1, the nave bay and the go/no-go: it
 passed on light and material and failed on framing, because one cell is open at
 both ends and a third of an eye-height frame came back sky. Phase 2 tiled that
 cell into a nave. Phase 3's bar was *the interior is continuous and navigable
-throughout*, and it is met — 96.8 m of walk from the Glory wall to the chevet,
-at a constant 1.65 m, stopped only where the plan says.
+throughout*, and it is met — ninety metres of walk from the Glory wall to the
+chevet, stopped only where the plan says. Phase 4's bar was *the silhouette is
+recognisable from street level*, and it is: eighteen towers, the terraces that
+close every vessel, and three fronts as massing.
 
 Phase 3 began by taking phase 2 apart. Three of the nave's numbers were wrong
 and the Basilica's own information booklets say so: the column grid is 7.5 m in
@@ -28,7 +30,7 @@ grid right the crossing places itself — four columns of red porphyry at the
 corners of a 15 m square and eight of basalt around them, which is the twelve
 the sources count.
 
-Since then, the floor. It was one grey disc of radius 320 doing two jobs at one
+Then the floor. It was one grey disc of radius 320 doing two jobs at one
 height with nothing on it — and measured on a frame taken standing in the nave,
 **16 %** of the picture, the third largest thing in it after two orders of
 column, every pixel the same number. It is now paved on the building's own
@@ -36,6 +38,17 @@ module, the church stands on a podium instead of being pushed into the plaza,
 every shaft has a foot, and the presbytery — two metres of solid plaster the
 camera used to walk into and stand inside up to the shoulders — has a flight up
 onto it.
+
+Phase 4 put an outside on it. Until now every vault in the model was a surface
+with nothing over it: from anywhere above forty metres you looked straight down
+into the nave. What closes it is not a lid but the **terraces** the real
+building carries, one per vessel at that vessel's own crown, with holes and
+collars where the vaults are open to the sky — you can walk on the naves of
+Sagrada Família, and the stepped profile of those terraces seen end-on is the
+section of the building. On top of that stand the eighteen, on published
+heights and on the grid's own positions: each bell tower is **one module
+across**, so four of them side by side is the thirty metres of the transept
+front.
 
 | Built | Where |
 | --- | --- |
@@ -62,7 +75,10 @@ onto it.
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
 | Walls — stone frames, no holes cut; aisle and clerestory | `src/plan/clerestory.ts` |
-| Ten curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
+| Tower generator — paraboloid shaft, star section, pierced | `src/geometry/tower.ts` |
+| The eighteen, on published heights and on the grid | `src/plan/towers.ts` |
+| Shell — terraces, parapets, roof lanterns, the three fronts | `src/plan/shell.ts` |
+| Thirteen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
 | Envelope: a rectangle for the nave, a disc for the apse, a terrace you can climb | `src/camera/envelope.ts` |
 
@@ -94,6 +110,8 @@ npm run build       # typecheck + production build
 | X | difference blend — use this for edge alignment |
 | `[` `]` | photo opacity |
 | drop an image | load it as a reference |
+| 1–9, 0 | the curated interior viewpoints |
+| N G T | the Nativity front, the Glory front, the terraces |
 
 `window.harness` exposes the camera, overlay, parameters and a `rebuild()` for
 driving the harness from the console.
@@ -143,6 +161,27 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   1.25 m slabs, a heavier joint every 7.5 m running through the column axes, and
   inside the apse it turns polar about the apse centre, where its rings land on
   the presbytery ring at 15 m and the ambulatory at 22.5 m unasked.
+- The plaster is `DoubleSide`, so **a face wound against its own normals is
+  lit from exactly the wrong side** and nothing in the geometry says so: three
+  flips the shading normal when a triangle faces away. The first towers were
+  inside out and it took a sun ablation to find, because an unlit white tower
+  looks exactly like a shadowed one. `tower.ts` now derives the winding from
+  the normal it was handed, which makes the mistake impossible rather than
+  merely unlikely.
+- The frame census used to encode its surface id in the red channel alone, one
+  step of 8/255 apiece, which holds **thirty-one kinds** and then silently
+  wraps — every kind past the limit decoding as the same id. The building
+  passed thirty-one kinds the day the towers arrived, and the census started
+  reporting that one tower covered a hundred per cent of a nave frame. It is
+  two channels and base 32 now. It also frames itself rather than borrowing
+  the window's aspect ratio, because a regression frame that changes shape
+  when you drag a window is not a regression frame.
+- The sun rig fits **one** orthographic shadow map to the whole model plus the
+  ground its shadow lands on, so the texel size is set by the largest thing
+  built. The towers took the fit from a 108 m radius to 180 m, which at 2048
+  coarsened every shadow in the interior from 10.5 cm to 17.6 cm to pay for
+  eighteen objects nobody is standing next to. The map is 3072 now, which puts
+  it back to 11.7 cm. Cascades are the real answer and are a phase 5 problem.
 - `material.envMapIntensity` does nothing in this project and never has. Where a
   material has no `envMap` of its own and the scene has an `environment`, three
   overwrites that uniform with `scene.environmentIntensity` every frame, so the

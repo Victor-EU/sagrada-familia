@@ -16,6 +16,14 @@ import {
   type PavingPlan,
 } from './floor.ts'
 import { named, Parts } from './parts.ts'
+import { buildShell, defaultShell, type ShellParams } from './shell.ts'
+import {
+  buildTowers,
+  defaultTowers,
+  towerSites,
+  type TowerParams,
+  type TowerSite,
+} from './towers.ts'
 import {
   buildStation,
   buildStrip,
@@ -122,6 +130,10 @@ export interface ChurchParams {
   vault: VaultShape
   walls: WallParams
   floor: FloorParams
+  /** Terraces, parapets and the three fronts. */
+  shell: ShellParams
+  /** The eighteen. */
+  towers: TowerParams
 }
 
 export const defaultChurch: ChurchParams = {
@@ -232,6 +244,8 @@ export const defaultChurch: ChurchParams = {
     glory: true,
   },
   floor: { ...defaultFloor },
+  shell: { ...defaultShell },
+  towers: { ...defaultTowers },
 }
 
 export interface Church {
@@ -261,6 +275,10 @@ export interface Church {
   apse: Apse
   /** What the paving pattern needs in order to be set out on the plan. */
   paving: PavingPlan
+  /** The eighteen, where they stand and how tall. */
+  towers: TowerSite[]
+  /** The top of the tallest thing in the model. */
+  peak: number
 }
 
 export function buildChurch(
@@ -278,7 +296,8 @@ export function buildChurch(
   const crossNear = -gloryLine
   const crossFar = crossNear - p.crossing.span
 
-  const outermost = p.bands[p.bands.length - 1]!.outer
+  const outermostBand = p.bands[p.bands.length - 1]!
+  const outermost = outermostBand.outer
 
   // The crossing is the nave's own bands with the orders stepped up and the
   // crowns raised — same lines, same grid, different load.
@@ -363,6 +382,71 @@ export function buildChurch(
     parts.piece(named('podium', skirt, parts.plaster), skirt)
   }
 
+  // Outside. The terraces close every vessel at its own crown, the three
+  // fronts stand as massing, and the eighteen towers spring off the result —
+  // which is why this comes after the walls and not before them: a tower has
+  // to know the height of the roof it grows out of.
+  const wallOuter = wallCentre + p.walls.thickness / 2
+  const gloryOuter = gloryLine + p.walls.offset + p.walls.thickness / 2
+  const clerOuter = p.bands[0]!.outer + p.walls.clerestoryOffset + p.walls.thickness / 2
+  const aisleCrown = outermostBand.crown
+  const apseOuter = apse.outerRadius + p.apse.wall.thickness / 2
+
+  let peak = ceilingOf(p)
+  let reach = wallOuter + 4
+
+  if (p.shell.show) {
+    const shell = buildShell(
+      parts,
+      {
+        gloryZ: gloryOuter,
+        wallX: wallOuter,
+        clerX: clerOuter,
+        crossNear,
+        crossFar,
+        crossingZ: (crossNear + crossFar) / 2,
+        naveCrown: p.bands[0]!.crown,
+        aisleCrown,
+        crossingCrown: p.crossing.crown,
+        armCrown: p.crossing.armCrown,
+        apseCentreZ: apse.centreZ,
+        apseInner: p.apse.radius + p.apse.overhang,
+        apseOuter,
+        ambulatoryCrown: p.apse.ambulatoryCrown,
+      },
+      p.shell,
+      // The apse's own opening is at 75 m and no terrace is anywhere near
+      // it, so one radius for the lot is exact rather than merely close.
+      skylights.map((light) => ({
+        x: light.x,
+        y: light.y,
+        z: light.z,
+        radius: p.vault.skylightRadius,
+      })),
+    )
+    peak = Math.max(peak, shell.peak)
+    reach = Math.max(reach, shell.reach)
+  }
+
+  const sites = towerSites({
+    crossingZ: (crossNear + crossFar) / 2,
+    crossNear,
+    crossFar,
+    crossingCrown: p.crossing.crown,
+    armCrown: p.crossing.armCrown,
+    naveCrown: p.bands[0]!.crown,
+    wallX: wallOuter,
+    gloryZ: gloryOuter,
+    apseCentreZ: apse.centreZ,
+    apseCrown: p.apse.crown,
+    parapet: p.shell.show ? p.shell.parapet : 0,
+    facadeStand: p.shell.show ? p.shell.project / 2 : 0,
+  })
+  const towers = p.towers.show
+    ? buildTowers(parts, sites, p.towers)
+    : { sites: [] as TowerSite[], peak: 0 }
+  peak = Math.max(peak, towers.peak)
+
   const field = new InstancedField(parts.specs())
 
   const ceiling = Math.max(p.crossing.crown, p.apse.crown, ...p.bands.map((b) => b.crown))
@@ -377,10 +461,12 @@ export function buildChurch(
     terraces: [apse.terrace],
   })
 
-  const reach = halfWidth + p.walls.thickness + 4
+  // What the whole thing occupies, towers included — the sun rig fits its
+  // shadow map to this, so leaving the towers out of it would leave them out
+  // of their own shadows.
   const bounds = new THREE.Box3(
-    new THREE.Vector3(-reach, 0, apse.far - 6),
-    new THREE.Vector3(reach, ceiling + 2, gloryLine + p.walls.offset + 6),
+    new THREE.Vector3(-reach, -p.floor.podium, apse.far - 6),
+    new THREE.Vector3(reach, peak + 2, gloryOuter + p.shell.project + MODULE + 2),
   )
 
   const group = parts.group
@@ -407,7 +493,14 @@ export function buildChurch(
       radialsPerChapel: 4,
       crossingZ: (crossNear + crossFar) / 2,
     },
+    towers: towers.sites,
+    peak,
   }
+}
+
+/** The highest vault, which is what the shell has to close over. */
+function ceilingOf(p: ChurchParams): number {
+  return Math.max(p.crossing.crown, p.apse.crown, ...p.bands.map((b) => b.crown))
 }
 
 /**

@@ -85,9 +85,17 @@ export function censusFrame(
     const id = claim(name)
     painted.push({ mesh, material: mesh.material })
     const flat = new THREE.MeshBasicMaterial({ toneMapped: false, side: THREE.DoubleSide })
-    // One id per step of 8/255 — far enough apart that nothing in the buffer
-    // can be mistaken for its neighbour.
-    flat.color.setRGB(((id + 1) * 8) / 255, 0, 0)
+    // The id goes in two channels, base 32, one step of 8/255 per digit —
+    // far enough apart that nothing in the buffer can be mistaken for its
+    // neighbour, and 0 is reserved for sky.
+    //
+    // It used to go in red alone, which held thirty-one kinds and silently
+    // wrapped past that: everything above the limit decoded as the same id,
+    // and the census came back saying one surface covered the whole frame.
+    // The building has had more than thirty-one kinds of surface in it since
+    // the towers arrived.
+    const code = id + 1
+    flat.color.setRGB(((code % 32) * 8) / 255, ((Math.floor(code / 32) % 32) * 8) / 255, 0)
     mesh.material = flat
   }
 
@@ -116,6 +124,16 @@ export function censusFrame(
   const target = new THREE.WebGLRenderTarget(width, height, { type: THREE.UnsignedByteType })
   const tone = stage.renderer.toneMapping
   const background = stage.scene.background
+  // The census frames itself rather than borrowing the window's shape.
+  //
+  // It renders into a target of its own size and used to do it through the
+  // camera's live aspect ratio, so the same viewpoint measured on a wide
+  // window and a tall one came back as two different pictures — a view up
+  // the nave lost two thirds of its vault to a wider desktop. A regression
+  // harness whose frames depend on how the user dragged a window is not one.
+  const aspect = stage.camera.aspect
+  stage.camera.aspect = width / height
+  stage.camera.updateProjectionMatrix()
   stage.renderer.toneMapping = THREE.NoToneMapping
   stage.scene.background = new THREE.Color(0, 0, 0)
   stage.renderer.setRenderTarget(target)
@@ -125,6 +143,8 @@ export function censusFrame(
   stage.renderer.setRenderTarget(null)
   stage.renderer.toneMapping = tone
   stage.scene.background = background
+  stage.camera.aspect = aspect
+  stage.camera.updateProjectionMatrix()
 
   for (const { mesh, material } of painted) {
     ;(mesh.material as THREE.Material).dispose()
@@ -136,8 +156,8 @@ export function censusFrame(
   const area = new Array<number>(names.length).fill(0)
   let sky = 0
   for (let i = 0; i < width * height; i++) {
-    const red = pixels[i * 4]!
-    const which = red < 4 ? -1 : Math.round(red / 8) - 1
+    const code = Math.round(pixels[i * 4]! / 8) + Math.round(pixels[i * 4 + 1]! / 8) * 32
+    const which = code - 1
     id[i] = which
     if (which < 0 || which >= names.length) sky++
     else area[which]!++

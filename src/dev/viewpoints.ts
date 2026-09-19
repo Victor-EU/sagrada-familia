@@ -15,6 +15,7 @@ import type { FreeCamera } from '../camera/freecam.ts'
  * view of this building.
  */
 export interface Viewpoint {
+  /** The key that jumps here. Digits first, then letters as they ran out. */
   key: string
   name: string
   note: string
@@ -168,14 +169,63 @@ export const VIEWPOINTS: Viewpoint[] = [
     name: 'Passion elevation',
     note:
       'Square on from outside, the way a survey photograph is taken. Further ' +
-      'out than phase 2 needed it: the church is a hundred metres long now, ' +
-      'not a nave.',
-    position: [-135, 40, -25],
-    target: [0, 34, -25],
-    fov: 40,
+      'out again for phase 4: the building was a hundred metres long and is ' +
+      'now a hundred and seventy-two tall, and an elevation that cannot hold ' +
+      'the tower of Jesus Christ is not an elevation of this church.',
+    position: [-310, 62, -30],
+    target: [0, 80, -30],
+    fov: 36,
     shiftCorrection: 1,
     day: 262,
     hour: 16,
+  },
+  {
+    key: 'n',
+    name: 'Nativity, from the plaza',
+    note:
+      'The recognisability test, and the one phase 4 is scored on: eye ' +
+      'height on the pavement outside, looking up the Nativity front. Four ' +
+      'bell towers on the module, the terrace and its pinnacles behind them, ' +
+      'the tower of Jesus Christ over the crossing beyond. If this frame is ' +
+      'not obviously Sagrada Família then the phase has not happened, ' +
+      'whatever the model contains.',
+    position: [96, 1.7, 22],
+    target: [10, 120, -26],
+    fov: 72,
+    shiftCorrection: 0.35,
+    day: 172,
+    hour: 9.6,
+  },
+  {
+    key: 'g',
+    name: 'The Glory front',
+    note:
+      'The main entrance, which is the one façade nobody has ever seen ' +
+      'finished. Its four are the tallest of the twelve apostles — the ' +
+      'published range tops out at 117 m and the Glory end is where it does ' +
+      'it — so the three fronts rise toward this one.',
+    position: [28, 1.7, 118],
+    target: [-4, 110, -10],
+    fov: 70,
+    shiftCorrection: 0.3,
+    day: 110,
+    hour: 13,
+  },
+  {
+    key: 't',
+    name: 'On the terraces',
+    note:
+      'Standing on the aisle roof, which is a thing you can do at Sagrada ' +
+      'Família and the reason the shell is terraces rather than a lid. The ' +
+      'parapet and its pinnacles in the near ground, the clerestory stepping ' +
+      'up behind, and the Nativity towers springing straight off the mass — ' +
+      'this is the frame that says the outside is built rather than draped.',
+    position: [18.5, 33.4, 12],
+    target: [3, 96, -36],
+    fov: 72,
+    shiftCorrection: 0.4,
+    day: 172,
+    hour: 8.5,
   },
 ]
 
