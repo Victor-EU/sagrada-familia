@@ -14,8 +14,8 @@ phases live there. This README covers running the code.
 Phase 0's bar was: *you can load a photo, match a camera to it, and tune a
 parameter live.* All three work, plus the straight-line ruling view.
 
-Phase 1 is the nave bay — the go/no-go. Columns and the branching node are in;
-the vault, glass and the coloured transmittance pass are not yet.
+Phase 1 is the nave bay — the go/no-go. Columns, the branching node and the
+vault are in. Glass and the coloured transmittance pass are not yet.
 
 | Built | Where |
 | --- | --- |
@@ -26,6 +26,9 @@ the vault, glass and the coloured transmittance pass are not yet.
 | Plaster maquette material, studio ambient, ACES tonemap | `src/render/` |
 | Double-twist column, all four orders, from the published rule | `src/geometry/column.ts` |
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
+| Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |
+| The 7.5 m module and the four vault heights | `src/plan/module.ts` |
+| Bay assembly — four columns and the vault they carry | `src/plan/bay.ts` |
 
 ## Running
 

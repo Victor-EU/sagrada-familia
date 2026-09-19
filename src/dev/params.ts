@@ -1,7 +1,7 @@
 import { Pane } from 'tweakpane'
 import type { FolderApi } from 'tweakpane'
 import type { FreeCamera } from '../camera/freecam.ts'
-import type { TreeColumnParams } from '../geometry/branch.ts'
+import type { BayParams } from '../plan/bay.ts'
 import type { HyperboloidParams, RulingFamily } from '../geometry/hyperboloid.ts'
 import type { PhotoOverlay } from './overlay.ts'
 import { PresetStore } from './presets.ts'
@@ -22,7 +22,7 @@ export interface RenderFlags {
 }
 
 export interface ParamContext {
-  tree: TreeColumnParams
+  bay: BayParams
   hyper: HyperboloidParams
   view: ViewFlags
   render: RenderFlags
@@ -41,23 +41,32 @@ export function buildPanel(ctx: ParamContext): Pane {
   const store = new PresetStore()
 
   const col = pane.addFolder({ title: 'Tree column' })
-  col.addBinding(ctx.tree, 'order', {
+  col.addBinding(ctx.bay.tree, 'order', {
     label: 'trunk order',
     options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — porphyry': 12 },
   })
-  col.addBinding(ctx.tree, 'levels', { min: 0, max: 3, step: 1, label: 'branch levels' })
-  col.addBinding(ctx.tree, 'branches', { min: 2, max: 6, step: 1, label: 'branches / knot' })
-  col.addBinding(ctx.tree, 'splayDeg', { min: 0, max: 60, step: 0.5, label: 'splay °' })
-  col.addBinding(ctx.tree, 'phaseDeg', { min: 0, max: 90, step: 1, label: 'fan phase °' })
-  col.addBinding(ctx.tree, 'branchLength', { min: 0.1, max: 1, step: 0.01, label: 'branch length' })
-  col.addBinding(ctx.tree, 'knotRadiusScale', { min: 1, max: 2.5, step: 0.01, label: 'knot width' })
-  col.addBinding(ctx.tree, 'knotHeightScale', { min: 0.4, max: 2.5, step: 0.01, label: 'knot height' })
-  col.addBinding(ctx.tree, 'stages', { min: 1, max: 6, step: 1, label: 'twist stages' })
-  col.addBinding(ctx.tree, 'radialSegments', { min: 24, max: 512, step: 8, label: 'radial' })
-  col.addBinding(ctx.tree, 'heightSegments', { min: 8, max: 384, step: 4, label: 'height' })
+  col.addBinding(ctx.bay.tree, 'levels', { min: 0, max: 3, step: 1, label: 'branch levels' })
+  col.addBinding(ctx.bay.tree, 'branches', { min: 2, max: 6, step: 1, label: 'branches / knot' })
+  col.addBinding(ctx.bay.tree, 'splayDeg', { min: 0, max: 60, step: 0.5, label: 'splay °' })
+  col.addBinding(ctx.bay.tree, 'phaseDeg', { min: 0, max: 90, step: 1, label: 'fan phase °' })
+  col.addBinding(ctx.bay.tree, 'branchLength', { min: 0.1, max: 1, step: 0.01, label: 'branch length' })
+  col.addBinding(ctx.bay.tree, 'knotRadiusScale', { min: 1, max: 2.5, step: 0.01, label: 'knot width' })
+  col.addBinding(ctx.bay.tree, 'knotHeightScale', { min: 0.4, max: 2.5, step: 0.01, label: 'knot height' })
+  col.addBinding(ctx.bay.tree, 'stages', { min: 1, max: 6, step: 1, label: 'twist stages' })
+  col.addBinding(ctx.bay.tree, 'radialSegments', { min: 24, max: 512, step: 8, label: 'radial' })
+  col.addBinding(ctx.bay.tree, 'heightSegments', { min: 8, max: 384, step: 4, label: 'height' })
   col.on('change', () => ctx.rebuild())
 
-  const geo = pane.addFolder({ title: 'Hyperboloid' })
+  const vault = pane.addFolder({ title: 'Bay and vault' })
+  vault.addBinding(ctx.bay, 'bay', { min: 5, max: 30, step: 0.25, label: 'column spacing m' })
+  vault.addBinding(ctx.bay.vault, 'crownHeight', { min: 15, max: 75, step: 0.5, label: 'crown m' })
+  vault.addBinding(ctx.bay.vault, 'skylightRadius', { min: 0.2, max: 5, step: 0.05, label: 'skylight r' })
+  vault.addBinding(ctx.bay.vault, 'bossRadius', { min: 0.5, max: 8, step: 0.05, label: 'boss r' })
+  vault.addBinding(ctx.bay.vault, 'meetFraction', { min: 0.15, max: 0.9, step: 0.01, label: 'meet height' })
+  vault.addBinding(ctx.bay.vault, 'spread', { min: 0.8, max: 1.5, step: 0.01, label: 'overlap' })
+  vault.on('change', () => ctx.rebuild())
+
+  const geo = pane.addFolder({ title: 'Hyperboloid (scratch)' })
   geo.addBinding(ctx.hyper, 'throatRadius', { min: 0.15, max: 6, step: 0.01, label: 'throat a' })
   geo.addBinding(ctx.hyper, 'ellipticity', { min: 0.3, max: 3, step: 0.01, label: 'b / a' })
   geo.addBinding(ctx.hyper, 'flare', { min: 0.2, max: 10, step: 0.01, label: 'flare c' })

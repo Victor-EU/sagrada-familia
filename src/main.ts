@@ -3,12 +3,7 @@ import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
 import { plasterMaterial, rulingMaterial } from './render/materials.ts'
 import { columnMetrics } from './geometry/column.ts'
-import {
-  buildTreeColumn,
-  defaultTreeColumn,
-  type TreeColumn,
-  type TreeColumnParams,
-} from './geometry/branch.ts'
+import { buildBay, defaultBay, type Bay, type BayParams } from './plan/bay.ts'
 import {
   buildHyperboloidRulings,
   buildHyperboloidSurface,
@@ -36,7 +31,7 @@ const stage = createStage(canvas)
 const cam = new FreeCamera(stage.camera, canvas)
 const overlay = new PhotoOverlay(overlayImg, document.body)
 
-const tree: TreeColumnParams = { ...defaultTreeColumn }
+const bay: BayParams = structuredClone(defaultBay)
 const hyper: HyperboloidParams = { ...defaultHyperboloid }
 const view: ViewFlags = {
   showSurface: true,
@@ -53,9 +48,9 @@ const render: RenderFlags = { exposure: 1, environment: 0.9 }
 // variation to budget for, which is the point of choosing it.
 const plaster = plasterMaterial()
 
-const treeRoot = new THREE.Group()
-stage.scene.add(treeRoot)
-let treeColumn: TreeColumn | null = null
+const bayRoot = new THREE.Group()
+stage.scene.add(bayRoot)
+let built: Bay | null = null
 
 // Generators work in their natural frame with z as the axis; the world is
 // y-up. Placement rotates, the mathematics stays clean.
@@ -75,17 +70,17 @@ const rulings = new THREE.LineSegments(
 )
 funnel.add(rulings)
 
-function rebuildTree(): void {
-  if (treeColumn) {
-    treeRoot.remove(treeColumn.group)
-    for (const geometry of treeColumn.geometries) geometry.dispose()
+function rebuildBay(): void {
+  if (built) {
+    bayRoot.remove(built.group)
+    for (const geometry of built.geometries) geometry.dispose()
   }
-  treeColumn = buildTreeColumn(tree, plaster)
-  treeRoot.add(treeColumn.group)
+  built = buildBay(bay, plaster)
+  bayRoot.add(built.group)
 }
 
 function rebuild(): void {
-  rebuildTree()
+  rebuildBay()
 
   surface.geometry.dispose()
   surface.geometry = buildHyperboloidSurface(hyper)
@@ -139,17 +134,16 @@ function layout(): void {
 overlay.onChange = layout
 window.addEventListener('resize', layout)
 
-buildPanel({ tree, hyper, view, render, cam, overlay, rebuild, applyView, applyRender })
+buildPanel({ bay, hyper, view, render, cam, overlay, rebuild, applyView, applyRender })
 
 rebuild()
 applyRender()
 layout()
 
-// Open on the whole tree — an order-12 column is 24 m before it even branches.
-const apex = treeColumn ? (treeColumn as TreeColumn).totalHeight : 24
-cam.camera.position.set(20, apex * 0.42, 30)
+// Open standing in the bay looking up, which is the whole point of the space.
+cam.camera.position.set(bay.bay * 0.9, 1.65, bay.bay * 1.25)
 cam.shiftCorrection = 1
-cam.lookAt(new THREE.Vector3(0, apex * 0.55, 0))
+cam.lookAt(new THREE.Vector3(0, bay.vault.crownHeight * 0.62, 0))
 
 // Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
@@ -158,8 +152,8 @@ declare global {
     harness: {
       cam: FreeCamera
       overlay: PhotoOverlay
-      tree: TreeColumnParams
-      treeColumn: () => TreeColumn | null
+      bay: BayParams
+      built: () => Bay | null
       hyper: HyperboloidParams
       view: ViewFlags
       stage: typeof stage
@@ -170,8 +164,8 @@ declare global {
 window.harness = {
   cam,
   overlay,
-  tree,
-  treeColumn: () => treeColumn,
+  bay,
+  built: () => built,
   hyper,
   view,
   stage,
@@ -194,11 +188,11 @@ function frame(): void {
   if (now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position
-    const cm = columnMetrics(tree.order)
+    const cm = columnMetrics(bay.tree.order)
 
     let tris = (surface.geometry.index?.count ?? 0) / 3
     let meshes = 1
-    treeColumn?.group.traverse((node) => {
+    built?.group.traverse((node) => {
       if (!(node instanceof THREE.Mesh)) return
       meshes++
       tris += (node.geometry.index?.count ?? 0) / 3
@@ -213,9 +207,10 @@ function frame(): void {
         `${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
-      `tree  ${tree.levels} levels  ${tree.branches} branches  ` +
-        `apex ${(treeColumn?.totalHeight ?? 0).toFixed(1)} m  ` +
-        `${treeColumn?.tips.length ?? 0} tips`,
+      `tree  ${bay.tree.levels} levels  ${bay.tree.branches} branches  ` +
+        `springs at ${(built?.springHeight ?? 0).toFixed(1)} m`,
+      `bay   ${bay.bay} m across  crown ${bay.vault.crownHeight} m  ` +
+        `(${(bay.vault.crownHeight / 7.5).toFixed(0)} modules)`,
     ].join('\n')
   }
 }
