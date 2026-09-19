@@ -30,8 +30,24 @@ export interface RegisterParams {
 export interface ClerestoryParams {
   /** Wall length — one bay. */
   span: number
+  /**
+   * Where the wall starts.
+   *
+   * Zero for a wall standing on the floor. The nave's own clerestory starts
+   * at the height of the aisle vaults it rises above, which is the whole
+   * reason a basilica has one.
+   */
+  base: number
   /** Full height of the wall, normally the springing. */
   height: number
+  /**
+   * Height the colour grade is measured against — the crown of the nave.
+   *
+   * Not the wall's own height. Two windows at the same height in the building
+   * must agree about what colour that height is, and an aisle wall and a
+   * clerestory thirty metres above it do not share a top.
+   */
+  gradeHeight: number
   thickness: number
   side: GlassSide
   /** Stone left at each end of the wall. */
@@ -40,6 +56,8 @@ export interface ClerestoryParams {
   mullion: number
   registers: RegisterParams[]
   seed: number
+  /** Where this bay stands along the nave: 0 at the Glory end, 1 at the crossing. */
+  along: number
 }
 
 export function defaultClerestory(
@@ -49,12 +67,15 @@ export function defaultClerestory(
 ): ClerestoryParams {
   return {
     span,
+    base: 0,
     height,
+    gradeHeight: height,
     thickness: 0.9,
     side,
     margin: 1.1,
     mullion: 0.55,
     seed: side === 'nativity' ? 11 : 29,
+    along: 1,
     registers: [
       // Aisle lights: tall, deeply coloured, and the ones you stand next to.
       { sill: 3.2, head: 17, lights: 3, panesAcross: 4, panesUp: 12 },
@@ -83,7 +104,7 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
 
   // Solid bands: below the first register, between consecutive ones, above the
   // last. Expressed as the gaps between openings so heights can never disagree.
-  let y = 0
+  let y = p.base
   for (const register of registers) {
     if (register.sill > y) stonePieces.push(slab(p.span, register.sill - y, p.thickness, 0, y))
     y = register.head
@@ -123,8 +144,9 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
         side: p.side,
         // Grade against the wall, so two registers on the same wall agree
         // about what colour a given height is.
-        gradeBase: register.sill / p.height,
-        gradeTop: register.head / p.height,
+        gradeBase: register.sill / p.gradeHeight,
+        gradeTop: register.head / p.gradeHeight,
+        along: p.along,
       })
       panel.translate(centre, register.sill, 0)
       glassPieces.push(panel)

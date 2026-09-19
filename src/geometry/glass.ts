@@ -33,6 +33,15 @@ export interface GlassPanelParams {
   gradeBase: number
   /** Height of the head, same units. */
   gradeTop: number
+  /**
+   * Where this window stands along the nave: 0 at the Glory end, 1 at the
+   * crossing.
+   *
+   * The grading is not only vertical. The glass nearest the entrance is
+   * almost clear and deepens as you walk in, so that the colour arrives
+   * gradually rather than all at once in the doorway.
+   */
+  along: number
 }
 
 export const defaultGlassPanel: GlassPanelParams = {
@@ -45,6 +54,7 @@ export const defaultGlassPanel: GlassPanelParams = {
   side: 'nativity',
   gradeBase: 0.1,
   gradeTop: 0.45,
+  along: 1,
 }
 
 /**
@@ -104,7 +114,7 @@ export function buildGlassPanel(p: GlassPanelParams): THREE.BufferGeometry {
       // is, or the building loses the gradient.
       const v = (j + 0.5) / rows
       const grade = THREE.MathUtils.lerp(p.gradeBase, p.gradeTop, v)
-      paneColor(color, p.side, (i + 0.5) / cols, grade, random)
+      paneColor(color, p.side, (i + 0.5) / cols, grade, p.along, random)
 
       const base = positions.length / 3
       for (const n of [a, b, c, d]) {
@@ -135,6 +145,7 @@ function paneColor(
   side: GlassSide,
   u: number,
   grade: number,
+  along: number,
   random: () => number,
 ): THREE.Color {
   const sweep = SWEEP[side]
@@ -142,8 +153,11 @@ function paneColor(
   const hue = (THREE.MathUtils.lerp(sweep.low, sweep.high, t) + 1) % 1
 
   // The wash to white. Nothing below a third of the height washes at all;
-  // everything above the springing is nearly clear.
-  const wash = THREE.MathUtils.clamp((grade - 0.3) / 0.55, 0, 1)
+  // everything above the springing is nearly clear. The walk from the Glory
+  // end adds to it, so the first bay is glazed almost clear and the colour
+  // gathers as you go in.
+  const entrance = THREE.MathUtils.lerp(0.45, 0, THREE.MathUtils.clamp(along, 0, 1))
+  const wash = THREE.MathUtils.clamp((grade - 0.3) / 0.55 + entrance, 0, 1)
   const saturation = THREE.MathUtils.lerp(0.9, 0.16, wash) * (0.82 + random() * 0.3)
   const lightness = THREE.MathUtils.lerp(0.42, 0.86, wash) * (0.88 + random() * 0.26)
 

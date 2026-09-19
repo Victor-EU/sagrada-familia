@@ -286,7 +286,8 @@ function frame(): void {
   if (now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position
-    const cm = columnMetrics(plan.tree.order)
+    const nave = plan.bands[0]!
+    const cm = columnMetrics(nave.order)
 
     const field = built?.field.stats() ?? { pieces: 0, triangles: 0, draws: 0 }
     let tris = field.triangles
@@ -311,10 +312,11 @@ function frame(): void {
         `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
-      `tree  ${plan.tree.levels} levels  ${plan.tree.branches} branches  ` +
-        `springs at ${(built?.springHeight ?? 0).toFixed(1)} m`,
-      `nave  ${plan.bays} bays  ${plan.bay} × ${plan.station} m cell  ` +
-        `crown ${plan.vault.crownHeight} m (${(plan.vault.crownHeight / 7.5).toFixed(0)} modules)`,
+      `tree  ${nave.levels} levels  ${plan.tree.branches} branches  ` +
+        `springs at ${(built?.springs ?? []).map((v) => v.toFixed(1)).join(' / ')} m`,
+      `nave  ${plan.bays} bays × ${plan.station} m  ` +
+        `${(built?.halfWidth ?? 0).toFixed(1)} m half-width  ` +
+        `crowns ${plan.bands.map((b) => b.crown).join(' / ')} m`,
       `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
         `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,

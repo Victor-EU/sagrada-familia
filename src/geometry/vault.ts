@@ -34,6 +34,15 @@ export interface VaultCellParams {
   meetFraction: number
   /** Overlap multiplier on the meeting radius. 1 makes neighbours just touch. */
   spread: number
+  /**
+   * Whether the funnel's throat is left open.
+   *
+   * Open, it is a skylight for free — an unclosed surface is a hole. That is
+   * right for the central nave, whose vault is lit from above, and wrong for
+   * the aisles: thirty openings in a roof read as a colander rather than as a
+   * building. A closed cell gets a shallow dome over the throat instead.
+   */
+  skylight: boolean
 }
 
 export const defaultVaultCell: VaultCellParams = {
@@ -44,6 +53,7 @@ export const defaultVaultCell: VaultCellParams = {
   bossRadius: 2.2,
   meetFraction: 0.55,
   spread: 1.06,
+  skylight: true,
 }
 
 export interface VaultSurface {
@@ -61,6 +71,8 @@ export interface VaultCell {
   funnel: VaultSurface
   /** One boss; the cell uses four of them, one over each column. */
   boss: VaultSurface
+  /** Dome closing the throat, when the cell has no skylight. */
+  cap: VaultSurface | null
   /** Where the funnel's throat sits, in world height. */
   crownHeight: number
   /** Where each boss's throat sits, in world height. */
@@ -114,6 +126,7 @@ export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
   return {
     funnel,
     boss,
+    cap: p.skylight ? null : crownDome(p.skylightRadius, detail),
     crownHeight: p.crownHeight,
     springHeight: p.springHeight,
     skylight: new THREE.Vector3(0, p.crownHeight, 0),
@@ -149,6 +162,36 @@ function surface(
   return {
     geometry: buildHyperboloidSurface(params),
     error: reach * (1 - Math.cos(Math.PI / radialSegments)),
+  }
+}
+
+/**
+ * The dome that closes an unlit cell.
+ *
+ * Shallow rather than flat, and for the same reason the knots are ellipsoids
+ * rather than spheres: a disc at the top of a funnel reads as a lid set into
+ * it, and a dome reads as the funnel closing.
+ *
+ * Built in the funnel's own frame — z along the axis — so it takes the same
+ * placement as the surface it caps.
+ */
+function crownDome(radius: number, detail: number): VaultSurface {
+  const segments = Math.max(8, surfaceRadial(radius, detail))
+  const geometry = new THREE.SphereGeometry(
+    radius * 1.02,
+    segments,
+    Math.max(3, Math.round(segments / 6)),
+    0,
+    Math.PI * 2,
+    0,
+    Math.PI / 2,
+  )
+  // Sphere stands on y; the funnel's axis is z, and the dome bulges up it.
+  geometry.scale(1, 0.38, 1)
+  geometry.rotateX(Math.PI / 2)
+  return {
+    geometry,
+    error: radius * (1 - Math.cos(Math.PI / segments)),
   }
 }
 

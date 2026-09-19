@@ -30,14 +30,14 @@ cell tiled the length of the nave, which is the fix.
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 | Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |
 | The 7.5 m module and the four vault heights | `src/plan/module.ts` |
-| Nave assembly — the cell, tiled, walls running the length | `src/plan/nave.ts` |
+| Nave assembly — five naves on the module, tiled the length | `src/plan/nave.ts` |
 | Tessellation from feature size, not from typed-in counts | `src/geometry/detail.ts` |
 | Instanced level of detail, switched on measured error | `src/render/field.ts` |
 | Solar position for 41.40° N, 2.17° E, with CET/CEST | `src/light/sun.ts` |
 | Analytic sky, and the environment light it casts | `src/light/sky.ts` |
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
-| Clerestory wall — stone frame, two registers, no holes cut | `src/plan/clerestory.ts` |
+| Walls — stone frames, no holes cut; aisle and clerestory | `src/plan/clerestory.ts` |
 | Seven curated viewpoints, on the number keys | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts`, `src/camera/envelope.ts` |
 

@@ -79,16 +79,26 @@ export function buildPanel(ctx: ParamContext): Pane {
       })
   }
 
-  const col = pane.addFolder({ title: 'Tree column' })
-  col.addBinding(ctx.plan.tree, 'order', {
-    label: 'trunk order',
-    options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — porphyry': 12 },
-  })
-  col.addBinding(ctx.plan.tree, 'levels', { min: 0, max: 3, step: 1, label: 'branch levels' })
+  // One folder per band across the nave, because that is where the plan
+  // actually varies: the order of a column is chosen by what it carries.
+  for (const band of ctx.plan.bands) {
+    const f = pane.addFolder({ title: band.name })
+    f.addBinding(band, 'outer', { min: 3, max: 40, step: 0.25, label: 'line at ±x' })
+    f.addBinding(band, 'crown', { min: 12, max: 80, step: 0.5, label: 'crown m' })
+    f.addBinding(band, 'order', {
+      label: 'order',
+      options: { '6 — sandstone': 6, '8 — grey granite': 8, '10 — basalt': 10, '12 — porphyry': 12 },
+    })
+    f.addBinding(band, 'levels', { min: 0, max: 3, step: 1, label: 'branch levels' })
+    f.addBinding(band, 'branchLength', { min: 0.1, max: 1.4, step: 0.01, label: 'branch length' })
+    f.addBinding(band, 'skylight', { label: 'skylight' })
+    f.on('change', () => ctx.rebuild())
+  }
+
+  const col = pane.addFolder({ title: 'Tree shape' })
   col.addBinding(ctx.plan.tree, 'branches', { min: 2, max: 6, step: 1, label: 'branches / knot' })
   col.addBinding(ctx.plan.tree, 'splayDeg', { min: 0, max: 60, step: 0.5, label: 'splay °' })
   col.addBinding(ctx.plan.tree, 'phaseDeg', { min: 0, max: 90, step: 1, label: 'fan phase °' })
-  col.addBinding(ctx.plan.tree, 'branchLength', { min: 0.1, max: 1, step: 0.01, label: 'branch length' })
   col.addBinding(ctx.plan.tree, 'knotRadiusScale', { min: 1, max: 2.5, step: 0.01, label: 'knot width' })
   col.addBinding(ctx.plan.tree, 'knotHeightScale', { min: 0.4, max: 2.5, step: 0.01, label: 'knot height' })
   col.addBinding(ctx.plan.tree, 'stages', { min: 1, max: 6, step: 1, label: 'twist stages' })
@@ -108,8 +118,6 @@ export function buildPanel(ctx: ParamContext): Pane {
   const vault = pane.addFolder({ title: 'Plan and vault' })
   vault.addBinding(ctx.plan, 'bays', { min: 1, max: 12, step: 1, label: 'bays' })
   vault.addBinding(ctx.plan, 'station', { min: 5, max: 30, step: 0.25, label: 'bay length m' })
-  vault.addBinding(ctx.plan, 'bay', { min: 5, max: 30, step: 0.25, label: 'column spacing m' })
-  vault.addBinding(ctx.plan.vault, 'crownHeight', { min: 15, max: 75, step: 0.5, label: 'crown m' })
   vault.addBinding(ctx.plan.vault, 'skylightRadius', { min: 0.2, max: 5, step: 0.05, label: 'skylight r' })
   vault.addBinding(ctx.plan.vault, 'bossRadius', { min: 0.5, max: 8, step: 0.05, label: 'boss r' })
   vault.addBinding(ctx.plan.vault, 'meetFraction', { min: 0.15, max: 0.9, step: 0.01, label: 'meet height' })
@@ -123,6 +131,7 @@ export function buildPanel(ctx: ParamContext): Pane {
   walls.addBinding(ctx.plan.walls, 'lights', { min: 1, max: 6, step: 1, label: 'lights / register' })
   walls.addBinding(ctx.plan.walls, 'margin', { min: 0.2, max: 4, step: 0.05, label: 'end stone m' })
   walls.addBinding(ctx.plan.walls, 'mullion', { min: 0.1, max: 3, step: 0.05, label: 'mullion m' })
+  walls.addBinding(ctx.plan.walls, 'clerestoryOffset', { min: 0.1, max: 3, step: 0.05, label: 'clerestory ±x' })
   walls.addBinding(ctx.plan.walls, 'lowSill', { min: 0, max: 20, step: 0.1, label: 'aisle sill m' })
   walls.addBinding(ctx.plan.walls, 'lowHead', { min: 2, max: 30, step: 0.1, label: 'aisle head m' })
   walls.addBinding(ctx.plan.walls, 'highSill', { min: 5, max: 36, step: 0.1, label: 'clerestory sill m' })
