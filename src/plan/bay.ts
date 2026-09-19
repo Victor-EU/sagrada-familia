@@ -1,8 +1,10 @@
 import * as THREE from 'three'
 import { buildTreeColumn, type TreeColumnParams } from '../geometry/branch.ts'
 import { columnMetrics } from '../geometry/column.ts'
+import { DETAIL_LEVELS } from '../geometry/detail.ts'
 import { BayEnvelope } from '../camera/envelope.ts'
-import { buildVaultCell, type VaultCellParams } from '../geometry/vault.ts'
+import { bossOffsets, buildVaultCell, type VaultCellParams } from '../geometry/vault.ts'
+import { InstancedField, type FieldKindSpec } from '../render/field.ts'
 import { buildClerestory, defaultClerestory } from './clerestory.ts'
 import { LAYER_GLASS } from '../render/sunrig.ts'
 import { MODULE } from './module.ts'
@@ -15,9 +17,9 @@ import { MODULE } from './module.ts'
  * scene that exercises the column rule, a hyperboloid vault, both camera
  * behaviours and the plaster look under coloured light all at once.
  *
- * The four columns share one geometry set: the tree is built once and cloned,
- * and `clone()` keeps geometry and material references, so four columns cost
- * what one costs.
+ * Everything repeated is built once per level of detail and then instanced, so
+ * four columns cost one draw call and the count does not change when the nave
+ * grows to seventy of them.
  */
 export interface WallParams {
   show: boolean
@@ -58,10 +60,7 @@ export const defaultBay: BayParams = {
     branchLength: 0.36,
     knotRadiusScale: 1.14,
     knotHeightScale: 1.95,
-    knotSegments: 48,
     stages: 3,
-    radialSegments: 192,
-    heightSegments: 128,
   },
   vault: {
     crownHeight: MODULE * 6, // the nave vault, 45 m
@@ -71,8 +70,6 @@ export const defaultBay: BayParams = {
     // Above ~1.4 the two families overlap enough to close the cell. Adjacent
     // bays will cover the perimeter once the nave is tiled.
     spread: 1.45,
-    radialSegments: 128,
-    heightSegments: 64,
   },
   walls: {
     show: true,
@@ -89,7 +86,11 @@ export const defaultBay: BayParams = {
 }
 
 export interface Bay {
+  /** Everything drawn once: the walls and their glass. */
   group: THREE.Group
+  /** Everything drawn many times: columns, funnels, bosses. */
+  field: InstancedField
+  /** Geometries owned by `group`, so callers can dispose the lot. */
   geometries: THREE.BufferGeometry[]
   /** Where the branches hand off to the vault. */
   springHeight: number
@@ -98,6 +99,23 @@ export interface Bay {
   columnPositions: THREE.Vector3[]
   /** What the camera needs in order to walk here. */
   envelope: BayEnvelope
+  /** What the whole assembly occupies, instances included. */
+  bounds: THREE.Box3
+}
+
+/** A placement with no rotation or scale. */
+function at(x: number, y: number, z: number): THREE.Matrix4 {
+  return new THREE.Matrix4().makeTranslation(x, y, z)
+}
+
+/**
+ * Hyperboloids are generated with z as their axis; the world is y up. One
+ * quarter turn on the way in, and the mathematics stays clean.
+ */
+function upright(x: number, y: number, z: number): THREE.Matrix4 {
+  return new THREE.Matrix4()
+    .makeRotationX(-Math.PI / 2)
+    .premultiply(at(x, y, z))
 }
 
 export function buildBay(
@@ -108,29 +126,51 @@ export function buildBay(
   const group = new THREE.Group()
   const geometries: THREE.BufferGeometry[] = []
 
-  const template = buildTreeColumn(p.tree, plaster)
-  geometries.push(...template.geometries)
+  // One tree per level of detail. The 24 m trunk and the 5.8 m twigs are the
+  // same rule sampled at different steps, not the same mesh decimated.
+  const trees = DETAIL_LEVELS.map((detail) => buildTreeColumn(p.tree, detail))
+  const springHeight = trees[0]!.totalHeight
 
   const half = p.bay / 2
-  const columnPositions: THREE.Vector3[] = []
-  for (const [x, z] of [
-    [-half, -half],
-    [half, -half],
-    [-half, half],
-    [half, half],
-  ] as const) {
-    const instance = template.group.clone()
-    instance.position.set(x, 0, z)
-    group.add(instance)
-    columnPositions.push(new THREE.Vector3(x, 0, z))
-  }
+  const corners = bossOffsets(p.bay)
+  const columnPositions = corners.map(([x, z]) => new THREE.Vector3(x, 0, z))
 
   // The vault springs from wherever the branches actually end, rather than
   // from a number typed in twice.
-  const springHeight = template.totalHeight
-  const vault = buildVaultCell({ ...p.vault, bay: p.bay, springHeight }, plaster)
-  geometries.push(...vault.geometries)
-  group.add(vault.group)
+  const cells = DETAIL_LEVELS.map((detail) =>
+    buildVaultCell({ ...p.vault, bay: p.bay, springHeight }, detail),
+  )
+  const cell = cells[0]!
+
+  const kinds: FieldKindSpec[] = [
+    {
+      name: 'column',
+      levels: trees.map((t) => ({ geometry: t.geometry, error: t.error })),
+      material: plaster,
+      placements: corners.map(([x, z]) => at(x, 0, z)),
+      // A column is allowed several pixels where a vault is allowed one.
+      // Its error is the depth of one flute clipped where the twist puts a
+      // corner between two samples — a few pixels of one edge, not the whole
+      // outline moving — and the shading either side of it is unchanged.
+      // Measured rather than argued: at the distance this tolerance puts the
+      // first switch, dropping a level changes the average plaster tone by
+      // about 1/255, with no bias in either direction.
+      tolerancePx: 5,
+    },
+    {
+      name: 'funnel',
+      levels: cells.map((c) => c.funnel),
+      material: plaster,
+      placements: [upright(0, cell.crownHeight, 0)],
+    },
+    {
+      name: 'boss',
+      levels: cells.map((c) => c.boss),
+      material: plaster,
+      placements: corners.map(([x, z]) => upright(x, springHeight, z)),
+    },
+  ]
+  const field = new InstancedField(kinds)
 
   if (p.walls.show) {
     // Nativity to +X, Passion to −X. That is the convention the sun model
@@ -178,12 +218,21 @@ export function buildBay(
     columns: columnPositions.map((c) => ({ x: c.x, z: c.z, radius: columnRadius })),
   })
 
+  const bounds = new THREE.Box3()
+  group.updateMatrixWorld(true)
+  bounds.setFromObject(group)
+  const reach = Math.max(half + trees[0]!.radius, wallInner + p.walls.thickness)
+  bounds.expandByPoint(new THREE.Vector3(-reach, 0, -reach))
+  bounds.expandByPoint(new THREE.Vector3(reach, p.vault.crownHeight + 2, reach))
+
   return {
     group,
+    field,
     geometries,
     springHeight,
-    skylight: vault.skylight,
+    skylight: cell.skylight,
     columnPositions,
     envelope,
+    bounds,
   }
 }

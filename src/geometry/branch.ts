@@ -1,11 +1,14 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   buildColumn,
   columnMetrics,
+  columnSectionError,
   COLUMN_ORDERS,
   type ColumnOrder,
   type ColumnParams,
 } from './column.ts'
+import { knotSegments, shaftRadial, shaftRows } from './detail.ts'
 
 /**
  * The branching node — the stone forest.
@@ -22,6 +25,10 @@ import {
  *
  * Load falls as it divides, and column order is chosen by load, so each level
  * of branching steps down one order: 12 → 10 → 8 → 6.
+ *
+ * A tree is baked to **one geometry**. Twenty-one meshes per column is twenty-
+ * one draw calls, and a nave has seventy-odd columns; merged once at build
+ * time, a whole tree is a single instanceable piece of stone.
  */
 export interface TreeColumnParams {
   order: ColumnOrder
@@ -38,11 +45,7 @@ export interface TreeColumnParams {
   /** Ellipsoid semi-axes, as multiples of the shaft's inner radius. */
   knotRadiusScale: number
   knotHeightScale: number
-  knotSegments: number
-  /** Tessellation shared by every column in the assembly. */
   stages: number
-  radialSegments: number
-  heightSegments: number
 }
 
 export const defaultTreeColumn: TreeColumnParams = {
@@ -56,10 +59,7 @@ export const defaultTreeColumn: TreeColumnParams = {
   // elongated ellipsoid as a swelling in the branch itself.
   knotRadiusScale: 1.14,
   knotHeightScale: 1.95,
-  knotSegments: 48,
   stages: 3,
-  radialSegments: 192,
-  heightSegments: 128,
 }
 
 /** Next order down the hierarchy; the smallest order stays put. */
@@ -69,48 +69,62 @@ export function childOrder(order: ColumnOrder): ColumnOrder {
 }
 
 export interface TreeColumn {
-  group: THREE.Group
-  /** Every distinct geometry built, so callers can dispose the lot. */
-  geometries: THREE.BufferGeometry[]
+  /** The whole tree as one geometry, standing on the origin, y up. */
+  geometry: THREE.BufferGeometry
   /** Where the outermost branches end — the vault springs from these. */
   tips: THREE.Vector3[]
   totalHeight: number
+  /** Widest horizontal reach, for placing walls and for culling. */
+  radius: number
+  /**
+   * How far this tessellation strays from the true surface, in metres —
+   * measured, not estimated. What the level-of-detail switch is judged on.
+   */
+  error: number
 }
 
 /**
- * Assemble a tree column. Returns a group in world orientation (y up); the
- * column generator works with z as its axis, so each mesh rotates on the way in.
+ * Build a tree column at one level of detail.
+ *
+ * `detail` is the scalar from `detail.ts`: 1 is what you stand next to, and
+ * each level down halves it. Nothing is decimated — the surface is re-sampled
+ * from the same rule at a coarser step, so a distant column is still exactly
+ * the column, and its star keeps its points.
  */
-export function buildTreeColumn(
-  params: TreeColumnParams,
-  material: THREE.Material,
-): TreeColumn {
-  const geometries: THREE.BufferGeometry[] = []
+export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColumn {
   const tipMarkers: THREE.Object3D[] = []
-  const group = new THREE.Group()
+  const root = new THREE.Group()
 
-  // One geometry per (order, lengthFraction) — every branch at a given level is
-  // the same shape, which is also what makes this instanceable later.
+  // One geometry per (order, lengthFraction) — every branch at a given level
+  // is the same shape. They are merged away below, but building each shape
+  // once still saves the generator work.
   const cache = new Map<string, THREE.BufferGeometry>()
   const columnGeometry = (order: ColumnOrder, lengthFraction: number): THREE.BufferGeometry => {
     const key = `${order}:${lengthFraction.toFixed(4)}`
     const hit = cache.get(key)
     if (hit) return hit
+    const height = columnMetrics(order).height * lengthFraction
     const shape: ColumnParams = {
       order,
       stages: params.stages,
-      radialSegments: params.radialSegments,
-      heightSegments: params.heightSegments,
+      radialSegments: shaftRadial(order, detail),
+      heightSegments: shaftRows(height, detail),
       lengthFraction,
     }
     const geometry = buildColumn(shape)
     cache.set(key, geometry)
-    geometries.push(geometry)
     return geometry
   }
 
-  const knotGeometry = new THREE.SphereGeometry(1, params.knotSegments, params.knotSegments / 2)
-  geometries.push(knotGeometry)
+  const knotCache = new Map<ColumnOrder, THREE.BufferGeometry>()
+  const knotGeometry = (order: ColumnOrder): THREE.BufferGeometry => {
+    const hit = knotCache.get(order)
+    if (hit) return hit
+    const segments = knotSegments(order, detail)
+    const geometry = new THREE.SphereGeometry(1, segments, segments / 2)
+    knotCache.set(order, geometry)
+    return geometry
+  }
 
   const splay = THREE.MathUtils.degToRad(params.splayDeg)
 
@@ -121,22 +135,18 @@ export function buildTreeColumn(
     const fraction = isTrunk ? 1 : params.branchLength
     const length = m.height * fraction
 
-    const shaft = new THREE.Mesh(columnGeometry(order, fraction), material)
+    const shaft = new THREE.Mesh(columnGeometry(order, fraction))
     shaft.rotation.x = -Math.PI / 2
-    shaft.castShadow = true
-    shaft.receiveShadow = true
     parent.add(shaft)
 
     // The knot sits on the capital so that its lower half swallows it.
-    const knot = new THREE.Mesh(knotGeometry, material)
+    const knot = new THREE.Mesh(knotGeometry(order))
     knot.position.y = length
     knot.scale.set(
       m.inradius * params.knotRadiusScale,
       m.inradius * params.knotHeightScale,
       m.inradius * params.knotRadiusScale,
     )
-    knot.castShadow = true
-    knot.receiveShadow = true
     parent.add(knot)
 
     if (level >= params.levels) {
@@ -168,12 +178,43 @@ export function buildTreeColumn(
     }
   }
 
-  grow(group, params.order, 0, 0)
-  group.updateMatrixWorld(true)
+  grow(root, params.order, 0, 0)
+  root.updateMatrixWorld(true)
+
+  const pieces: THREE.BufferGeometry[] = []
+  root.traverse((node) => {
+    if (node instanceof THREE.Mesh) {
+      pieces.push(node.geometry.clone().applyMatrix4(node.matrixWorld))
+    }
+  })
+
+  const geometry = mergeGeometries(pieces, false)
+  for (const piece of pieces) piece.dispose()
+  for (const shape of cache.values()) shape.dispose()
+  for (const shape of knotCache.values()) shape.dispose()
+
+  geometry.computeBoundingSphere()
+  geometry.computeBoundingBox()
 
   const tips = tipMarkers.map((marker) => marker.getWorldPosition(new THREE.Vector3()))
   let totalHeight = 0
   for (const t of tips) totalHeight = Math.max(totalHeight, t.y)
 
-  return { group, geometries, tips, totalHeight }
+  const box = geometry.boundingBox!
+  const radius = Math.max(
+    Math.abs(box.min.x), Math.abs(box.max.x),
+    Math.abs(box.min.z), Math.abs(box.max.z),
+  )
+
+  // The worst any shaft in the tree does, not the average: the level has to
+  // survive the piece you are looking straight at.
+  let error = 0
+  let order = params.order
+  for (let level = 0; level <= params.levels; level++) {
+    const [worst] = columnSectionError(order, params.stages, [shaftRadial(order, detail)])
+    error = Math.max(error, worst ?? 0)
+    order = childOrder(order)
+  }
+
+  return { geometry, tips, totalHeight, radius, error }
 }

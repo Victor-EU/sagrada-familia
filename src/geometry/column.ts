@@ -40,7 +40,9 @@ export interface ColumnParams {
   order: ColumnOrder
   /** Twist stages. Past ~3 the flutes are shallower than a millimetre. */
   stages: number
+  /** Segments around. Callers get this from `detail.ts`, not from a constant. */
   radialSegments: number
+  /** Rows up the part actually built, not up the notional full column. */
   heightSegments: number
   /**
    * Build only the lower fraction of the column. Branches are shorter pieces
@@ -246,7 +248,7 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
   const buildHeight = m.height * fraction
 
   const cols = Math.max(12, Math.floor(params.radialSegments))
-  const rows = Math.max(4, Math.floor(params.heightSegments * fraction))
+  const rows = Math.max(4, Math.floor(params.heightSegments))
   const dAlpha = (Math.PI * 2) / cols
   const dZ = buildHeight / rows
 
@@ -354,4 +356,86 @@ function addCap(
     if (dir > 0) indices.push(centre, a, b)
     else indices.push(centre, b, a)
   }
+}
+
+/**
+ * How far a column's true section strays from the polyline the renderer will
+ * actually draw at each radial count.
+ *
+ * This exists so that level of detail can be decided by *error* rather than by
+ * a made-up distance. Every other piece in the project is a smooth surface
+ * whose sampling error is the plain sagitta of a chord; a column is not, and
+ * guessing at it would have been the one place the budget was decided by feel.
+ *
+ * Two things make the answer interesting. Sampling a regular polygon at a
+ * multiple of its edge count is *exact* — a polygon's edges are already
+ * straight — so the base star costs nothing at any level, and the whole error
+ * is the fluting the twist stages add. And because the radial function is
+ * star-shaped, the chord between two samples has a closed polar form:
+ *
+ *   r_chord(α) = r₀·r₁·sin(α₁ − α₀) / ( r₀·sin(α₁ − α) + r₁·sin(α − α₀) )
+ *
+ * so the deviation is a subtraction rather than a point-to-segment solve.
+ *
+ * Sampled over the height because the flutes deepen and double as the twist
+ * accumulates, and the level has to survive the worst of it.
+ */
+const ERROR_CACHE = new Map<string, number[]>()
+
+export function columnSectionError(
+  order: ColumnOrder,
+  stages: number,
+  radialCounts: number[],
+): number[] {
+  const key = `${order}:${stages}:${radialCounts.join(',')}`
+  const cached = ERROR_CACHE.get(key)
+  if (cached) return cached
+
+  const m = columnMetrics(order)
+  const polys = basePolygons(order)
+  const schedule = stageSchedule(m, stages)
+
+  const finest = Math.max(...radialCounts)
+  // A multiple of every count on the list, so each coarse sample lands exactly
+  // on a fine one and no interpolation creeps into the reference.
+  const fine = finest * 16
+  const dFine = (Math.PI * 2) / fine
+
+  const heights = [0, 0.12, 0.3, 0.5, 0.72, 0.92, 1].map(
+    (f) => m.plinthHeight + m.shaftHeight * f,
+  )
+
+  const errors = radialCounts.map(() => 0)
+
+  for (const z of heights) {
+    const offsets = offsetsAt(z, schedule)
+    const ring = new Float64Array(fine)
+    for (let i = 0; i < fine; i++) {
+      ring[i] = sectionRadius(i * dFine, offsets, polys, m.polygonInradius)
+    }
+
+    for (let k = 0; k < radialCounts.length; k++) {
+      const n = radialCounts[k]!
+      const stride = fine / n
+      if (!Number.isInteger(stride)) continue
+      const span = stride * dFine
+      const sinSpan = Math.sin(span)
+
+      for (let c = 0; c < n; c++) {
+        const i0 = c * stride
+        const i1 = ((c + 1) % n) * stride
+        const r0 = ring[i0]!
+        const r1 = ring[i1]!
+        for (let j = 1; j < stride; j++) {
+          const da = j * dFine
+          const chord = (r0 * r1 * sinSpan) / (r0 * Math.sin(span - da) + r1 * Math.sin(da))
+          const deviation = Math.abs(ring[(i0 + j) % fine]! - chord)
+          if (deviation > errors[k]!) errors[k] = deviation
+        }
+      }
+    }
+  }
+
+  ERROR_CACHE.set(key, errors)
+  return errors
 }

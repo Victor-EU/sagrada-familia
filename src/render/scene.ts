@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { groundMaterial, plasterMaterial } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
 import { LAYER_GLASS, SunRig, patchForSunlight } from './sunrig.ts'
+import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
 import { EYE_HEIGHT } from '../camera/envelope.ts'
 
@@ -20,6 +21,13 @@ export interface Stage {
   bounce: THREE.HemisphereLight
   /** Unit vector toward the sun, in model space. */
   sunDirection: THREE.Vector3
+  /**
+   * Instanced fields, which have to choose a level of detail before each
+   * pass. The sun looks at the model from somewhere the eye is not, so a
+   * bucketing made for the camera would drop the very columns whose shadows
+   * fall into view.
+   */
+  passes: PassParticipant[]
   /** Re-light for a new sun position. */
   setSun(direction: THREE.Vector3): void
   /** Tell the rig the geometry changed, and what it now occupies. */
@@ -85,6 +93,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   scene.add(figure)
 
   const sunDirection = new THREE.Vector3(0, 1, 0).normalize()
+  const passes: PassParticipant[] = []
+  const drawingBuffer = new THREE.Vector2()
   let dirty = true
 
   function setSun(direction: THREE.Vector3): void {
@@ -113,6 +123,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     figure,
     bounce,
     sunDirection,
+    passes,
     setSun,
     setModelBounds(box) {
       sun.setBounds(box)
@@ -126,10 +137,15 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // sun or the geometry has actually changed. Everything else is a plain
       // forward render.
       if (dirty) {
+        for (const participant of passes) participant.prepareForSun(SUN_DETAIL_LEVEL)
         const radiance = sun.uniforms.uSunRadiance.value
         sun.render(renderer, scene, camera, sunDirection, radiance)
         dirty = false
       }
+      // The level-of-detail switch is angular, so it needs to know how many
+      // device pixels the frame is tall — not how many CSS ones.
+      renderer.getDrawingBufferSize(drawingBuffer)
+      for (const participant of passes) participant.prepareForView(camera, drawingBuffer.y)
       sun.syncView(camera)
       renderer.render(scene, camera)
     },

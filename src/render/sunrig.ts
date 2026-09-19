@@ -311,13 +311,24 @@ export function patchForSunlight(
       .replace('#include <common>', '#include <common>\nvarying vec3 vSunWorld;')
       .replace(
         '#include <project_vertex>',
-        '#include <project_vertex>\n  vSunWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;',
+        [
+          '#include <project_vertex>',
+          // The instance matrix is applied inside project_vertex to a local
+          // copy, so `transformed` is still in the piece's own frame here. A
+          // world position that skipped it would put every instanced column's
+          // sunlight at the one place the template geometry happens to stand.
+          '  vec4 sunLocal = vec4( transformed, 1.0 );',
+          '  #ifdef USE_INSTANCING',
+          '    sunLocal = instanceMatrix * sunLocal;',
+          '  #endif',
+          '  vSunWorld = ( modelMatrix * sunLocal ).xyz;',
+        ].join('\n'),
       )
 
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${SUN_PARS}`)
       .replace('#include <lights_fragment_end>', `${SUN_APPLY}\n#include <lights_fragment_end>`)
   }
-  material.customProgramCacheKey = () => 'sf-sunlight-2'
+  material.customProgramCacheKey = () => 'sf-sunlight-3'
   material.needsUpdate = true
 }

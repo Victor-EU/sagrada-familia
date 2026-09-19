@@ -15,6 +15,10 @@ export interface ViewFlags {
   rulingFamily: RulingFamily
   showFigure: boolean
   showGround: boolean
+  /** Level of detail to pin every instance to; −1 chooses by distance. */
+  detailLevel: number
+  /** Multiplier on the distances at which detail drops. */
+  detailRange: number
 }
 
 export interface RenderFlags {
@@ -88,9 +92,18 @@ export function buildPanel(ctx: ParamContext): Pane {
   col.addBinding(ctx.bay.tree, 'knotRadiusScale', { min: 1, max: 2.5, step: 0.01, label: 'knot width' })
   col.addBinding(ctx.bay.tree, 'knotHeightScale', { min: 0.4, max: 2.5, step: 0.01, label: 'knot height' })
   col.addBinding(ctx.bay.tree, 'stages', { min: 1, max: 6, step: 1, label: 'twist stages' })
-  col.addBinding(ctx.bay.tree, 'radialSegments', { min: 24, max: 512, step: 8, label: 'radial' })
-  col.addBinding(ctx.bay.tree, 'heightSegments', { min: 8, max: 384, step: 4, label: 'height' })
   col.on('change', () => ctx.rebuild())
+
+  // Tessellation is no longer typed in here. Counts follow the size of the
+  // feature — see geometry/detail.ts — so what is worth a dial is which level
+  // gets used, and how far away the switch happens.
+  const lod = pane.addFolder({ title: 'Detail' })
+  lod.addBinding(ctx.view, 'detailLevel', {
+    label: 'level',
+    options: { auto: -1, '0 — near': 0, '1': 1, '2': 2, '3 — far': 3 },
+  })
+  lod.addBinding(ctx.view, 'detailRange', { min: 0.2, max: 4, step: 0.05, label: 'switch ×' })
+  lod.on('change', () => ctx.applyView())
 
   const vault = pane.addFolder({ title: 'Bay and vault' })
   vault.addBinding(ctx.bay, 'bay', { min: 5, max: 30, step: 0.25, label: 'column spacing m' })

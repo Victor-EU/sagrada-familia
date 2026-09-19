@@ -51,6 +51,8 @@ const view: ViewFlags = {
   rulingFamily: 'both',
   showFigure: true,
   showGround: true,
+  detailLevel: -1,
+  detailRange: 1,
 }
 const render: RenderFlags = {
   exposure: 1,
@@ -110,15 +112,23 @@ funnel.add(rulings)
 
 function rebuildBay(): void {
   if (built) {
-    bayRoot.remove(built.group)
+    bayRoot.remove(built.group, built.field.group)
     for (const geometry of built.geometries) geometry.dispose()
+    const seat = stage.passes.indexOf(built.field)
+    if (seat >= 0) stage.passes.splice(seat, 1)
+    built.field.dispose()
   }
   built = buildBay(bay, plaster, stage.glass)
-  bayRoot.add(built.group)
+  bayRoot.add(built.group, built.field.group)
+  // The field picks its level of detail once per pass, so the stage has to
+  // know it exists.
+  stage.passes.push(built.field)
 
   // The sun rig fits itself to what is actually built, so it has to be told.
-  built.group.updateMatrixWorld(true)
-  stage.setModelBounds(new THREE.Box3().setFromObject(built.group))
+  // Instanced pieces are invisible to Box3.setFromObject, which reads a
+  // geometry's own bounds and not where its copies stand, so the plan reports
+  // what it occupies rather than the scene graph being asked.
+  stage.setModelBounds(built.bounds)
   cam.envelope = built.envelope
 }
 
@@ -136,6 +146,10 @@ function rebuild(): void {
 }
 
 function applyView(): void {
+  if (built) {
+    built.field.forceLevel = view.detailLevel
+    built.field.switchScale = view.detailRange
+  }
   surface.visible = view.showSurface
   rulings.visible = view.showRulings
   plaster.wireframe = view.wireframe
@@ -274,11 +288,16 @@ function frame(): void {
     const p = stage.camera.position
     const cm = columnMetrics(bay.tree.order)
 
-    let tris = (surface.geometry.index?.count ?? 0) / 3
-    let meshes = 1
+    const field = built?.field.stats() ?? { pieces: 0, triangles: 0, draws: 0 }
+    let tris = field.triangles
+    let draws = field.draws
+    if (surface.visible) {
+      tris += (surface.geometry.index?.count ?? 0) / 3
+      draws++
+    }
     built?.group.traverse((node) => {
       if (!(node instanceof THREE.Mesh)) return
-      meshes++
+      draws++
       tris += (node.geometry.index?.count ?? 0) / 3
     })
 
@@ -288,8 +307,8 @@ function frame(): void {
       `lens  ${stage.camera.fov.toFixed(1)}° fov   shift ${(cam.shiftCorrection * 100).toFixed(0)}%`,
       `move  ${modeLabel()}  ${cam.speed.toFixed(2)} m/s fly  ` +
         `${cam.walkSpeed.toFixed(2)} m/s walk`,
-      `mesh  ${Math.round(tris).toLocaleString()} tris  ${meshes} meshes  ` +
-        `${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
+      `mesh  ${Math.round(tris).toLocaleString()} tris  ${draws} draws  ` +
+        `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
       `tree  ${bay.tree.levels} levels  ${bay.tree.branches} branches  ` +

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { surfaceRadial, surfaceRows } from './detail.ts'
 import { buildHyperboloidSurface, type HyperboloidParams } from './hyperboloid.ts'
 
 /**
@@ -33,8 +34,6 @@ export interface VaultCellParams {
   meetFraction: number
   /** Overlap multiplier on the meeting radius. 1 makes neighbours just touch. */
   spread: number
-  radialSegments: number
-  heightSegments: number
 }
 
 export const defaultVaultCell: VaultCellParams = {
@@ -45,13 +44,27 @@ export const defaultVaultCell: VaultCellParams = {
   bossRadius: 2.2,
   meetFraction: 0.55,
   spread: 1.06,
-  radialSegments: 128,
-  heightSegments: 64,
+}
+
+export interface VaultSurface {
+  geometry: THREE.BufferGeometry
+  /**
+   * How far this tessellation strays from the true surface, in metres. A
+   * hyperboloid is smooth, so it is the plain sagitta of a chord across the
+   * widest ring — nothing is lost but roundness.
+   */
+  error: number
 }
 
 export interface VaultCell {
-  group: THREE.Group
-  geometries: THREE.BufferGeometry[]
+  /** The skylight funnel, in its own frame: z along the axis, throat at z=0. */
+  funnel: VaultSurface
+  /** One boss; the cell uses four of them, one over each column. */
+  boss: VaultSurface
+  /** Where the funnel's throat sits, in world height. */
+  crownHeight: number
+  /** Where each boss's throat sits, in world height. */
+  springHeight: number
   /** Centre of the skylight opening, for placing the light later. */
   skylight: THREE.Vector3
 }
@@ -65,71 +78,84 @@ function flareFor(throat: number, reach: number, depth: number): number {
   return depth / Math.sqrt(ratio * ratio - 1)
 }
 
-export function buildVaultCell(
-  p: VaultCellParams,
-  material: THREE.Material,
-): VaultCell {
-  const geometries: THREE.BufferGeometry[] = []
-  const group = new THREE.Group()
-
+export function buildVaultCell(p: VaultCellParams, detail = 1): VaultCell {
   const rise = Math.max(0.5, p.crownHeight - p.springHeight)
   const meetHeight = p.springHeight + rise * p.meetFraction
   // Cell centre to corner is bay/√2, so each family covers half of that.
   const meetRadius = ((p.bay / Math.SQRT2) / 2) * p.spread
 
-  const shared = {
-    ellipticity: 1,
-    radialSegments: p.radialSegments,
-    heightSegments: p.heightSegments,
-  }
-
   // Skylight funnel: throat at the crown, flaring downward to the meeting level.
   const funnelDepth = p.crownHeight - meetHeight
-  const funnel: HyperboloidParams = {
-    ...shared,
-    throatRadius: p.skylightRadius,
-    flare: flareFor(p.skylightRadius, meetRadius, funnelDepth),
-    zBottom: -funnelDepth,
-    zTop: 0,
-  }
-  const funnelGeometry = buildHyperboloidSurface(funnel)
-  geometries.push(funnelGeometry)
-
-  const funnelMesh = new THREE.Mesh(funnelGeometry, material)
-  funnelMesh.rotation.x = -Math.PI / 2
-  funnelMesh.position.y = p.crownHeight
-  funnelMesh.castShadow = true
-  funnelMesh.receiveShadow = true
-  group.add(funnelMesh)
+  const funnel = surface(
+    p.skylightRadius,
+    flareFor(p.skylightRadius, meetRadius, funnelDepth),
+    -funnelDepth,
+    0,
+    meetRadius,
+    detail,
+  )
 
   // Boss: throat at the springing, flaring up to meet the funnel.
   const bossRise = meetHeight - p.springHeight
-  const boss: HyperboloidParams = {
-    ...shared,
-    throatRadius: p.bossRadius,
-    flare: flareFor(p.bossRadius, meetRadius, bossRise),
-    zBottom: 0,
-    zTop: bossRise,
-  }
-  const bossGeometry = buildHyperboloidSurface(boss)
-  geometries.push(bossGeometry)
+  const boss = surface(
+    p.bossRadius,
+    flareFor(p.bossRadius, meetRadius, bossRise),
+    0,
+    bossRise,
+    meetRadius,
+    detail,
+  )
 
-  const half = p.bay / 2
-  for (const [x, z] of [
+  return {
+    funnel,
+    boss,
+    crownHeight: p.crownHeight,
+    springHeight: p.springHeight,
+    skylight: new THREE.Vector3(0, p.crownHeight, 0),
+  }
+}
+
+/**
+ * One hyperboloid, tessellated for the detail asked of it.
+ *
+ * Counts come from the surface's own size — see `detail.ts` — rather than
+ * from a parameter, so the same call serves the near view and the one
+ * eighty metres down the nave.
+ */
+function surface(
+  throatRadius: number,
+  flare: number,
+  zBottom: number,
+  zTop: number,
+  reach: number,
+  detail: number,
+): VaultSurface {
+  const profile = Math.hypot(zTop - zBottom, reach - throatRadius)
+  const radialSegments = surfaceRadial(reach, detail)
+  const params: HyperboloidParams = {
+    throatRadius,
+    ellipticity: 1,
+    flare,
+    zBottom,
+    zTop,
+    radialSegments,
+    heightSegments: surfaceRows(profile, detail),
+  }
+  return {
+    geometry: buildHyperboloidSurface(params),
+    error: reach * (1 - Math.cos(Math.PI / radialSegments)),
+  }
+}
+
+/** Where a cell's four bosses stand, relative to its centre. */
+export function bossOffsets(bay: number): [number, number][] {
+  const half = bay / 2
+  return [
     [-half, -half],
     [half, -half],
     [-half, half],
     [half, half],
-  ] as const) {
-    const mesh = new THREE.Mesh(bossGeometry, material)
-    mesh.rotation.x = -Math.PI / 2
-    mesh.position.set(x, p.springHeight, z)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    group.add(mesh)
-  }
-
-  return { group, geometries, skylight: new THREE.Vector3(0, p.crownHeight, 0) }
+  ]
 }
 
 /**
