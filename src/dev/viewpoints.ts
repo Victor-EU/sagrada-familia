@@ -31,11 +31,14 @@ export const VIEWPOINTS: Viewpoint[] = [
   {
     key: '1',
     name: 'Under the crown',
-    note: 'Eye height between the trees, looking into the vault.',
-    position: [2.5, 1.65, 5.5],
-    target: [-4, 30, -5],
-    fov: 66,
-    shiftCorrection: 1,
+    note:
+      'Eye height between the trees, looking into the vault. Steep on ' +
+      'purpose: a single bay is open at both ends, and a shallower look ' +
+      'fills a third of the frame with sky that adjacent bays will fill.',
+    position: [4.2, 1.65, 4.2],
+    target: [-3, 34, -3],
+    fov: 72,
+    shiftCorrection: 0.55,
     day: 262,
     hour: 16,
   },
@@ -78,11 +81,15 @@ export const VIEWPOINTS: Viewpoint[] = [
   {
     key: '5',
     name: 'At the springing',
-    note: 'The branching node, where the risk was.',
-    position: [0, 29.5, 0.5],
-    target: [7.5, 35.5, 7.5],
-    fov: 55,
-    shiftCorrection: 0,
+    note:
+      'The branching node, where the risk was — four fans meeting under the ' +
+      'vault. Taken from outside the open end at branch height, because from ' +
+      'inside a single cell there is no angle on a fan that is not also an ' +
+      'angle out of the building.',
+    position: [1.5, 30.5, 19],
+    target: [0, 35, -4],
+    fov: 58,
+    shiftCorrection: 0.8,
     day: 262,
     hour: 16,
   },
