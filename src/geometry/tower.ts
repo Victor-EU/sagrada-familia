@@ -111,7 +111,12 @@ interface Ring {
   turn: number
 }
 
-export function buildTowerShaft(p: TowerParams): TowerSurface {
+/** Rings and aperture mask — shared by the shaft and by what lines it. */
+function towerFabric(p: TowerParams): {
+  rings: Ring[]
+  cols: number
+  mask: Mask | null
+} {
   const bands = p.openings?.bands ?? 4
   const cols = towerRadial(p.points, p.detail)
   const shaftRows = towerRows(bands, p.detail)
@@ -140,7 +145,40 @@ export function buildTowerShaft(p: TowerParams): TowerSurface {
     ? apertureMask(p.openings, cols, p.points, first, first + shaftRows)
     : null
 
+  return { rings, cols, mask }
+}
+
+export function buildTowerShaft(p: TowerParams): TowerSurface {
+  const { rings, cols, mask } = towerFabric(p)
   return buildRings(rings, p.points, cols, mask, p.reveal, p.cap)
+}
+
+/**
+ * What is behind an opening.
+ *
+ * The apertures were the one part of these towers that was built right and
+ * did not read. A cell the mesh declines to emit is a genuine hole, and the
+ * shaft is a closed tube of `DoubleSide` plaster — so looking through an
+ * opening you saw the *inside of the far wall*, in the same stone, lit by the
+ * same sky. A hole came back as a slightly different shade of tower, and at
+ * a hundred metres the whole belfry read as faintly mottled rather than as
+ * pierced. Every photograph of these towers has the opposite: the openings
+ * are the darkest thing in the frame by a long way, which is what makes the
+ * shaft read as a lattice instead of a chimney.
+ *
+ * The honest fix is also the cheap one, and it is what the building does.
+ * These openings are not empty: they are fitted with sloping stone louvres
+ * that let the bells out and the rain not in. So a panel is set a reveal's
+ * depth inside each aperture, in a stone dark enough to stand for a hundred
+ * metres of unlit masonry tube behind it, and the jambs already emitted by
+ * the shaft become the sides of a real recess rather than the lip of a hole.
+ *
+ * Same rings, same mask, same tessellation — it is generated from the same
+ * call, so the two can never drift out of register at any level of detail.
+ */
+export function buildTowerLouvres(p: TowerParams): TowerSurface {
+  const { rings, cols, mask } = towerFabric(p)
+  return buildRings(rings, p.points, cols, mask, p.reveal, 0, 'louvre')
 }
 
 type Mask = (row: number, col: number) => boolean
@@ -192,6 +230,13 @@ function buildRings(
   mask: Mask | null,
   reveal: number,
   cap: number,
+  /**
+   * 'stone' is the shaft: everything the mask leaves standing, plus a jamb
+   * turned inward at every edge of an opening. 'louvre' is the complement —
+   * only what closes the openings, a reveal's depth in. Two passes over one
+   * fabric, so they are in register by construction.
+   */
+  what: 'stone' | 'louvre' = 'stone',
 ): TowerSurface {
   const star = starProfile(points)
   const rows = rings.length - 1
@@ -277,6 +322,18 @@ function buildRings(
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
+      if (what === 'louvre') {
+        // Only the backs, and only where there is an opening to back.
+        if (!open(row, col)) continue
+        const a = point(row, col, reveal)
+        const b = point(row, col + 1, reveal)
+        const c = point(row + 1, col + 1, reveal)
+        const d = point(row + 1, col, reveal)
+        const n = normal(row, col)
+        quad([a, b, c, d], [n, n, n, n])
+        continue
+      }
+
       if (open(row, col)) {
         if (reveal <= 0) continue
         // Jambs: one for each edge this aperture shares with standing stone.

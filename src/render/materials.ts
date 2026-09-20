@@ -68,6 +68,21 @@ export const WALL = 0xe3d3b8
 export const PAVING = 0xd8c2a2
 
 /**
+ * What is behind a bell tower's openings.
+ *
+ * Not a colour of stone so much as a stand-in for a hundred metres of unlit
+ * masonry tube. The towers are hollow, their openings are louvred, and in
+ * every photograph of them the apertures are the darkest thing in the frame —
+ * it is the contrast between pale shaft and black slot that makes a
+ * silhouette read as Sagrada Família rather than as a spire.
+ *
+ * It stays out of `INDOORS` on purpose, so it takes the envelope's fill
+ * rather than the room's and is allowed to be as dark outdoors as the real
+ * thing is. See `buildTowerLouvres` in geometry/tower.ts.
+ */
+export const HOLLOW = 0x35302a
+
+/**
  * The plaza outside, at the foot of the podium.
  *
  * Darker than it was. While the ground was the only thing out there, a pale
@@ -88,6 +103,8 @@ export type StoneName =
   | 'vault'
   | 'wall'
   | 'facade'
+  /** The dark behind a tower's louvres — see HOLLOW. */
+  | 'hollow'
   /**
    * Pieces that face both ways: the terrace lids, their parapets, the lantern
    * collars. Their top is a roof standing in full sky and their underside is
@@ -121,6 +138,7 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
   vault: { color: VAULT, roughness: 0.88 },
   wall: { color: WALL, roughness: 0.86 },
   facade: { color: SANDSTONE, roughness: 0.88 },
+  hollow: { color: HOLLOW, roughness: 0.96 },
   shell: { color: SANDSTONE, roughness: 0.88 },
 }
 
@@ -364,6 +382,7 @@ export function openQuarry(): Quarry {
     vault: stone('vault'),
     wall: stone('wall'),
     facade: stone('facade'),
+    hollow: stone('hollow'),
     shell: stone('shell'),
   }
 }

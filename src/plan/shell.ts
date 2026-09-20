@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { buildPinnacle } from '../geometry/tower.ts'
 import { buildPavement } from './floor.ts'
 import { MODULE } from './module.ts'
@@ -20,13 +21,17 @@ import { named, type Parts } from './parts.ts'
  * invented: it is one deck per band at that band's own crown, and the steps
  * between them are the clerestories that were already there.
  *
- * The three fronts are massing and nothing more, which is what the scope says
- * they are. The Nativity façade alone carries some three hundred sculpted
- * figures; none of that is generated geometry, and pretending otherwise with
- * a lumpy displacement would be worse than leaving it as the block it
- * structurally is. What the block does have to be is the right block: thirty
- * metres across, which is the published width of the transept, standing as
- * high as the vessel behind it, and carrying four bell towers.
+ * The three fronts are massing, and massing is still all they are: the
+ * Nativity façade alone carries some three hundred sculpted figures, none of
+ * that is generated geometry, and a lumpy displacement pretending otherwise
+ * would be worse than the honest block. What the block has to be is the right
+ * block — thirty metres across, which is the published width of the transept,
+ * standing as high as the vessel behind it, and carrying four bell towers.
+ *
+ * It also has to have a *shape*, which for two phases it did not: above the
+ * portal head sat one flat slab thirty metres wide and twenty-seven tall. See
+ * `front` below for what is drawn on it now and why, all of it set out on the
+ * module that was already in this file.
  */
 export interface ShellParams {
   show: boolean
@@ -56,6 +61,16 @@ export interface ShellParams {
   pier: number
   /** How far the wall between the piers is set back from their faces. */
   relief: number
+  /** Width of one step of a portal's reveal, and of one archivolt ring. */
+  jamb: number
+  /** How far each archivolt ring is set back behind the one outside it. */
+  ring: number
+  /** Stepped rings over a portal. Three is what reads as a deep one. */
+  archivolts: number
+  /** Rise of the gable standing over each portal. */
+  gable: number
+  /** Width of the mullions dividing the upper front. */
+  mullion: number
   pinnacles: boolean
   /** Pinnacle height and girth along the parapets. */
   pinnacleHeight: number
@@ -74,6 +89,11 @@ export const defaultShell: ShellParams = {
   doorHeight: 9.5,
   pier: 3.4,
   relief: 2.2,
+  jamb: 0.42,
+  ring: 1.9,
+  archivolts: 3,
+  gable: 6.5,
+  mullion: 0.9,
   pinnacles: true,
   // A module tall and a fifth of a module across: they read at a hundred
   // metres, which is the only distance they are ever seen from.
@@ -242,11 +262,33 @@ export function buildShell(
   // hundred per cent façade. The towers stand on the projection instead,
   // which is where they stand on the building.
   //
-  // Massing, and it says so: a solid upper block, and below it a row of
-  // piers on the module with the portals between them. Nothing here pretends
-  // to be sculpture. The Nativity front alone carries some three hundred
-  // carved figures and a lumpy displacement map would be a worse lie than
-  // the honest block.
+  // Massing — but massing has a shape, and for two phases this one did not
+  // have the right one.
+  //
+  // A solid upper block over a row of piers is the *structure* of a front
+  // here, and structure was all it was: above the portal head sat one flat
+  // slab thirty metres wide and twenty-seven tall, carrying a single value
+  // across the largest object in every street-level frame. It is the exact
+  // fault the floor had in phase 3 and the exact fault the bare plaza had in
+  // phase 5, and it has the same answer both times — not detail bolted on,
+  // but the building's own grid allowed to put relief on it.
+  //
+  // What a front is made of, all of it on the module already in the file:
+  //
+  //   · piers on the column lines, as before, carrying the four bell towers
+  //   · a portal in every gap between them, with a **pointed arch** over it
+  //     and three stepped archivolt rings receding into the wall
+  //   · a **gable** over each portal, standing proud of the piers
+  //   · above that, mullions on the half-module and two string courses, so
+  //     the upper wall is a grid of tall panels rather than one plane
+  //   · a cornice along the top, which is what the parapet stands on
+  //
+  // None of it is sculpture and none of it pretends to be. The Nativity
+  // front alone carries some three hundred carved figures; a displacement
+  // map of lumps would be a worse lie than the honest block. What this adds
+  // is the one thing the honest block was missing, which is *depth* — every
+  // piece here is a slab at a stated distance out from the wall, and the
+  // shadows between them are the façade.
   const front = (
     face: THREE.Vector2,
     along: THREE.Vector2,
@@ -255,9 +297,13 @@ export function buildShell(
     height: number,
   ): void => {
     const top = height + s.parapet
+    // One front is one draw call. Seven hundred separate slabs is the right
+    // drawing and the wrong scene graph, so they are collected and merged.
+    const slabs: THREE.BufferGeometry[] = []
 
     /** One slab of the front, from a metre inside the wall to `depth` out. */
     const panel = (offset: number, span: number, base: number, crest: number, depth: number): void => {
+      if (span <= 0.02 || crest - base <= 0.02) return
       const thick = depth + 1
       const mid = new THREE.Vector2()
         .copy(face)
@@ -269,20 +315,194 @@ export function buildShell(
         Math.abs(along.y) * span + Math.abs(outward.y) * thick,
       )
       box.translate(mid.x, (base + crest) / 2, mid.y)
-      parts.piece(named('facade', box, parts.stone('facade')), box)
+      slabs.push(box)
     }
 
-    // The wall, set back behind the piers.
-    panel(0, width, s.portalHeight, top, s.project - s.relief)
+    /**
+     * A solid of the caller's own outline, standing in the plane of the front.
+     *
+     * The first version of the arches and gables was stacked boxes, and a
+     * curve approximated by boxes is a staircase: at six steps over five
+     * metres the portal heads read as corbelling and the gables as ziggurats,
+     * which is a different building in a different century. An outline
+     * extruded through the wall is both smoother and *fewer* pieces — one
+     * solid where there were twelve.
+     *
+     * The shape is drawn in (across, up); the extrusion runs outward, and the
+     * basis puts it on whichever of the three fronts asked.
+     */
+    const solid = (shape: THREE.Shape, offset: number, base: number, depth: number, thick: number): void => {
+      const g = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: false })
+      const mid = new THREE.Vector2()
+        .copy(face)
+        .addScaledVector(along, offset)
+        .addScaledVector(outward, depth - thick)
+      /**
+       * Right-handed, and it has to be said out loud.
+       *
+       * The obvious basis — the front's own `along`, up, and `outward` — is
+       * left-handed on two of the three fronts, and a matrix with a negative
+       * determinant *mirrors* the geometry it is applied to. Three then does
+       * exactly the right thing twice: `applyMatrix4` flips the stored
+       * normals through the normal matrix, and the shader flips them again
+       * for what are now back-facing triangles. Two corrections compose into
+       * an error, the normals end up pointing into the stone, and the gables
+       * came back as black triangles stuck to the front of a sunlit
+       * building.
+       *
+       * `up × outward` is the across-vector that makes the basis right-handed
+       * by construction. Both outlines here are symmetric about their own
+       * centre line, so which way across it points changes nothing about the
+       * solid — and the offset along the front is applied to the position
+       * rather than through the basis, so it is not affected either.
+       */
+      const outwardVec = new THREE.Vector3(outward.x, 0, outward.y)
+      const up = new THREE.Vector3(0, 1, 0)
+      g.applyMatrix4(
+        new THREE.Matrix4()
+          .makeBasis(new THREE.Vector3().crossVectors(up, outwardVec), up, outwardVec)
+          .setPosition(mid.x, base, mid.y),
+      )
+      slabs.push(g)
+    }
+
+    /**
+     * The stone standing either side of, and over, a pointed opening.
+     *
+     * A horseshoe: the outside is a rectangle, the inside is the arch soffit,
+     * and the two meet at the springing corners. The soffit is
+     * `(1 − t)^0.55` — bellied out where it springs and coming to a point at
+     * the crown, which is the ogival head these portals have rather than the
+     * semicircle a Romanesque one would have or the square top they used to
+     * have because nothing at all was drawn over them.
+     *
+     * `headroom` keeps a course of stone over the crown, so the outline never
+     * pinches to a point and the triangulator is never asked to resolve one.
+     */
+    const archShape = (clear: number, rise: number, headroom: number): THREE.Shape => {
+      const half = clear / 2
+      const shape = new THREE.Shape()
+      shape.moveTo(-half, 0)
+      shape.lineTo(-half, rise + headroom)
+      shape.lineTo(half, rise + headroom)
+      shape.lineTo(half, 0)
+      const steps = 24
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps
+        shape.lineTo(half * Math.pow(1 - t, 0.55), rise * t)
+      }
+      for (let i = steps; i >= 0; i--) {
+        const t = i / steps
+        shape.lineTo(-half * Math.pow(1 - t, 0.55), rise * t)
+      }
+      shape.closePath()
+      return shape
+    }
+
+    /** A gable: a triangle standing on the portal head. */
+    const gableShape = (span: number, rise: number): THREE.Shape => {
+      const shape = new THREE.Shape()
+      shape.moveTo(-span / 2, 0)
+      shape.lineTo(span / 2, 0)
+      shape.lineTo(0, rise)
+      shape.closePath()
+      return shape
+    }
+
+    const clear = MODULE - s.pier
+    const springing = s.portalHeight * 0.55
+
+    for (const bay of portals(s.pier, width)) {
+      // One shallow jamb step each side below the springing, so the reveal
+      // continues to the ground without narrowing the way through: a portal
+      // you cannot walk in at is scenery, and there are doors behind these.
+      panel(bay.centre - (clear - s.jamb) / 2, s.jamb, -4, springing, s.project - s.ring)
+      panel(bay.centre + (clear - s.jamb) / 2, s.jamb, -4, springing, s.project - s.ring)
+
+      // Three archivolt rings, each narrower than the last and set further
+      // back, which is what makes a deep portal read as deep from in front:
+      // you see the outermost ring's edge, and behind it the next one
+      // standing further in.
+      let apex = springing
+      for (let r = 0; r < s.archivolts; r++) {
+        const ringClear = clear - 2 * r * s.jamb
+        const rise = ringClear * 1.15
+        solid(
+          archShape(ringClear, rise, s.jamb * 1.4),
+          bay.centre,
+          springing,
+          s.project - r * s.ring,
+          // Each ring is as thick as the step between rings, plus enough to
+          // reach the one behind it — no gaps to see daylight through.
+          s.ring + s.jamb,
+        )
+        apex = Math.max(apex, springing + rise + s.jamb * 1.4)
+      }
+      // The tympanum: what fills the bay between the arch head and the solid
+      // upper front. Set back with the innermost ring.
+      panel(
+        bay.centre,
+        clear,
+        apex,
+        s.portalHeight,
+        s.project - (s.archivolts - 1) * s.ring,
+      )
+
+      // The gable, standing proud of the piers. The roofline of this
+      // building is not a straight edge in any photograph of it, and the
+      // line where the portals stop should not be one either.
+      solid(
+        gableShape(MODULE * 0.94, s.gable),
+        bay.centre,
+        s.portalHeight,
+        s.project + 0.5,
+        1.4,
+      )
+    }
+
+    // The wall above, set well back — it is the thing everything else on the
+    // front is measured out from.
+    const backDepth = s.project - s.relief * 1.8
+    panel(0, width, s.portalHeight, top, backDepth)
+
+    // Mullions on the half-module, skipping the lines a pier already stands
+    // on. Eight tall panels of shadow across an upper wall that used to be
+    // one unbroken plane.
+    const mullionDepth = s.project - s.relief * 0.6
+    for (let x = -width / 2 + MODULE / 4; x < width / 2; x += MODULE / 3) {
+      if (pierLines(width).some((line) => Math.abs(x - line) < s.pier / 2 + 0.4)) continue
+      panel(x, s.mullion, s.portalHeight + s.gable * 0.6, top - 2.4, mullionDepth)
+    }
+
+    // Two string courses and a cornice: the horizontals that stop the
+    // mullions reading as a fence.
+    const courseDepth = s.project - s.relief * 0.45
+    const first = s.portalHeight + s.gable + 1.2
+    panel(0, width, first, first + 0.9, courseDepth)
+    const second = (first + top) / 2
+    panel(0, width, second, second + 0.9, courseDepth)
+    panel(0, width, top - 1.4, top, s.project + 0.35)
+
     // The piers, one to a column line, running the full height — which is
-    // what makes a front out of a slab. Measured on the two street-level
-    // frames, a flat block was the largest single object in the picture at
-    // seventeen to twenty-two per cent and carried one value across all of
-    // it; the same fault the floor had, and the same answer, which is to let
-    // the building's own grid put relief on it. Below the portal head the
-    // gaps between them are the portals; above it they stand proud of the
-    // wall and the four bell towers land on them.
+    // what makes a front out of a slab. Below the portal head the gaps
+    // between them are the portals; above it they stand proud of the wall
+    // and the four bell towers land on them.
     for (const x of pierLines(width)) panel(x, s.pier, -4, top, s.project)
+
+    // A box comes back indexed and an extrusion does not, and a merge of the
+    // two returns null rather than throwing — so everything is flattened on
+    // the way in. (plan/city.ts learned this the expensive way: a Mesh with
+    // no geometry reached the renderer and took the whole frame down.)
+    const flattened = slabs.map((g) => {
+      if (!g.index) return g
+      const out = g.toNonIndexed()
+      g.dispose()
+      return out
+    })
+    const merged = mergeGeometries(flattened, false)
+    for (const slab of flattened) slab.dispose()
+    if (!merged) throw new Error('shell: façade slabs could not be merged')
+    parts.piece(named('facade', merged, parts.stone('facade')), merged)
   }
 
   const facadeWidth = FACADE_WIDTH

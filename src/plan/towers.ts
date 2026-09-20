@@ -4,8 +4,10 @@ import {
   buildCross,
   buildPinnacle,
   buildStar,
+  buildTowerLouvres,
   buildTowerShaft,
   type TowerOpenings,
+  type TowerParams as TowerShaftParams,
 } from '../geometry/tower.ts'
 import { named, type Parts } from './parts.ts'
 import { MODULE } from './module.ts'
@@ -103,10 +105,24 @@ export const defaultTowers: TowerParams = {
   twistDeg: 22,
   taper: 0.44,
   bands: 11,
-  tall: 0.52,
-  wide: 0.5,
+  // Taller and narrower than they were. The openings on these towers are
+  // lozenges standing on end, not square punches; at 0.52 × 0.5 they read as
+  // a chequer, and the helix — which is the whole point of the pattern — was
+  // lost in it.
+  tall: 0.66,
+  wide: 0.42,
   helix: 1,
-  reveal: 0.45,
+  /**
+   * How deep the stone is at an opening's edge.
+   *
+   * A hole with a 45 cm lip is a hole with no shadow in it at any sun the
+   * year offers: the jamb is too shallow to throw one across the reveal, so
+   * every aperture on the building came back as a flat mark the colour of
+   * whatever was behind it. Real ones are set back the better part of a
+   * metre and are in shadow at every hour — that shadow, repeated a hundred
+   * and thirty times up a shaft, is the pattern people recognise.
+   */
+  reveal: 1.05,
   pinnacle: 0.17,
 }
 
@@ -289,27 +305,37 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
       site.crown === 'pinnacle' || site.crown === 'finial' ? 'open' : 'lantern',
     ].join(':')
 
+    /** One description of this tower, so the shaft and its louvres agree. */
+    const shape = (detail: number): TowerShaftParams => ({
+      height: shaft,
+      footRadius: site.radius,
+      taper: p.taper,
+      points: site.points,
+      starFoot: p.star,
+      // The star runs out as the tower climbs; what is left at the top is a
+      // flute rather than a point. Half rather than a fifth: at 0.22 the
+      // ribs had gone by the first band of openings and the whole belfry —
+      // which is most of what anybody sees of a tower — was a smooth cone.
+      // The photographs keep an edge on every rib right up to the pinnacle.
+      starTop: p.star * 0.5,
+      twistDeg: p.twistDeg,
+      skirt,
+      openings,
+      reveal: p.reveal,
+      cap: site.crown === 'cross' || site.crown === 'star' ? site.radius * 0.3 : 0,
+      detail,
+    })
+    const stand = new THREE.Matrix4().makeTranslation(site.x, base, site.z)
+
+    parts.surface(key, (detail) => buildTowerShaft(shape(detail)), stand, 'facade', true)
+    // And what stands behind the openings, in the dark stone — see
+    // `buildTowerLouvres`. Without it an aperture shows the sunlit inside of
+    // the far wall and the tower reads as mottled rather than pierced.
     parts.surface(
-      key,
-      (detail) =>
-        buildTowerShaft({
-          height: shaft,
-          footRadius: site.radius,
-          taper: p.taper,
-          points: site.points,
-          starFoot: p.star,
-          // The star runs out as the tower climbs; what is left at the top is
-          // a flute rather than a point.
-          starTop: p.star * 0.22,
-          twistDeg: p.twistDeg,
-              skirt,
-          openings,
-          reveal: p.reveal,
-          cap: site.crown === 'cross' || site.crown === 'star' ? site.radius * 0.3 : 0,
-          detail,
-        }),
-      new THREE.Matrix4().makeTranslation(site.x, base, site.z),
-      'facade',
+      `${key}:louvre`,
+      (detail) => buildTowerLouvres(shape(detail)),
+      stand,
+      'hollow',
       true,
     )
 
