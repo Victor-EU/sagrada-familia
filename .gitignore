@@ -3,6 +3,11 @@ dist
 .DS_Store
 
 # Reference photographs are dev-harness input only and are never shipped.
-# The note explaining the directory stays tracked.
+# The note explaining the directory, and the record of where the photographs
+# came from, stay tracked.
 reference/*
 !reference/README.md
+!reference/SOURCES.md
+
+# Frame grabs from the dev harness.
+reference/.shots

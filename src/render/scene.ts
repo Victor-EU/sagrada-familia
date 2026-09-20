@@ -5,6 +5,8 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
 import {
+  cityPatch,
+  cityUniforms,
   grainUniforms,
   groundMaterial,
   openQuarry,
@@ -17,12 +19,13 @@ import {
   type StoneName,
 } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
-import { LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
+import { LAYER_CITY, LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
 import { RoofMap } from './roof.ts'
 import { ShaftPass, type ShaftSettings } from './shafts.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
 import { EYE_HEIGHT } from '../camera/envelope.ts'
+import { buildCity, defaultCity, type City } from '../plan/city.ts'
 import { PAVING_PATCH, pavingUniforms, type PavingUniforms } from '../plan/floor.ts'
 
 export interface Stage {
@@ -47,6 +50,8 @@ export interface Stage {
   grain: GrainUniforms
   /** The plaza the church stands in, at the foot of the podium. */
   ground: THREE.Mesh
+  /** The Eixample around it, which is where the height comes from. */
+  city: City
   figure: THREE.Mesh
   /** Stand-in for interreflection: warm from below, cool from above. */
   bounce: THREE.HemisphereLight
@@ -194,6 +199,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // The towers are kept off the default layer so the roof map can ignore
   // them; the viewer, obviously, cannot.
   camera.layers.enable(LAYER_SKYLINE)
+  // The Eixample. Only the eye sees it — see LAYER_CITY in sunrig.ts.
+  camera.layers.enable(LAYER_CITY)
 
   const sky = new Sky(renderer)
   // Three thousand, not two.
@@ -219,7 +226,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   for (const [name, material] of Object.entries(stones)) {
     patchForSunlight(material, sun.uniforms, stonePatch(name as StoneName, grain, room))
   }
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(320, 128), groundMaterial())
+  // Out past the city rather than stopping short of it. At 320 m the disc's
+  // own edge was a hard line across the middle distance in every exterior
+  // frame; the grid now reaches 670 m, and the ground has to get past it or
+  // the blocks stand on nothing.
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(1800, 96), groundMaterial())
   patchForSunlight(ground.material as THREE.MeshStandardMaterial, sun.uniforms)
 
   // The pavement is stone with one extra job: it knows where it is standing,
@@ -251,6 +262,40 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   ground.rotation.x = -Math.PI / 2
   scene.add(ground)
 
+  /**
+   * The city, and the one number in it that is not scenery.
+   *
+   * Its haze colour is taken from the sky's own horizon rather than picked,
+   * so distant blocks fade toward exactly what is behind them and the far
+   * edge of the grid has no edge. Everything else about it is in plan/city.ts.
+   *
+   * It takes the sun the way the ground does — the patch is about how
+   * sunlight arrives, not about albedo — and `vertexColors` is what carries
+   * the hundred different renders and terracotta roofs on one draw call.
+   */
+  const cityMassing = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.93,
+    metalness: 0,
+  })
+  const cityFill = cityUniforms()
+  patchForSunlight(cityMassing, sun.uniforms, cityPatch(cityFill))
+  const cityWater = new THREE.MeshStandardMaterial({
+    color: 0x5f7486,
+    roughness: 0.12,
+    metalness: 0.1,
+  })
+  patchForSunlight(cityWater, sun.uniforms, cityPatch(cityFill))
+  const city = buildCity(
+    defaultCity,
+    { massing: cityMassing, water: cityWater },
+    new THREE.Color().setRGB(0.52, 0.66, 0.9).convertSRGBToLinear(),
+  )
+  city.group.traverse((node) => {
+    node.layers.set(LAYER_CITY)
+  })
+  scene.add(city.group)
+
   // 1.65 m scale reference. Nothing about a cathedral reads correctly without
   // a body in the frame.
   const figure = new THREE.Mesh(
@@ -271,6 +316,23 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     const state = sky.update(renderer, sunDirection)
     scene.background = sky.background
     scene.environment = sky.environment
+    /**
+     * Air, and only over the city.
+     *
+     * Half a kilometre of Eixample drawn at full contrast to the far edge is
+     * a diorama: the grid reads as a painted floor with the horizon sitting
+     * on top of it, because in the world there is nothing at 600 m that is
+     * as sharp as something at 60 m. Linear fog starting well past the
+     * building gives back the one cue that was missing, and starting it at
+     * 240 m means the church — 124 m end to end, and never further than
+     * about 200 m from any stop on the visit — is never touched by it. The
+     * interior cannot reach it at all.
+     *
+     * The colour is the sky's own horizon, so the far edge of the grid does
+     * not end: it arrives at exactly what is behind it, at whatever hour.
+     */
+    if (!scene.fog) scene.fog = new THREE.Fog(0x000000, 240, 1750)
+    ;(scene.fog as THREE.Fog).color.copy(state.hazeColor)
     sun.uniforms.uSunRadiance.value
       .copy(state.sunColor)
       .multiplyScalar(state.sunIntensity)
@@ -370,6 +432,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     room,
     grain,
     ground,
+    city,
     figure,
     bounce,
     sunDirection,
@@ -430,6 +493,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // The plaza sits at the foot of the podium, so the church stands on
       // something rather than being pushed into the ground.
       ground.position.y = y
+      // And the city stands on the same plaza, not on nothing.
+      city.group.position.y = y
     },
     setOcclusion({ intensity, radius }) {
       occlusion.enabled = intensity > 0

@@ -44,10 +44,15 @@ export interface Moment {
  * of this whole thing that nobody will skip.
  */
 export const OVERTURE: Pick<Moment, 'position' | 'target' | 'fov' | 'shiftCorrection'> = {
-  position: [-215, 54, 168],
-  target: [0, 74, -20],
-  fov: 46,
-  shiftCorrection: 0.5,
+  // High over the Eixample, on the Nativity quarter, with the grid running
+  // away behind. The opening frame is the one that has to do the arguing:
+  // this building's whole claim is how much bigger it is than the city it
+  // stands in, and until there was a city to stand in there was nothing in
+  // the frame making that claim.
+  position: [330, 120, 210],
+  target: [0, 80, -22],
+  fov: 42,
+  shiftCorrection: 0.3,
 }
 
 export const JOURNEY: Moment[] = [
@@ -55,24 +60,27 @@ export const JOURNEY: Moment[] = [
     id: 'approach',
     title: 'From across the plaza',
     caption:
-      'Ten in the morning, late September: the sun is round on the Glory ' +
-      'front and the western flank is in its own shadow. Eighteen towers are ' +
-      'planned and not one was finished in Gaudí’s lifetime; the tallest ' +
-      'will stand 172.5 m, a metre under Montjuïc, because he would not ' +
-      'build higher than the hill.',
+      'Across the pond in Plaça de Gaudí, mid-morning in June — the corner ' +
+      'every photograph of this building is taken from. The blocks around it ' +
+      'are Cerdà’s, six storeys and twenty metres; the tallest tower stands ' +
+      '172.5 m, a metre under Montjuïc, because Gaudí would not build higher ' +
+      'than the hill. Eighteen are planned and not one was finished in his ' +
+      'lifetime.',
     part: 'outside',
-    position: [-118, 0.3, 84],
-    target: [0, 78, -20],
-    fov: 58,
+    // Standing in Plaça de Gaudí, across the pond, which is where every
+    // photograph of this building is taken from and is now somewhere you can
+    // actually stand. The old position was out on bare ground at the Glory
+    // corner; the Eixample has a block there, and a viewpoint inside a
+    // building is not a viewpoint.
+    position: [150, 2, -19],
+    target: [0, 84, -24],
+    fov: 56,
     shiftCorrection: 0.45,
-    day: 262,
-    // Chosen off the table in light/sun.ts rather than by eye: at this hour
-    // the sun stands at 0.83 on the Glory front's normal and -0.34 on the
-    // flank beside it, which is the one combination that gives this corner a
-    // lit face and a shaded one at an altitude still low enough to be warm.
-    // At five in the afternoon, where this used to sit, both were negative
-    // and the building opened the visit in its own shadow.
-    hour: 10,
+    day: 172,
+    // Midsummer mid-morning, which is when the sun is on this side. The hour
+    // moved with the viewpoint: the old figure was picked for a corner that
+    // put the Glory front in the light, and the visit no longer opens there.
+    hour: 9.6,
     travel: 6.5,
   },
   {
@@ -84,8 +92,9 @@ export const JOURNEY: Moment[] = [
       'Matthias, and the stone is Montjuïc sandstone, from a quarry that ' +
       'closed in 1938 and has been matched ever since.',
     part: 'outside',
-    position: [96, 0.3, 22],
-    target: [10, 120, -26],
+    // In under the front, close enough that it stops fitting in one eye.
+    position: [70, 2, -26],
+    target: [10, 120, -28],
     fov: 72,
     shiftCorrection: 0.35,
     day: 172,
@@ -119,7 +128,7 @@ export const JOURNEY: Moment[] = [
     // Far enough back that the portal has its piers around it. Square on the
     // doorway's own z, so the step inside that follows travels straight along
     // the opening instead of into the jamb beside it.
-    position: [66, 3, -26.3],
+    position: [52, 3, -26.3],
     target: [24, 15, -26.3],
     fov: 66,
     shiftCorrection: 0.45,
@@ -251,6 +260,20 @@ export class Journey {
 
   onArrive: ((m: Moment, index: number) => void) | null = null
   onLeave: ((m: Moment, index: number) => void) | null = null
+  /**
+   * Where we have just set off *to*, fired the instant the flight starts.
+   *
+   * The visit used to tell the interface nothing until the camera landed,
+   * which meant pressing → produced five to seven seconds of a caption still
+   * describing the place you were leaving. Every viewer reads that as a dead
+   * key and presses it again, which restarts the flight from wherever the
+   * camera has got to — so the one control the whole visit runs on felt
+   * broken, and got worse the more it was used.
+   *
+   * A move should answer immediately. The destination's title goes up as the
+   * camera sets off, and the body of the caption arrives with the camera.
+   */
+  onDepart: ((m: Moment, index: number) => void) | null = null
 
   private from: Pose | null = null
   private to: Pose | null = null
@@ -341,10 +364,45 @@ export class Journey {
     this.from = this.pose()
     this.to = this.poseOf(target)
     this.turn = shortestTurn(this.from.yaw, this.to.yaw)
-    this.duration = Math.max(0.4, seconds ?? target.travel ?? 3.6)
+    this.duration = seconds ?? this.travelTime(target)
     this.elapsed = 0
     this.flying = true
     this.cam.teleport()
+    this.onDepart?.(target, this.index)
+  }
+
+  /**
+   * How long a flight should take, given where it actually starts.
+   *
+   * A moment's `travel` is the time from the moment before it, and that is
+   * the right number exactly once — when you walk the visit in order. Skip
+   * two stops ahead and the same figure covers four times the distance at
+   * four times the speed; step back one and it crawls. Both happened, and
+   * both read as the camera being unpredictable rather than as the viewer
+   * having asked for something unusual.
+   *
+   * So the authored time is treated as what it is — a speed, over the
+   * distance it was authored for — and the real distance is flown at that
+   * speed, clamped so a long skip is brisk rather than interminable and a
+   * nudge next door still eases rather than cutting.
+   */
+  private travelTime(target: Moment): number {
+    const authored = target.travel ?? 3.6
+    const from = this.from?.position
+    if (!from) return authored
+    const here = new THREE.Vector3(...target.position).distanceTo(from)
+    const ordinary = this.reference(target)
+    if (ordinary < 1) return authored
+    const scaled = authored * Math.sqrt(here / ordinary)
+    return THREE.MathUtils.clamp(scaled, 1.6, 9)
+  }
+
+  /** The distance this moment's authored time was written for. */
+  private reference(target: Moment): number {
+    const index = JOURNEY.indexOf(target)
+    const previous = JOURNEY[index - 1]
+    if (!previous) return 1
+    return new THREE.Vector3(...previous.position).distanceTo(new THREE.Vector3(...target.position))
   }
 
   next(): void {

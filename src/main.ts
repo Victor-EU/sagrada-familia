@@ -81,21 +81,33 @@ const view: ViewFlags = {
   detailRange: 1,
 }
 const render: RenderFlags = {
-  exposure: 1.05,
-  // Low, and it stays low.
+  exposure: 1,
+  // Low, and it stays low — the probe is Barcelona sky, so more of it is more
+  // blue, and past about 0.5 the whole room goes pale and flat as everything
+  // piles up at the top of the ACES curve where it desaturates toward white.
+  // The room is not short of light. It is short of light the right colour,
+  // which is what the ambient rotation in materials.ts supplies.
   //
-  // The interior used to read as a grey cave with four bright windows in it,
-  // and raising this looked like the fix. It is not: the probe is Barcelona
-  // sky, so more of it is more blue, and at 0.42 the whole room went pale and
-  // flat — everything sat at the top of the ACES curve, where it desaturates
-  // toward white. The room was never short of light. It was short of light
-  // the right colour, which is what the ambient rotation in materials.ts now
-  // supplies. Two tenths of a stop off the old figure, and the difference in
-  // the render is not subtle.
-  environment: 0.22,
-  // The glazing has to be able to overrun white, or there is nothing for the
-  // bloom to find and the windows go back to being bright rectangles.
-  glassGain: 3.8,
+  // Eight hundredths above the old figure, which is the least of the three
+  // numbers that were keeping the interior brown — see `uRoomGain`.
+  environment: 0.3,
+  /**
+   * The glazing has to overrun white — but only just.
+   *
+   * At 3.8, where this sat, every window in the building was four times over
+   * the tone mapper's white point, and everything four times over white is
+   * the same colour: white. The Nativity wall — Vila-Grau's greens and blues,
+   * jittered pane by pane and graded as it climbs, which is the single most
+   * carefully built thing in this model — was delivered as a luminous smear
+   * with no panes and no colour in it, and the bloom then spread that smear
+   * over the columns in front of it.
+   *
+   * Glass is not a light source. It is a filter with a light behind it, and
+   * what makes it beautiful is that it is *darker* than the sun and coloured.
+   * A little over white keeps the spill and the halo where the sun stands
+   * square on a window; the rest of the wall stays glass.
+   */
+  glassGain: 1.7,
   // Cut hard, and deliberately. A hemisphere light fills a shaded face
   // regardless of whether that face can see any sky, which outdoors is a lie
   // that costs the whole building its modelling: at 0.6 the lit and unlit
@@ -110,7 +122,10 @@ const render: RenderFlags = {
   occlusion: 0.55,
   occlusionRadius: 3,
   // The spill off the glazing — see the bloom pass in render/scene.ts.
-  bloom: { strength: 0.34, radius: 0.75, threshold: 1.4 },
+  // Threshold raised with the gain above: at 1.4 a window that no longer
+  // overruns white by much was still mostly above the knee, and the bloom
+  // put back the smear the gain had just taken out.
+  bloom: { strength: 0.3, radius: 0.75, threshold: 1.75 },
   // The air. Every photograph of this interior is a photograph of air, and
   // until now the model had none — see render/shafts.ts.
   shafts: { ...defaultShafts },
@@ -329,7 +344,7 @@ journey.onArrive = (moment, index) => {
   chrome.arrive(moment, index)
   chrome.setTravelling(false)
 }
-journey.onLeave = () => chrome.setTravelling(true)
+journey.onDepart = (moment, index) => chrome.depart(moment, index)
 
 /**
  * Any movement of the viewer's own ends the tour where it stands.
@@ -342,7 +357,19 @@ const MOVEMENT = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC',
   'ShiftLeft', 'ShiftRight',
 ])
-canvas.addEventListener('pointerdown', () => chrome.takeOver())
+/**
+ * Looking is not leaving.
+ *
+ * A click used to end the visit, and a click is also the only way to capture
+ * the pointer — so the first thing a viewer does on arriving at a stop, which
+ * is look around it, silently threw away the tour they had just started. The
+ * caption stayed up describing a place they were still standing in, and the
+ * only clue was that the arrows had stopped meaning anything.
+ *
+ * Turning your head at a viewpoint is part of being at the viewpoint. What
+ * ends the visit is going somewhere: the movement keys, or the wheel, which
+ * is the speed control and therefore an intention to fly.
+ */
 canvas.addEventListener('wheel', () => chrome.takeOver(), { passive: true })
 
 // Number and letter keys jump to the curated views, which is how the same
@@ -427,8 +454,34 @@ declare global {
       census: () => FrameCensus | null
       /** What the light is doing — see dev/probe.ts. */
       light: () => LightCensus
+      /** Draw one frame and write it to `reference/.shots` — see vite.config.ts. */
+      shot: (name: string, width?: number) => Promise<string>
     }
   }
+}
+
+/**
+ * Take the frame the renderer just drew and send it to disk.
+ *
+ * The drawing buffer is not preserved between frames, so this renders and
+ * reads in the same task — a frame drawn now and copied on the next tick
+ * comes back blank. The copy goes through a 2D canvas so a full-resolution
+ * frame can be written down to something an eye can take in at once.
+ */
+async function shot(name: string, width = 1400): Promise<string> {
+  stage.render()
+  const src = stage.renderer.domElement
+  const scale = Math.min(1, width / src.width)
+  const flat = document.createElement('canvas')
+  flat.width = Math.round(src.width * scale)
+  flat.height = Math.round(src.height * scale)
+  flat.getContext('2d')!.drawImage(src, 0, 0, flat.width, flat.height)
+  const res = await fetch('/__shot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, data: flat.toDataURL('image/png') }),
+  })
+  return `${res.status} ${(await res.text()).slice(0, 120)}`
 }
 window.harness = {
   cam,
@@ -448,6 +501,7 @@ window.harness = {
   journey,
   census: () => (built ? censusFrame(stage, [built.field.group]) : null),
   light: () => censusLight(stage),
+  shot,
 }
 
 const clock = new THREE.Clock()

@@ -41,6 +41,20 @@ export const LAYER_GLASS = 1
  */
 export const LAYER_SKYLINE = 2
 
+/**
+ * Scenery: the Eixample the building stands in.
+ *
+ * Only the eye ever sees this layer. The sun's occlusion pass does not, so a
+ * hundred city blocks never enter the orthographic fit — a fit stretched to
+ * hold half a kilometre of Barcelona would coarsen every shadow in the nave
+ * to pay for buildings nobody is standing next to. The roof map does not, so
+ * the volumetric medium never decides the plaza is indoors. And the
+ * transmittance pass does not, because none of it is glass.
+ *
+ * The city is scale and nothing else. See plan/city.ts.
+ */
+export const LAYER_CITY = 3
+
 export interface SunUniforms {
   uSunMatrix: { value: THREE.Matrix4 }
   uSunDepth: { value: THREE.Texture | null }

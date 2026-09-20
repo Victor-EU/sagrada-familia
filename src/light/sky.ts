@@ -91,6 +91,15 @@ export interface SkyState {
   sunColor: THREE.Color
   /** Intensity for the directional light, before the user's multiplier. */
   sunIntensity: number
+  /**
+   * What the air between here and the horizon is the colour of.
+   *
+   * The sky already computes this — it is the horizon end of the gradient —
+   * and handing it out means the haze that distance fades into is the same
+   * colour as the thing behind the distance, at every hour. Picked by eye it
+   * would be right at noon and a grey band across a red sunset.
+   */
+  hazeColor: THREE.Color
 }
 
 export class Sky {
@@ -178,9 +187,11 @@ export class Sky {
     const reach = THREE.MathUtils.smoothstep(degrees, -1.5, 7)
     const thickness = THREE.MathUtils.lerp(0.42, 1, THREE.MathUtils.smoothstep(degrees, 0, 32))
 
+    const horizon = u.uHorizon.value
     return {
       sunColor: new THREE.Color(sun.x, sun.y, sun.z),
       sunIntensity: 4.2 * reach * thickness,
+      hazeColor: new THREE.Color(horizon.x, horizon.y, horizon.z),
     }
   }
 

@@ -82,7 +82,7 @@ export class Chrome {
 
     this.hint = el('div', 'hint')
     this.hint.innerHTML =
-      '<strong>drag</strong> to look · <strong>W A S D</strong> to walk · ' +
+      '<strong>drag</strong> to look around · <strong>W A S D</strong> to walk · ' +
       '<strong>space</strong> up · <strong>C</strong> down · ' +
       '<strong>←</strong> <strong>→</strong> move through the visit'
 
@@ -123,12 +123,32 @@ export class Chrome {
     this.sync()
   }
 
+  /**
+   * Setting off. Put the destination up at once, without its text.
+   *
+   * Where you are going is the answer to the key you just pressed, so it can
+   * be shown immediately; the paragraph about it cannot, because it is
+   * unreadable from a moving camera and because arriving to text that has
+   * been sitting there for six seconds is arriving to nothing. Title now,
+   * body on landing.
+   */
+  depart(moment: Moment, index: number): void {
+    this.capIndex.textContent = `${String(index + 1).padStart(2, '0')} — ${
+      moment.part === 'outside' ? 'Outside' : 'Inside'
+    }`
+    this.capTitle.textContent = moment.title
+    this.capText.textContent = ''
+    this.caption.classList.add('moving')
+    this.sync()
+  }
+
   arrive(moment: Moment, index: number): void {
     this.capIndex.textContent = `${String(index + 1).padStart(2, '0')} — ${
       moment.part === 'outside' ? 'Outside' : 'Inside'
     }`
     this.capTitle.textContent = moment.title
     this.capText.textContent = moment.caption
+    this.caption.classList.remove('moving')
     this.sync()
   }
 

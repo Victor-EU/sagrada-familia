@@ -39,14 +39,21 @@ export class FreeCamera {
   readonly camera: THREE.PerspectiveCamera
   yaw = 0
   pitch = 0
-  speed = 4
+  speed = 9
   shiftCorrection = 0
 
   /**
-   * Walking pace. A metre and a half a second is a real one; anything faster
-   * in a room this size turns the vault into a blur.
+   * Walking pace.
+   *
+   * A metre and a half a second is a real one and it was the wrong one. This
+   * nave is ninety metres and the church is a hundred and twenty-four end to
+   * end: at 1.4 m/s crossing it takes a minute and a half, and the thing a
+   * viewer does in that minute and a half is give up and press the arrow
+   * keys. Two and a half is still a walk — it is a purposeful one, the pace
+   * of somebody who knows where they are going in a building they have been
+   * in before — and it makes the interior somewhere you can cross on a whim.
    */
-  walkSpeed = 1.4
+  walkSpeed = 2.5
 
   /** Whether the camera is allowed to ground itself at all. */
   grounding = true
@@ -82,6 +89,8 @@ export class FreeCamera {
   private viewWidth = 1
   private viewHeight = 1
   private locked = false
+  /** A mouse button is down on the canvas — see the two ways to look. */
+  private dragging = false
 
   constructor(camera: THREE.PerspectiveCamera, private readonly domElement: HTMLElement) {
     this.camera = camera
@@ -122,13 +131,46 @@ export class FreeCamera {
     // capture, and asking for it on every tap only produces a refusal.
     this.domElement.addEventListener('pointerdown', (e) => {
       if (e.pointerType !== 'mouse') return
+      // Drag works whether or not the lock is granted — see below.
+      this.dragging = true
+      // Throws outright if the id is not an active pointer, which a synthetic
+      // event and some pen hardware both manage. Capture is a nicety here —
+      // the drag already ends on pointerup anywhere — so it is not worth an
+      // exception escaping into the listener.
+      try {
+        this.domElement.setPointerCapture(e.pointerId)
+      } catch {
+        /* no capture; the window-level pointerup still ends the drag */
+      }
       if (!this.locked) void this.domElement.requestPointerLock()
     })
+    const endDrag = (): void => {
+      this.dragging = false
+    }
+    window.addEventListener('pointerup', endDrag)
+    window.addEventListener('pointercancel', endDrag)
+    window.addEventListener('blur', endDrag)
+
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.domElement
     })
+    /**
+     * Two ways to look, because the promised one can be refused.
+     *
+     * The hint under the title says "drag to look", and until now that was
+     * not true: looking was pointer lock and nothing else. A browser that
+     * declines the lock — it is a user-gesture-gated request, and it is
+     * refused outright after an Escape, inside some embeds, and on every
+     * touch device with a trackpad attached — left the viewer dragging on a
+     * cathedral that did not move, with no way to find out why.
+     *
+     * Locked, the mouse reports movement with the cursor hidden and the range
+     * is unlimited. Unlocked, a held drag turns by the same movement. The
+     * second is strictly worse and is never chosen while the first is
+     * available; it exists so the instruction on the screen is always true.
+     */
     document.addEventListener('mousemove', (e) => {
-      if (!this.locked) return
+      if (!this.locked && !this.dragging) return
       const sensitivity = 0.0022
       this.turn(-e.movementX * sensitivity, -e.movementY * sensitivity)
     })

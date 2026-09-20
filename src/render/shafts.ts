@@ -66,13 +66,22 @@ export interface ShaftSettings {
 }
 
 export const defaultShafts: ShaftSettings = {
-  // Measured across all thirteen curated frames rather than picked by eye.
-  // At this density the interior views the light was tuned against gain
-  // between two and seven per cent of their frame brightness — the Passion
-  // at four o'clock most, at 6.7 %, which is the one whose whole subject is
-  // a shaft — and the four exterior views gain between nothing and 0.9 %,
-  // which is the test that the medium has stayed indoors where it belongs.
-  density: 0.02,
+  // Measured, and then measured against the wrong thing.
+  //
+  // This used to be 0.02, chosen because at that density the interior frames
+  // gained two to seven per cent of frame brightness and the exterior ones
+  // gained none — a number that proved the medium was staying indoors, and
+  // said nothing at all about whether the room still had any depth in it.
+  // It did not. Ninety metres of nave at 0.02/m is an optical depth near two
+  // by the apse, so the far half of the building was delivered behind a warm
+  // veil: the columns at the crossing were the same value as the columns in
+  // front of them, and a view down the nave — the one view this building is
+  // famous for — arrived with no recession in it whatsoever.
+  //
+  // Air you can see is the effect; air you can see *through* is the room.
+  // At a third of the old figure the shafts are still there in every frame
+  // that has one, and the nave goes back to being ninety metres long.
+  density: 0.006,
   // Forward-scattering, but not so much that the effect disappears when the
   // sun is off to one side. Half is about right for dust: at g = 0.72 the
   // lobe is narrow enough that only a frame looking into the sun gets
