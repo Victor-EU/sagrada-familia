@@ -9,7 +9,23 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phases 0 to 5 complete
+## Status: phases 0 to 5 complete, and then the colour
+
+The scope phases finished and the model was still wrong in the way that
+mattered most: it looked like a 3D print of a cathedral. Everything opaque was
+one white plaster, the interior ambient was Barcelona sky pouring through walls
+it should not have been able to see, and the interface was a parameter panel
+three hundred and ten pixels wide standing next to it.
+
+All three are gone. The building is cut from the stones the Basilica publishes
+and the model has recorded since phase 2 — Montjuïc sandstone on the side
+naves, granite down the middle, basalt round the crossing, red porphyry at the
+centre — the ambient indoors is the colour of the light that actually arrives
+through Vila-Grau's glazing, and the app opens on a nine-stop visit that starts
+across the plaza and ends inside. The panel is still there behind `?dev` or the
+P key; it is no longer the first thing anyone sees.
+
+
 
 Each phase carried its own bar. Phase 0: *you can load a photo, match a camera
 to it, and tune a parameter live.* Phase 1, the nave bay and the go/no-go: it
@@ -85,7 +101,11 @@ the building anyone is standing in.
 | Photo-match overlay, letterboxed to the photo's aspect | `src/dev/overlay.ts` |
 | Live parameter panel, camera and geometry presets | `src/dev/params.ts`, `src/dev/presets.ts` |
 | Free-fly camera with vertical-line correction | `src/camera/freecam.ts` |
-| Plaster maquette material, studio ambient, ACES tonemap | `src/render/` |
+| The four stones, and which order is cut from which | `src/render/materials.ts` |
+| The ambient indoors is the room; outdoors it is the sky | `src/render/materials.ts` |
+| Stone grain — two octaves on world position, laid in courses | `src/render/materials.ts` |
+| Bloom above the white point, so only the glazing spills | `src/render/scene.ts` |
+| Studio ambient, ACES tonemap | `src/render/scene.ts` |
 | Double-twist column, all four orders, from the published rule | `src/geometry/column.ts` |
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 | Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |
@@ -118,6 +138,9 @@ the building anyone is standing in.
 | Doors — a window with no glass in it, placed by the front in front of it | `src/plan/clerestory.ts`, `src/plan/church.ts` |
 | A podium you can climb: the skirt as a flight of steps round the footprint | `src/plan/floor.ts` |
 | The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
+| The visit: four stops outside, five inside, in the order you would walk them | `src/ui/journey.ts` |
+| The interface — a title card, a caption, a rail, and nothing else | `src/ui/chrome.ts` |
+| Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
 
 ## Running
 
@@ -147,14 +170,20 @@ npm run build       # typecheck + production build
 | X | difference blend — use this for edge alignment |
 | `[` `]` | photo opacity |
 | drop an image | load it as a reference |
-| 1–9, 0 | the curated interior viewpoints |
-| N D G T | the Nativity front, the doorway, the Glory front, the terraces |
+| ← → | back and on through the visit |
+| F | leave the visit and explore on your own |
+| P | the parameter panel and the readouts (also `?dev` in the address) |
 | L | copy a link to exactly this frame and hour |
+| 1–9, 0, N D G T | the curated viewpoints — **only with the panel open** |
+
+The curated viewpoints are the regression harness rather than the visit: they
+move the camera without telling the caption, so they live behind the same
+switch as the panel.
 
 On a touch device the left thumb walks — a stick appears where it lands, and
 deflection is proportional — the right thumb looks, and two fingers rise and
-fall together and pinch for speed. The panel opens closed there and the
-render gets the whole screen.
+fall together and pinch for speed. The render gets the whole screen on every
+device now, because nothing is standing beside it.
 
 ## Links
 

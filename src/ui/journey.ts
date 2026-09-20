@@ -55,10 +55,10 @@ export const JOURNEY: Moment[] = [
     id: 'approach',
     title: 'From across the plaza',
     caption:
-      'Five in the afternoon, late September, with the sun raking along the ' +
-      'Passion flank and the Glory front in its own shadow. Eighteen towers ' +
-      'are planned and none was finished in Gaudí’s lifetime; the tallest ' +
-      'will stand 172.5 m, one metre under Montjuïc, because he would not ' +
+      'Ten in the morning, late September: the sun is round on the Glory ' +
+      'front and the western flank is in its own shadow. Eighteen towers are ' +
+      'planned and not one was finished in Gaudí’s lifetime; the tallest ' +
+      'will stand 172.5 m, a metre under Montjuïc, because he would not ' +
       'build higher than the hill.',
     part: 'outside',
     position: [-118, 0.3, 84],
@@ -66,7 +66,13 @@ export const JOURNEY: Moment[] = [
     fov: 58,
     shiftCorrection: 0.45,
     day: 262,
-    hour: 17,
+    // Chosen off the table in light/sun.ts rather than by eye: at this hour
+    // the sun stands at 0.83 on the Glory front's normal and -0.34 on the
+    // flank beside it, which is the one combination that gives this corner a
+    // lit face and a shaded one at an altitude still low enough to be warm.
+    // At five in the afternoon, where this used to sit, both were negative
+    // and the building opened the visit in its own shadow.
+    hour: 10,
     travel: 6.5,
   },
   {
@@ -106,13 +112,17 @@ export const JOURNEY: Moment[] = [
     id: 'threshold',
     title: 'At the door',
     caption:
-      'Square on the northern doorway of the Nativity transept. Four metres ' +
-      'of opening, and the last of the sky.',
+      'Square on the northern doorway of the Nativity transept, under the ' +
+      'leaning piers of the front. Four metres of opening, and the last of ' +
+      'the sky.',
     part: 'outside',
-    position: [47, 0.3, -26.3],
-    target: [0, 11, -26.3],
-    fov: 74,
-    shiftCorrection: 0.4,
+    // Far enough back that the portal has its piers around it. Square on the
+    // doorway's own z, so the step inside that follows travels straight along
+    // the opening instead of into the jamb beside it.
+    position: [66, 3, -26.3],
+    target: [24, 15, -26.3],
+    fov: 66,
+    shiftCorrection: 0.45,
     day: 172,
     hour: 9.6,
     travel: 5,
