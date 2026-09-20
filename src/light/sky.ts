@@ -60,17 +60,23 @@ void main() {
 
 /** Linear-space palettes, blended by sun altitude. */
 const PALETTE = {
+  // Barcelona in clear weather is a much deeper blue overhead than the first
+  // palette allowed, and the pallor at the horizon was carrying the whole sky
+  // toward grey — which is most of why the exterior read as a maquette under
+  // a studio dome rather than a building standing in a city.
   day: {
-    zenith: new THREE.Vector3(0.11, 0.26, 0.62),
-    horizon: new THREE.Vector3(0.64, 0.74, 0.88),
-    ground: new THREE.Vector3(0.20, 0.19, 0.17),
-    sun: new THREE.Vector3(1.0, 0.96, 0.9),
+    zenith: new THREE.Vector3(0.055, 0.20, 0.66),
+    horizon: new THREE.Vector3(0.52, 0.66, 0.90),
+    ground: new THREE.Vector3(0.22, 0.20, 0.17),
+    // Daylight is not white. A touch of amber here is what makes stone read
+    // as stone, and it is what the sunlit faces in every photograph have.
+    sun: new THREE.Vector3(1.0, 0.94, 0.84),
   },
   twilight: {
-    zenith: new THREE.Vector3(0.07, 0.10, 0.26),
-    horizon: new THREE.Vector3(0.92, 0.40, 0.17),
-    ground: new THREE.Vector3(0.07, 0.06, 0.06),
-    sun: new THREE.Vector3(1.0, 0.44, 0.15),
+    zenith: new THREE.Vector3(0.06, 0.11, 0.30),
+    horizon: new THREE.Vector3(0.98, 0.44, 0.18),
+    ground: new THREE.Vector3(0.09, 0.07, 0.06),
+    sun: new THREE.Vector3(1.0, 0.46, 0.16),
   },
   night: {
     zenith: new THREE.Vector3(0.008, 0.012, 0.030),
@@ -106,7 +112,7 @@ export class Sky {
         uHorizon: { value: PALETTE.day.horizon.clone() },
         uGround: { value: PALETTE.day.ground.clone() },
         uSunColor: { value: PALETTE.day.sun.clone() },
-        uHaloStrength: { value: 0.22 },
+        uHaloStrength: { value: 0.34 },
         uDiscStrength: { value: 40 },
       },
       vertexShader: SKY_VERTEX,
@@ -174,7 +180,7 @@ export class Sky {
 
     return {
       sunColor: new THREE.Color(sun.x, sun.y, sun.z),
-      sunIntensity: 3.6 * reach * thickness,
+      sunIntensity: 4.2 * reach * thickness,
     }
   }
 

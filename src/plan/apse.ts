@@ -202,6 +202,7 @@ export function buildApse(
         detail,
       ),
     upright(0, p.crown, centreZ),
+    'vault',
   )
 
   // A swelling over each column of the ring, where the branches arrive under
@@ -222,6 +223,7 @@ export function buildApse(
           detail,
         ),
       upright(x, ringSpring, z),
+      'vault',
     )
   }
 
@@ -313,7 +315,7 @@ export function buildApse(
     const holder = new THREE.Group()
     holder.position.set(x, 0, z)
     holder.rotation.y = Math.PI - angle
-    holder.add(new THREE.Mesh(built.stone, parts.plaster))
+    holder.add(new THREE.Mesh(built.stone, parts.stone('wall')))
     const panes = new THREE.Mesh(built.glass, parts.glass)
     panes.layers.set(LAYER_GLASS)
     holder.add(panes)

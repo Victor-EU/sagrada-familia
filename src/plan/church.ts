@@ -17,6 +17,7 @@ import {
   type FootprintParams,
   type PavingPlan,
 } from './floor.ts'
+import type { Quarry } from '../render/materials.ts'
 import { named, Parts } from './parts.ts'
 import { buildShell, defaultShell, portals, type ShellParams } from './shell.ts'
 import {
@@ -339,11 +340,11 @@ export interface Church {
 
 export function buildChurch(
   p: ChurchParams,
-  plaster: THREE.Material,
+  stones: Quarry,
   glass: THREE.Material,
   paving: THREE.Material,
 ): Church {
-  const parts = new Parts(plaster, glass, paving)
+  const parts = new Parts(stones, glass, paving)
 
   const bays = Math.max(1, Math.round(p.naveBays))
   // The nave is centred on the origin, because every curated view is framed
@@ -479,7 +480,7 @@ export function buildChurch(
     // The podium's edge is a flight, not a skirt: see `buildBase`.
     const base = buildBase(outside, p.floor.apron, step)
     parts.piece(named('base-treads', base.treads, parts.paving), base.treads)
-    parts.piece(named('base-risers', base.risers, parts.plaster), base.risers)
+    parts.piece(named('base-risers', base.risers, parts.stone('facade')), base.risers)
   }
 
   // Outside. The terraces close every vessel at its own crown, the three
@@ -911,7 +912,7 @@ function addWall(
   const holder = new THREE.Group()
   holder.position.set(x, 0, z)
   holder.rotation.y = turn
-  holder.add(new THREE.Mesh(wall.stone, parts.plaster))
+  holder.add(new THREE.Mesh(wall.stone, parts.stone('wall')))
 
   // Glass sits on its own layer so the sun rig can render it separately from
   // everything that blocks light.

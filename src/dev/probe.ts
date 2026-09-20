@@ -193,3 +193,74 @@ export function censusFrame(
 function round(value: number): number {
   return Math.round(value * 100) / 100
 }
+
+/**
+ * What the light in this frame is actually doing, in numbers.
+ *
+ * "It looks flat" is the exterior's version of "the canopy reads as noise" —
+ * true, unactionable, and equally likely to send you off changing the albedo
+ * when the problem is the sun. So the frame is rendered once more with tone
+ * mapping on, read back, and reduced to the three numbers that say whether
+ * there is any modelling in it:
+ *
+ *  - **spread**, the 10th to 90th percentile of luminance across the stone.
+ *    A façade with a lit side and a shaded side has a wide one; a façade lit
+ *    from everywhere at once has none, however bright it is.
+ *  - **median**, so a dark frame and a flat frame are told apart.
+ *  - **warmth**, mean red minus mean blue over the stone, which says whether
+ *    the sun is arriving coloured or the whole thing is being lit by probe.
+ *
+ * Sky is excluded by depth rather than by colour: a blue sky and a blue-lit
+ * wall are the same pixel, and it is the wall that is being asked about.
+ */
+export interface LightCensus {
+  spread: number
+  median: number
+  warmth: number
+  /** Fraction of the frame that is not sky. */
+  coverage: number
+}
+
+export function censusLight(stage: Stage, width = 360, height = 400): LightCensus {
+  const target = new THREE.WebGLRenderTarget(width, height, { type: THREE.UnsignedByteType })
+  const aspect = stage.camera.aspect
+  const background = stage.scene.background
+  stage.camera.aspect = width / height
+  stage.camera.updateProjectionMatrix()
+  // Sky becomes pure magenta, which nothing in a sandstone building can be,
+  // so the stone can be separated from it without a depth pass.
+  stage.scene.background = new THREE.Color(1, 0, 1)
+  stage.renderer.setRenderTarget(target)
+  stage.renderer.render(stage.scene, stage.camera)
+
+  const pixels = new Uint8Array(width * height * 4)
+  stage.renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels)
+
+  stage.renderer.setRenderTarget(null)
+  stage.scene.background = background
+  stage.camera.aspect = aspect
+  stage.camera.updateProjectionMatrix()
+  target.dispose()
+
+  const lum: number[] = []
+  let red = 0
+  let blue = 0
+  for (let i = 0; i < pixels.length; i += 4) {
+    const r = pixels[i]!
+    const g = pixels[i + 1]!
+    const b = pixels[i + 2]!
+    if (r > 200 && g < 60 && b > 200) continue
+    lum.push(0.2126 * r + 0.7152 * g + 0.0722 * b)
+    red += r
+    blue += b
+  }
+  if (lum.length === 0) return { spread: 0, median: 0, warmth: 0, coverage: 0 }
+  lum.sort((a, b) => a - b)
+  const at = (q: number): number => lum[Math.min(lum.length - 1, Math.floor(q * lum.length))]!
+  return {
+    spread: Math.round(at(0.9) - at(0.1)),
+    median: Math.round(at(0.5)),
+    warmth: Math.round((red - blue) / lum.length),
+    coverage: Math.round((100 * lum.length) / (width * height)),
+  }
+}

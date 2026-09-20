@@ -190,13 +190,13 @@ export function buildShell(
     const { lid, skirt } = buildPavement(outline, s.parapet + 2.2, holes)
     lid.translate(0, top, 0)
     skirt.translate(0, top, 0)
-    parts.piece(named('terrace', lid, parts.plaster), lid)
-    parts.piece(named('parapet', skirt, parts.plaster), skirt)
+    parts.piece(named('terrace', lid, parts.stone('shell')), lid)
+    parts.piece(named('parapet', skirt, parts.stone('shell')), skirt)
 
     for (const hole of holes) {
       const collar = new THREE.CylinderGeometry(hole.r * 0.92, hole.r, s.curb, 32, 1, true)
       collar.translate(hole.x, top + s.curb / 2, hole.z)
-      parts.piece(named('lantern', collar, parts.plaster), collar)
+      parts.piece(named('lantern', collar, parts.stone('shell')), collar)
     }
   }
 
@@ -269,7 +269,7 @@ export function buildShell(
         Math.abs(along.y) * span + Math.abs(outward.y) * thick,
       )
       box.translate(mid.x, (base + crest) / 2, mid.y)
-      parts.piece(named('facade', box, parts.plaster), box)
+      parts.piece(named('facade', box, parts.stone('facade')), box)
     }
 
     // The wall, set back behind the piers.
@@ -359,6 +359,7 @@ export function buildShell(
             detail,
           }),
         new THREE.Matrix4().makeTranslation(spot.x, spot.y, spot.z),
+        'facade',
       )
     }
   }

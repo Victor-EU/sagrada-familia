@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { SurfacePatch } from '../render/sunrig.ts'
-import { PLASTER } from '../render/materials.ts'
+import { WALL } from '../render/materials.ts'
 import { MODULE } from './module.ts'
 
 /**
@@ -343,7 +343,7 @@ export function pavingUniforms(): PavingUniforms {
     // The colour of the room, which is the colour of everything in it —
     // normalised to unit luminance so that rotating the ambient onto it
     // changes its hue and not how much of it there is.
-    uPavBounce: { value: unitLuminance(new THREE.Color(PLASTER).convertSRGBToLinear()) },
+    uPavBounce: { value: unitLuminance(new THREE.Color(WALL).convertSRGBToLinear()) },
   }
 }
 
@@ -376,6 +376,7 @@ uniform vec3 uPavRoundel;
 uniform float uPavGrain;
 uniform float uPavWarmth;
 uniform vec3 uPavBounce;
+uniform float uRoomGain;
 
 /** Distance from x to the nearest line of a grid of this period. */
 float sfToGrid( const in float x, const in float period ) {
@@ -497,7 +498,14 @@ const PAVING_LIGHT = /* glsl */ `
 {
   vec3 ambient = reflectedLight.indirectDiffuse;
   float luminance = dot( ambient, vec3( 0.2126, 0.7152, 0.0722 ) );
-  reflectedLight.indirectDiffuse = mix( ambient, luminance * uPavBounce, uPavWarmth );
+  // The same indoor fill every other interior stone gets. The floor is the
+  // one surface in the building that is lit almost entirely by bounce — it
+  // faces the sky and never sees it — so leaving it out of the gain left a
+  // cold grey slab under a room full of warm light, which is the exact
+  // opposite of every photograph, where the nave floor is the brightest
+  // thing below the windows and throws the light back up the aisle.
+  reflectedLight.indirectDiffuse =
+    mix( ambient, luminance * uPavBounce, uPavWarmth ) * uRoomGain;
 }
 `
 

@@ -309,6 +309,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
           detail,
         }),
       new THREE.Matrix4().makeTranslation(site.x, base, site.z),
+      'facade',
       true,
     )
 
@@ -325,18 +326,19 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
             detail,
           }),
         new THREE.Matrix4().makeTranslation(site.x, shaftTop, site.z),
+        'facade',
         true,
       )
     } else if (site.crown === 'cross') {
       const group = new THREE.Group()
       group.position.set(site.x, shaftTop, site.z)
       const limbs = buildCross(CROSS_HEIGHT)
-      for (const limb of limbs) group.add(named('cross', limb, parts.plaster))
+      for (const limb of limbs) group.add(named('cross', limb, parts.stone('facade')))
       parts.piece(group, ...limbs)
     } else {
       const star = buildStar(STAR_SPAN, 12)
       star.translate(site.x, shaftTop + STAR_SPAN / 2, site.z)
-      parts.piece(named('star', star, parts.plaster), star)
+      parts.piece(named('star', star, parts.stone('facade')), star)
     }
   }
 

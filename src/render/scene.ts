@@ -2,8 +2,20 @@ import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
-import { groundMaterial, pavingMaterial, plasterMaterial } from './materials.ts'
+import {
+  grainUniforms,
+  groundMaterial,
+  openQuarry,
+  pavingMaterial,
+  roomUniforms,
+  stonePatch,
+  type GrainUniforms,
+  type Quarry,
+  type RoomUniforms,
+  type StoneName,
+} from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
 import { LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
 import { RoofMap } from './roof.ts'
@@ -19,13 +31,20 @@ export interface Stage {
   camera: THREE.PerspectiveCamera
   sky: Sky
   sun: SunRig
-  /** One material for everything structural — the point of a plaster maquette. */
-  plaster: THREE.MeshStandardMaterial
+  /**
+   * Every stone the building is cut from — sandstone, granite, basalt,
+   * porphyry, and the vault and wall dressings.
+   */
+  stones: Quarry
   glass: GlassMaterial
   /** Plaster that draws its own joints where it faces the sky. */
   paving: THREE.MeshStandardMaterial
   /** What the paving pattern is set out against. */
   pavingUniforms: PavingUniforms
+  /** Colour and strength of the light the room lights itself with. */
+  room: RoomUniforms
+  /** Depth of the block-to-block variation in the stone. */
+  grain: GrainUniforms
   /** The plaza the church stands in, at the foot of the podium. */
   ground: THREE.Mesh
   figure: THREE.Mesh
@@ -60,6 +79,14 @@ export interface Stage {
   setSunNear(on: boolean): void
   /** How much lit air there is between the eye and the stone. */
   setShafts(options: ShaftSettings): void
+  /**
+   * The spill off things brighter than white.
+   *
+   * `threshold` is in the scene's own linear units, so a value above 1 means
+   * "brighter than the tone mapper's white point" — ordinary sunlit stone is
+   * left alone and only the glazing and the sun spill.
+   */
+  setBloom(options: { strength: number; radius: number; threshold: number }): void
   dispose(): void
 }
 
@@ -184,18 +211,27 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // most of the same thing today.
   const sun = new SunRig(3072)
 
-  // Every opaque surface is the same plaster, and every one of them receives
-  // the coloured sun the same way.
-  const plaster = plasterMaterial()
+  // Every opaque surface receives the coloured sun the same way, whatever it
+  // is cut from — the patch is about how sunlight arrives, not about albedo.
+  const stones = openQuarry()
+  const room = roomUniforms()
+  const grain = grainUniforms()
+  for (const [name, material] of Object.entries(stones)) {
+    patchForSunlight(material, sun.uniforms, stonePatch(name as StoneName, grain, room))
+  }
   const ground = new THREE.Mesh(new THREE.CircleGeometry(320, 128), groundMaterial())
-  patchForSunlight(plaster, sun.uniforms)
   patchForSunlight(ground.material as THREE.MeshStandardMaterial, sun.uniforms)
 
-  // The pavement is the same plaster with one extra job: it knows where it is
-  // standing, so it can draw the building's own grid on itself.
+  // The pavement is stone with one extra job: it knows where it is standing,
+  // so it can draw the building's own grid on itself.
   const paving = pavingMaterial()
   const pavingU = pavingUniforms()
-  patchForSunlight(paving, sun.uniforms, { ...PAVING_PATCH, uniforms: pavingU })
+  // The room's own uniforms ride along, so the floor is lit by the same
+  // indoor fill as the stone standing on it.
+  patchForSunlight(paving, sun.uniforms, {
+    ...PAVING_PATCH,
+    uniforms: { ...pavingU, ...room },
+  })
 
   const glass = glassMaterial()
 
@@ -204,7 +240,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // comes off warm plaster and a warm floor. Until phase 2 brings occlusion
   // this hemisphere is the stand-in, and it is doing an honest job: warm from
   // below, cool from above, which is the shape interreflection actually has.
-  const bounce = new THREE.HemisphereLight(0xe8e4de, 0xffd4a0, 0.42)
+  // Warm from below, cool from above, which is the shape interreflection
+  // actually has in a room whose floor is polished sandstone. Both ends are
+  // warmer than the first pass allowed: the room this stands in is lined with
+  // honey-coloured stone on every side, so even the light coming down has
+  // bounced off something warm before it arrives.
+  const bounce = new THREE.HemisphereLight(0xf0e3cc, 0xffc98f, 0.42)
   scene.add(bounce)
 
   ground.rotation.x = -Math.PI / 2
@@ -214,7 +255,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // a body in the frame.
   const figure = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.22, EYE_HEIGHT - 0.44, 6, 20),
-    plaster,
+    stones.wall,
   )
   figure.position.set(2.6, EYE_HEIGHT / 2, 2.2)
   scene.add(figure)
@@ -296,6 +337,24 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   })
   composer.addPass(occlusion)
   composer.addPass(new LayerGate(camera, LAYER_GLASS, true))
+
+  // Bloom.
+  //
+  // Not a garnish, and not a filter over the top: it is the one thing every
+  // photograph of this interior has that the model had no way to produce. A
+  // lit window a hundred times brighter than the stone beside it does not
+  // stop at its own frame — it spills, in the air, in the lens, and in the
+  // eye — and that spill is what "full of light" actually looks like. Without
+  // it a window is a bright rectangle with a hard edge, which is what a
+  // window looks like in a rendering and never in a room.
+  //
+  // The threshold is the whole design. It sits above the tone mapper's white
+  // point, so ordinary sunlit stone does not bloom at all and only things
+  // that are genuinely brighter than white — the glazing, the sun disc, the
+  // shafts — are allowed to spill. That keeps it from becoming the haze that
+  // bloom usually is.
+  const bloom = new UnrealBloomPass(drawingBuffer.clone(), 0.62, 0.72, 1.05)
+  composer.addPass(bloom)
   composer.addPass(new OutputPass())
 
   return {
@@ -304,10 +363,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     camera,
     sky,
     sun,
-    plaster,
+    stones,
     glass,
     paving,
     pavingUniforms: pavingU,
+    room,
+    grain,
     ground,
     figure,
     bounce,
@@ -378,6 +439,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setSunNear(on) {
       sun.nearEnabled = on
     },
+    setBloom({ strength, radius, threshold }) {
+      bloom.strength = strength
+      bloom.radius = radius
+      bloom.threshold = threshold
+    },
     setShafts(options) {
       // Never disabled: this pass is what puts the scene into the chain.
       Object.assign(shafts.settings, options)
@@ -386,6 +452,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       sky.dispose()
       sun.dispose()
       shafts.dispose()
+      bloom.dispose()
       roof.dispose()
       sceneTarget.dispose()
       composer.dispose()

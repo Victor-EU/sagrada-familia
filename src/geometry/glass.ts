@@ -152,14 +152,23 @@ function paneColor(
   const t = THREE.MathUtils.clamp(grade * 1.25 + (u - 0.5) * 0.14 + (random() - 0.5) * 0.16, 0, 1)
   const hue = (THREE.MathUtils.lerp(sweep.low, sweep.high, t) + 1) % 1
 
-  // The wash to white. Nothing below a third of the height washes at all;
-  // everything above the springing is nearly clear. The walk from the Glory
-  // end adds to it, so the first bay is glazed almost clear and the colour
-  // gathers as you go in.
-  const entrance = THREE.MathUtils.lerp(0.45, 0, THREE.MathUtils.clamp(along, 0, 1))
+  // The wash toward white.
+  //
+  // This used to run all the way to a saturation of 0.16, which put pale grey
+  // glass across the top two thirds of every window — and pale grey glass is
+  // the one thing Vila-Grau did not make. The windows lighten as they climb,
+  // but they never stop being coloured: the upper lights in the photographs
+  // are still unmistakably green, or blue, or gold. The range below keeps
+  // them so, and the vault above still reads as luminous because what lights
+  // it is the sun through the glass rather than the glass going white.
+  //
+  // The walk from the Glory end still adds to it, so the colour gathers as
+  // you go in rather than arriving all at once in the doorway — but half as
+  // strongly as before, because the first bay had been glazed nearly clear.
+  const entrance = THREE.MathUtils.lerp(0.22, 0, THREE.MathUtils.clamp(along, 0, 1))
   const wash = THREE.MathUtils.clamp((grade - 0.3) / 0.55 + entrance, 0, 1)
-  const saturation = THREE.MathUtils.lerp(0.9, 0.16, wash) * (0.82 + random() * 0.3)
-  const lightness = THREE.MathUtils.lerp(0.42, 0.86, wash) * (0.88 + random() * 0.26)
+  const saturation = THREE.MathUtils.lerp(0.95, 0.52, wash) * (0.86 + random() * 0.24)
+  const lightness = THREE.MathUtils.lerp(0.4, 0.68, wash) * (0.9 + random() * 0.22)
 
   return out.setHSL(
     hue,

@@ -13,6 +13,7 @@ import {
   type VaultSurface,
 } from '../geometry/vault.ts'
 import type { FieldKindSpec, FieldLevel } from '../render/field.ts'
+import { stoneForOrder, type Quarry, type StoneName } from '../render/materials.ts'
 
 /**
  * Where the pieces of the building are collected before they are drawn.
@@ -45,11 +46,21 @@ export class Parts {
   private readonly cells = new Map<string, VaultCell[]>()
 
   constructor(
-    readonly plaster: THREE.Material,
+    /**
+     * Every stone the building is cut from. A piece asks for the one it is
+     * made of; identical shapes in the same stone still collapse to one kind,
+     * because the stone is part of the key.
+     */
+    readonly stones: Quarry,
     readonly glass: THREE.Material,
-    /** Plaster that knows it is a floor and draws its own joints. */
+    /** Stone that knows it is a floor and draws its own joints. */
     readonly paving: THREE.Material,
   ) {}
+
+  /** The material for a named stone, for the one-off meshes. */
+  stone(name: StoneName): THREE.Material {
+    return this.stones[name]
+  }
 
   /**
    * The tree of this shape, at every level of detail.
@@ -93,17 +104,23 @@ export class Parts {
     const trees = this.treeLevels(shape)
     const turn = opts.turn ?? 0
     const matrix = new THREE.Matrix4().makeRotationY(turn).premultiply(at(x, 0, z))
+    // The order says which stone. Sandstone on the side naves, granite on the
+    // central nave, basalt round the crossing, porphyry at the centre — the
+    // four the Basilica publishes, and the four column.ts has recorded all
+    // along without anything ever drawing them.
+    const cut = stoneForOrder(shape.order)
     this.add(
       `column ${treeKey(shape)}`,
       trees.map((t) => ({ geometry: t.geometry, error: t.error })),
       matrix,
+      cut,
       // A column is allowed several pixels where a vault is allowed one. Its
       // error is one flute clipped where the twist puts a corner between two
       // samples — a few pixels of one edge, not the whole outline moving.
       COLUMN_TOLERANCE_PX,
     )
     this.columns.push({ x, z, radius: columnMetrics(shape.order).innerDiameter / 2 })
-    this.base(shape.order, matrix, trees)
+    this.base(shape.order, matrix, trees, cut)
 
     const tree = trees[0]!
     if (opts.crown !== undefined && opts.vault) this.rosette(shape, tree, matrix, opts.crown, opts.vault)
@@ -119,7 +136,12 @@ export class Parts {
    * the shaft's number switches it a level early, which costs nothing and is
    * the safe direction to be wrong in.
    */
-  private base(order: ColumnOrder, matrix: THREE.Matrix4, trees: TreeColumn[]): void {
+  private base(
+    order: ColumnOrder,
+    matrix: THREE.Matrix4,
+    trees: TreeColumn[],
+    cut: StoneName,
+  ): void {
     const key = `base ${order}`
     const kind = this.kinds.get(key)
     if (kind) {
@@ -133,6 +155,7 @@ export class Parts {
         error: trees[level]!.error,
       })),
       matrix,
+      cut,
       COLUMN_TOLERANCE_PX,
     )
   }
@@ -178,6 +201,7 @@ export class Parts {
         (detail) =>
           vaultSurface(throat, flareFor(throat, reach, rise), 0, rise, reach, detail),
         upright(spot.x, spot.y, spot.z),
+        'vault',
       )
     }
   }
@@ -214,9 +238,9 @@ export class Parts {
     const turn = opts.turn ?? 0
     const centre = upright(x, spec.crownHeight, z)
 
-    this.add(`funnel ${key}`, cells.map((c) => c.funnel), centre)
+    this.add(`funnel ${key}`, cells.map((c) => c.funnel), centre, 'vault')
     if (cells[0]!.cap) {
-      this.add(`cap ${key}`, cells.map((c) => c.cap!), centre)
+      this.add(`cap ${key}`, cells.map((c) => c.cap!), centre, 'vault')
     }
 
     const cos = Math.cos(turn)
@@ -227,6 +251,7 @@ export class Parts {
         `boss ${key}`,
         cells.map((c) => c.boss),
         upright(x + ox * cos + oz * sin, y, z - ox * sin + oz * cos),
+        'vault',
       )
     }
   }
@@ -237,16 +262,26 @@ export class Parts {
    * `skyline` marks a piece that stands above the roofs and roofs nothing —
    * see `LAYER_SKYLINE`. It changes nothing about how the piece is drawn.
    */
+  /**
+   * `cut` is required and has no default on purpose. It briefly defaulted to
+   * 'facade', and the twelve swellings over the apse ring quietly took the
+   * envelope's stone — which is the one stone that gets no indoor fill,
+   * because outdoors a shaded face really is lit by sky alone. Inside a dark
+   * apse they came back as black blotches on the vault, and nothing about the
+   * call site said anything was wrong. A default that is right four times out
+   * of five is worse here than no default at all.
+   */
   surface(
     key: string,
     make: (detail: number) => VaultSurface,
     matrix: THREE.Matrix4,
+    cut: StoneName,
     skyline = false,
   ): void {
     let kind = this.kinds.get(key)
     if (!kind) {
       const levels = DETAIL_LEVELS.map(make)
-      this.add(key, levels, matrix, undefined, skyline)
+      this.add(key, levels, matrix, cut, undefined, skyline)
       return
     }
     kind.placements.push(matrix)
@@ -267,12 +302,20 @@ export class Parts {
     key: string,
     levels: FieldLevel[],
     matrix: THREE.Matrix4,
+    cut: StoneName,
     tolerancePx?: number,
     skyline?: boolean,
   ): void {
     let kind = this.kinds.get(key)
     if (!kind) {
-      kind = { name: key, levels, material: this.plaster, placements: [], tolerancePx, skyline }
+      kind = {
+        name: key,
+        levels,
+        material: this.stones[cut],
+        placements: [],
+        tolerancePx,
+        skyline,
+      }
       this.kinds.set(key, kind)
     }
     kind.placements.push(matrix)

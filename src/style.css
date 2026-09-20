@@ -63,6 +63,12 @@ html, body {
 }
 #reticle.on { display: block; }
 
+/* The working readouts. Hidden unless the model is opened in dev — see
+   `dev` in main.ts — because a wall of numbers is the wrong first thing to
+   put next to a cathedral. */
+#hud, #hint { display: none; }
+body.dev #hud, body.dev #hint { display: block; }
+
 #hud, #hint {
   position: fixed;
   left: 14px;
@@ -132,7 +138,7 @@ html, body {
    the work happens, so it goes; the controls line stays, because on a device
    with no keys it is the only place the gestures are written down. */
 @media (max-width: 820px) {
-  #hud { display: none; }
+  body.dev #hud { display: none; }
   #hint {
     right: 14px;
     max-width: none;
@@ -156,3 +162,235 @@ html, body {
 }
 
 .tp-dfwv { width: 290px !important; }
+
+
+/* ---------------------------------------------------------------------------
+   The visit.
+
+   Everything below is drawn over the render and takes no space away from it.
+   The colours are the building's own — warm sandstone ink on a near-black
+   scrim — so the interface reads as part of the same object rather than as a
+   browser sitting in front of one.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --warm: #f4e6d2;
+  --warm-dim: #bda98f;
+  --gold: #e0b878;
+}
+
+.chrome {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font: 13px/1.6 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+.chrome button { pointer-events: auto; }
+
+/* The title card. */
+.intro {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(120% 90% at 50% 45%, rgba(10, 8, 6, 0.42), rgba(8, 6, 5, 0.9));
+  backdrop-filter: blur(3px);
+  opacity: 1;
+  transition: opacity 900ms ease, visibility 900ms;
+}
+.intro.gone { opacity: 0; visibility: hidden; }
+
+.intro-inner { max-width: 33rem; text-align: center; }
+.intro .kicker {
+  margin: 0 0 18px;
+  color: var(--warm-dim);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+}
+.intro h1 {
+  margin: 0 0 22px;
+  font-family: "Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(2.6rem, 8vw, 4.6rem);
+  line-height: 1;
+  letter-spacing: 0.005em;
+  color: var(--warm);
+}
+.intro .blurb {
+  margin: 0 auto 30px;
+  max-width: 27rem;
+  color: #cdbca6;
+  line-height: 1.75;
+}
+.intro .sub { margin: 16px 0 0; color: #8d8073; font-size: 12px; }
+.intro kbd {
+  font: inherit;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #4a423a;
+  color: var(--warm-dim);
+}
+
+.begin {
+  pointer-events: auto;
+  appearance: none;
+  border: 1px solid rgba(224, 184, 120, 0.55);
+  background: rgba(224, 184, 120, 0.09);
+  color: var(--warm);
+  font: inherit;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11.5px;
+  padding: 13px 30px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.begin:hover {
+  background: rgba(224, 184, 120, 0.18);
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+
+/* The caption. Bottom left, over a scrim that only exists where the text is. */
+.caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 90px 32px 74px;
+  max-width: 34rem;
+  background: linear-gradient(to top, rgba(8, 6, 5, 0.82), rgba(8, 6, 5, 0));
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+.chrome.running .caption { opacity: 1; transform: none; }
+.caption.moving { opacity: 0.15; }
+
+.cap-index {
+  margin: 0 0 8px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.cap-title {
+  margin: 0 0 10px;
+  font-family: "Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3.2vw, 2.1rem);
+  line-height: 1.15;
+  color: var(--warm);
+}
+.cap-text {
+  margin: 0;
+  color: #c2b3a0;
+  max-width: 30rem;
+  text-wrap: pretty;
+}
+
+/* The rail: previous, the nine stops, next. */
+.rail {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+.chrome.running .rail, .chrome.free .rail { opacity: 1; }
+
+.rail > button {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(244, 230, 210, 0.22);
+  background: rgba(10, 8, 6, 0.5);
+  color: var(--warm);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+.rail > button:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: rgba(224, 184, 120, 0.16);
+}
+.rail > button:disabled { opacity: 0.28; cursor: default; }
+
+.dots { display: flex; align-items: center; gap: 7px; }
+.dots .dot {
+  appearance: none;
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(244, 230, 210, 0.4);
+  background: transparent;
+  cursor: pointer;
+  transition: all 220ms ease;
+}
+.dots .dot.past { background: rgba(244, 230, 210, 0.42); }
+.dots .dot.on {
+  background: var(--gold);
+  border-color: var(--gold);
+  width: 20px;
+  border-radius: 999px;
+}
+/* Inside and outside are told apart at a glance, so the rail also reads as
+   the shape of the visit: four stops in daylight, five in the dark. */
+.dots .dot[data-part="inside"] { border-style: dashed; }
+
+.resume {
+  position: absolute;
+  left: 32px;
+  bottom: 30px;
+  appearance: none;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 230, 210, 0.25);
+  background: rgba(10, 8, 6, 0.55);
+  color: var(--warm);
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 400ms ease, visibility 400ms, border-color 160ms ease;
+}
+.chrome.free .resume { opacity: 1; visibility: visible; }
+.resume:hover { border-color: var(--gold); }
+
+.chrome .hint {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(10, 8, 6, 0.6);
+  color: #a99a88;
+  font-size: 11.5px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+.chrome .hint.on { opacity: 1; }
+.chrome .hint strong { color: var(--warm); font-weight: 500; }
+
+@media (max-width: 820px) {
+  .caption { padding: 70px 20px 86px; max-width: none; }
+  .cap-text { font-size: 12.5px; }
+  .rail { right: 50%; transform: translateX(50%); bottom: 20px; gap: 10px; }
+  .resume { left: 50%; transform: translateX(-50%); bottom: 74px; }
+  .chrome .hint { display: none; }
+}

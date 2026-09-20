@@ -37,6 +37,7 @@ export interface RenderFlags {
   occlusion: number
   /** How far it looks for occluders, in metres. */
   occlusionRadius: number
+  bloom: { strength: number; radius: number; threshold: number }
   /** Lit air between the eye and the stone. 0 density turns the pass off. */
   shafts: ShaftSettings
 }

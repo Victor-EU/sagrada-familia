@@ -15,10 +15,12 @@ import {
 import { FreeCamera } from './camera/freecam.ts'
 import { TouchControls } from './camera/touch.ts'
 import { PhotoOverlay } from './dev/overlay.ts'
-import { censusFrame, type FrameCensus } from './dev/probe.ts'
+import { censusFrame, censusLight, type FrameCensus, type LightCensus } from './dev/probe.ts'
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
 import { ShareLink } from './share.ts'
+import { Journey } from './ui/journey.ts'
+import { Chrome } from './ui/chrome.ts'
 import {
   BUILDING_BEARING_DEG,
   barcelonaTime,
@@ -34,6 +36,17 @@ const overlayImg = document.querySelector<HTMLImageElement>('#overlay')!
 const stageEl = document.querySelector<HTMLDivElement>('#stage')!
 const hudEl = document.querySelector<HTMLDivElement>('#hud')!
 const reticle = document.querySelector<HTMLDivElement>('#reticle')!
+
+/**
+ * Whether this is the instrument or the building.
+ *
+ * The parameter panel is the right interface for the person building the
+ * model and the wrong one for anybody who came to look at it, so it is no
+ * longer the default: `?dev` in the address, or the P key, brings it back
+ * along with the readouts. Everything it controls still works and is still
+ * bound; it is the wall of sliders next to a cathedral that has gone.
+ */
+let dev = new URLSearchParams(location.search).has('dev')
 
 /** Width reserved for the parameter panel so it never covers the render. */
 const PANEL_GUTTER = 310
@@ -68,23 +81,36 @@ const view: ViewFlags = {
   detailRange: 1,
 }
 const render: RenderFlags = {
-  exposure: 1,
-  // Low on purpose. An environment probe lights the interior as if the walls
-  // were not there, and every point of ambient it adds is a point of contrast
-  // taken off the sun shafts, which are the entire subject.
-  // Measured, not guessed: at these two numbers the shadowed floor sits at
-  // 0.15 of the open-sun floor, which is about what a clear day gives, and a
-  // shaft through the red glazing lands red rather than pink.
-  environment: 0.24,
-  glassGain: 3.4,
-  bounce: 0.5,
+  exposure: 1.05,
+  // Low, and it stays low.
+  //
+  // The interior used to read as a grey cave with four bright windows in it,
+  // and raising this looked like the fix. It is not: the probe is Barcelona
+  // sky, so more of it is more blue, and at 0.42 the whole room went pale and
+  // flat — everything sat at the top of the ACES curve, where it desaturates
+  // toward white. The room was never short of light. It was short of light
+  // the right colour, which is what the ambient rotation in materials.ts now
+  // supplies. Two tenths of a stop off the old figure, and the difference in
+  // the render is not subtle.
+  environment: 0.22,
+  // The glazing has to be able to overrun white, or there is nothing for the
+  // bloom to find and the windows go back to being bright rectangles.
+  glassGain: 3.8,
+  // Cut hard, and deliberately. A hemisphere light fills a shaded face
+  // regardless of whether that face can see any sky, which outdoors is a lie
+  // that costs the whole building its modelling: at 0.6 the lit and unlit
+  // faces of a tower came back the same value. Interiors get theirs back
+  // through uRoomGain — see render/materials.ts.
+  bounce: 0.16,
   sunOffset: 0.06,
   sunNear: true,
-  // White plaster under a uniform probe has almost no shading of its own, so
-  // this is not a subtle effect here — it is most of the form in the vaults.
+  // Stone under a nearly uniform probe has little shading of its own, so this
+  // is not a subtle effect here — it is most of the form in the vaults.
   // Two and a half metres is the scale of the crevices between them.
-  occlusion: 0.6,
+  occlusion: 0.55,
   occlusionRadius: 3,
+  // The spill off the glazing — see the bloom pass in render/scene.ts.
+  bloom: { strength: 0.34, radius: 0.75, threshold: 1.4 },
   // The air. Every photograph of this interior is a photograph of air, and
   // until now the model had none — see render/shafts.ts.
   shafts: { ...defaultShafts },
@@ -106,9 +132,8 @@ const sun: SunFlags = {
 /** Any year does; the sun repeats to well inside a pixel. */
 const YEAR = 2026
 
-// One material across the whole assembly: the plaster maquette has no material
-// variation to budget for, which is the point of choosing it.
-const plaster = stage.plaster
+// The stones. A piece asks for the one it is cut from; see render/materials.ts.
+const stones = stage.stones
 
 const churchRoot = new THREE.Group()
 stage.scene.add(churchRoot)
@@ -121,7 +146,7 @@ funnel.rotation.x = -Math.PI / 2
 funnel.position.x = FUNNEL_OFFSET_X
 stage.scene.add(funnel)
 
-const surface = new THREE.Mesh(buildHyperboloidSurface(hyper), plaster)
+const surface = new THREE.Mesh(buildHyperboloidSurface(hyper), stones.vault)
 surface.castShadow = true
 surface.receiveShadow = true
 funnel.add(surface)
@@ -140,7 +165,7 @@ function rebuildChurch(): void {
     if (seat >= 0) stage.passes.splice(seat, 1)
     built.field.dispose()
   }
-  built = buildChurch(plan, plaster, stage.glass, stage.paving)
+  built = buildChurch(plan, stones, stage.glass, stage.paving)
   churchRoot.add(built.group, built.field.group)
 
   // The pattern is set out on the plan, not on the pavement, so it has to be
@@ -180,7 +205,7 @@ function applyView(): void {
   }
   surface.visible = view.showSurface
   rulings.visible = view.showRulings
-  plaster.wireframe = view.wireframe
+  for (const material of Object.values(stones)) material.wireframe = view.wireframe
   stage.figure.visible = view.showFigure
   stage.ground.visible = view.showGround
 }
@@ -193,6 +218,7 @@ function applyRender(): void {
   stage.sun.offset = render.sunOffset
   stage.setSunNear(render.sunNear)
   stage.setOcclusion({ intensity: render.occlusion, radius: render.occlusionRadius })
+  stage.setBloom(render.bloom)
   stage.setShafts(render.shafts)
   stage.invalidateSun()
 }
@@ -209,7 +235,8 @@ function applySun(): void {
 
 function layout(): void {
   const narrow = window.innerWidth < NARROW
-  const availW = Math.max(240, window.innerWidth - (narrow ? 0 : PANEL_GUTTER))
+  const gutter = dev && !narrow ? PANEL_GUTTER : 0
+  const availW = Math.max(240, window.innerWidth - gutter)
   const availH = window.innerHeight
   let w = availW
   let h = availH
@@ -257,16 +284,66 @@ const link = new ShareLink(
     sun.hour = moment.hour
     applySun()
     cam.refresh()
-    panel.refresh()
+    panel?.refresh()
   },
 )
 link.bind()
 
-const panel = buildPanel({
-  plan, hyper, view, render, sun, cam, overlay,
-  rebuild, applyView, applyRender, applySun, goTo,
-  copyLink: () => void link.copy(),
-})
+type Panel = ReturnType<typeof buildPanel>
+let panel: Panel | null = null
+
+/** Build the instrument the first time it is actually asked for. */
+function openPanel(): Panel {
+  panel ??= buildPanel({
+    plan, hyper, view, render, sun, cam, overlay,
+    rebuild, applyView, applyRender, applySun, goTo,
+    copyLink: () => void link.copy(),
+  })
+  return panel
+}
+
+function setDev(on: boolean): void {
+  dev = on
+  document.body.classList.toggle('dev', on)
+  if (on) {
+    const p = openPanel()
+    p.expanded = window.innerWidth >= NARROW
+  }
+  const wrapper = document.querySelector<HTMLElement>('.tp-dfwv')
+  if (wrapper) wrapper.style.display = on ? '' : 'none'
+  layout()
+}
+
+/**
+ * The visit.
+ *
+ * `goTo` above is the harness's way round the building — thirteen frames in
+ * whatever order a regression wants them. This is a viewer's way round it,
+ * which is a different thing and has to be in an order: across the plaza,
+ * up to the front, onto the terraces, through the door, and then five stops
+ * inside. See ui/journey.ts.
+ */
+const journey = new Journey(cam, sun, applySun)
+const chrome = new Chrome(journey, document.body)
+journey.onArrive = (moment, index) => {
+  chrome.arrive(moment, index)
+  chrome.setTravelling(false)
+}
+journey.onLeave = () => chrome.setTravelling(true)
+
+/**
+ * Any movement of the viewer's own ends the tour where it stands.
+ *
+ * Stopping the flight is not enough on its own — the caption would go on
+ * describing a place the camera has walked away from — so the chrome is told
+ * as well, and offers the visit back rather than resuming it uninvited.
+ */
+const MOVEMENT = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC',
+  'ShiftLeft', 'ShiftRight',
+])
+canvas.addEventListener('pointerdown', () => chrome.takeOver())
+canvas.addEventListener('wheel', () => chrome.takeOver(), { passive: true })
 
 // Number and letter keys jump to the curated views, which is how the same
 // frames get compared after a change. The digits ran out at ten, and phase 4
@@ -275,10 +352,40 @@ window.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return
   // A panel field has the focus: these are characters, not shortcuts.
   if (event.target instanceof HTMLInputElement) return
-  if (event.key === 'l' || event.key === 'L') {
-    void link.copy()
+
+  if (MOVEMENT.has(event.code)) {
+    chrome.takeOver()
     return
   }
+  switch (event.key) {
+    case 'ArrowRight':
+      journey.next()
+      return
+    case 'ArrowLeft':
+      journey.prev()
+      return
+    case 'f':
+    case 'F':
+      chrome.explore()
+      return
+    case 'p':
+    case 'P':
+      setDev(!dev)
+      return
+    case 'l':
+    case 'L':
+      void link.copy()
+      return
+    case 'Enter':
+      chrome.begin()
+      return
+  }
+
+  // The curated views are the regression harness, not the visit: they move
+  // the camera without telling the chrome, so the caption would go on
+  // describing somewhere else. They stay on the keys they have always been
+  // on, behind the same switch as the panel.
+  if (!dev) return
   const index = VIEWPOINTS.findIndex((v) => v.key === event.key)
   if (index >= 0) goTo(index)
 })
@@ -286,13 +393,15 @@ window.addEventListener('keydown', (event) => {
 rebuild()
 applyRender()
 applySun()
-// A phone opens on the building, not on the instrument panel.
-panel.expanded = window.innerWidth >= NARROW
-layout()
+setDev(dev)
 
-// A link decides where we open, and otherwise we open standing in the bay
-// looking up, which is the whole point of the space.
-if (!link.restore()) goTo(0)
+// A link decides where we open — someone was sent a moment and should land
+// in it, not in a title card. Otherwise the title card, and the visit.
+if (link.restore()) {
+  chrome.explore()
+} else {
+  journey.jump(0)
+}
 
 // Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
@@ -314,7 +423,10 @@ declare global {
       applyRender: () => void
       goTo: (index: number) => void
       /** What is in this frame, by surface — see dev/probe.ts. */
+      journey: Journey
       census: () => FrameCensus | null
+      /** What the light is doing — see dev/probe.ts. */
+      light: () => LightCensus
     }
   }
 }
@@ -333,7 +445,9 @@ window.harness = {
   applySun,
   applyRender,
   goTo,
+  journey,
   census: () => (built ? censusFrame(stage, [built.field.group]) : null),
+  light: () => censusLight(stage),
 }
 
 const clock = new THREE.Clock()
@@ -344,6 +458,9 @@ function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.1)
 
   cam.update(dt)
+  // After the camera's own update, so a frame in which both run ends with the
+  // flight's answer rather than with whatever the idle walker did under it.
+  journey.update(dt)
   stage.render()
 
   reticle.classList.toggle('on', cam.isLocked)
