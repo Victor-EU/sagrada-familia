@@ -35,7 +35,6 @@ const MARKER_HEIGHT = 8
 
 export class Controls {
   private readonly root: HTMLElement
-  private readonly title: HTMLElement
   private readonly way: HTMLButtonElement
   private readonly out: HTMLButtonElement
   private readonly hint: HTMLElement
@@ -53,12 +52,6 @@ export class Controls {
     private readonly applySun: () => void,
   ) {
     this.root = el('div', 'ui')
-
-    this.title = el('div', 'title')
-    this.title.innerHTML =
-      '<h1>Sagrada Fam&iacute;lia</h1>' +
-      '<p>Barcelona &middot; begun 1882 &middot; every surface generated from ' +
-      'Gaud&iacute;&rsquo;s own rules, lit by the real sun</p>'
 
     this.way = el('button', 'way') as HTMLButtonElement
     this.way.type = 'button'
@@ -98,17 +91,33 @@ export class Controls {
     })
     this.clock.append(this.hourLabel, this.dial)
 
-    this.root.append(this.title, this.way, this.out, this.hint, this.clock)
+    this.root.append(this.way, this.out, this.hint, this.clock)
     this.host.append(this.root)
 
     this.showHour()
-    this.say('regard')
-    // The title is an introduction, not a caption: it says what this is and
-    // then stops saying it.
-    window.setTimeout(() => this.title.classList.add('gone'), 7000)
 
     viewer.onRelation = (relation) => this.say(relation)
-    viewer.onTravel = (travelling) => this.root.classList.toggle('travelling', travelling)
+    viewer.onTravel = (travelling) => {
+      this.root.classList.toggle('travelling', travelling)
+      // The line is hidden for the length of a flight, and a flight in
+      // through a door is most of the nine seconds it is given — so what the
+      // cursor does in the room was on screen for about two seconds after
+      // landing, which nobody read. Said again on arrival, with its full
+      // time.
+      if (!travelling) this.say(this.viewer.mode)
+    }
+  }
+
+  /**
+   * Start saying things.
+   *
+   * Called on the first frame that is actually drawn, not when the interface
+   * is built: the building takes seconds to generate, the page is blank
+   * while it does, and a line of controls whose nine seconds ran out under a
+   * blank page was never seen by anybody.
+   */
+  begin(): void {
+    this.say(this.viewer.mode)
   }
 
   /** Put the hour the sun is actually at back on the dial. */

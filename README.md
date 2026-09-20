@@ -21,9 +21,11 @@ All three are gone. The building is cut from the stones the Basilica publishes
 and the model has recorded since phase 2 — Montjuïc sandstone on the side
 naves, granite down the middle, basalt round the crossing, red porphyry at the
 centre — the ambient indoors is the colour of the light that actually arrives
-through Vila-Grau's glazing, and the app opens on a nine-stop visit that starts
-across the plaza and ends inside. The panel is still there behind `?dev` or the
-P key; it is no longer the first thing anyone sees.
+through Vila-Grau's glazing, and the app opens on the building, from across
+the plaza, with a door to go in by. There was a nine-stop guided visit for a
+while; it asked to be followed, and what a person wants from a cathedral is
+to walk round it and then go in, so it went. The panel is still there behind
+`?dev` or the P key; it is no longer the first thing anyone sees.
 
 
 
@@ -138,8 +140,8 @@ the building anyone is standing in.
 | Doors — a window with no glass in it, placed by the front in front of it | `src/plan/clerestory.ts`, `src/plan/church.ts` |
 | A podium you can climb: the skirt as a flight of steps round the footprint | `src/plan/floor.ts` |
 | The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
-| The visit: four stops outside, five inside, in the order you would walk them | `src/ui/journey.ts` |
-| The interface — a title card, a caption, a rail, and nothing else | `src/ui/chrome.ts` |
+| Two ways of being with a building: an orbit outside, a walk inside, and a door between them | `src/camera/viewer.ts` |
+| The interface — the way in, the way out, what the cursor does here, and the hour | `src/ui/controls.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
 
 ## Running
@@ -159,26 +161,45 @@ npm run build       # typecheck + production build
 
 ## Controls
 
-| | |
+The app opens across the plaza, in an orbit. Inside, it is a walk. The two
+are different relationships with the building and the controls mean
+different things in each — which is what the line at the bottom of the
+screen says, and changes when it changes.
+
+| Outside | |
 | --- | --- |
-| click | capture the pointer for mouse look |
-| W A S D | move; forward follows where you look |
-| space / C | up and down |
-| shift | 4× boost |
-| scroll | movement speed |
-| O | toggle the reference photo |
-| X | difference blend — use this for edge alignment |
-| `[` `]` | photo opacity |
-| drop an image | load it as a reference |
-| ← → | back and on through the visit |
-| F | leave the visit and explore on your own |
-| P | the parameter panel and the readouts (also `?dev` in the address) |
+| drag | turn the building — about whatever was under the cursor |
+| scroll / pinch | come closer, back off |
+| double-click a door, or **Go inside** | fly to it and walk in |
+| Enter | the same, through the door you are looking at |
+| W A S D, space / C | free flight, for the viewer who would rather fly |
+| Escape | back to the opening frame |
+
+| Inside | |
+| --- | --- |
+| drag | look |
+| click the floor | walk there |
+| scroll | a pace or two forward |
+| W A S D | walk; shift to hurry |
+| space / C | rise and settle; the height holds |
+| Escape, or **Step outside** | out through the nearest door |
+
+| Anywhere | |
+| --- | --- |
+| the scrubber | the hour of the day, and the whole model relit for it |
 | L | copy a link to exactly this frame and hour |
+| P | the parameter panel and the readouts (also `?dev` in the address) |
+| O, X, `[` `]` | the reference photo, difference blend, its opacity — with the panel |
+| drop an image | load it as a reference |
 | 1–9, 0, N D G T | the curated viewpoints — **only with the panel open** |
 
-The curated viewpoints are the regression harness rather than the visit: they
-move the camera without telling the caption, so they live behind the same
+The curated viewpoints are the regression harness rather than a visit: they
+move the camera without telling the interface, so they live behind the same
 switch as the panel.
+
+The render adapts its resolution to the machine: it drops device pixels
+while frames are slow and takes them back when they have been fast for a
+while. The readout shows where it currently stands.
 
 On a touch device the left thumb walks — a stick appears where it lands, and
 deflection is proportional — the right thumb looks, and two fingers rise and

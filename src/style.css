@@ -147,16 +147,34 @@ body.dev #hud, body.dev #hint { display: block; }
 }
 .ui button { pointer-events: auto; }
 
-/* The name of the thing, which says itself once and then stops. */
-.title {
-  position: absolute;
+/* The name of the thing, which says itself once and then stops. It is in the
+   page rather than built by the script — see index.html — because it has to
+   be on screen while the script is busy generating the building. */
+#intro {
+  position: fixed;
   left: 30px;
   top: 26px;
   max-width: 24rem;
+  z-index: 11;
+  pointer-events: none;
+  font: 13px/1.6 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
   transition: opacity 1400ms ease;
 }
-.title.gone { opacity: 0; }
-.title h1 {
+#intro.gone { opacity: 0; }
+/* The only thing on a blank page that says the page is alive. Animated on
+   opacity alone, which the compositor can carry while the main thread is
+   busy building the model. */
+#intro .wait {
+  color: var(--gold);
+  will-change: opacity;
+  animation: waiting 1.6s ease-in-out infinite alternate;
+}
+#intro.built .wait { display: none; }
+@keyframes waiting {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+#intro h1 {
   margin: 0;
   font-family: "Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
   font-weight: 400;
@@ -166,7 +184,7 @@ body.dev #hud, body.dev #hint { display: block; }
   color: var(--warm);
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.75);
 }
-.title p {
+#intro p {
   margin: 8px 0 0;
   color: #b8a894;
   font-size: 11.5px;
@@ -335,7 +353,7 @@ body.dev #hud, body.dev #hint { display: block; }
    and the line of controls goes: on a device with no keys and no cursor the
    gestures are the obvious ones, and there is no room to say so. */
 @media (max-width: 820px) {
-  .title { left: 18px; top: 18px; }
+  #intro { left: 18px; top: 18px; }
   .hint-line { display: none; }
   .out { left: 18px; bottom: 74px; }
   .clock { right: 18px; left: 18px; bottom: 20px; justify-content: space-between; }

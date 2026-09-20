@@ -174,7 +174,34 @@ interface Leg {
   /** Shortest way round, precomputed, so a flight never turns the long way. */
   turn: number
   duration: number
+  /**
+   * The way there, when it is not a straight line — a flight that has to go
+   * round or over the building. Sampled by arc length, so the eased progress
+   * along it is an eased speed and not a speed that depends on how the
+   * waypoints happen to be spaced.
+   */
+  path?: THREE.Curve<THREE.Vector3>
+  /**
+   * What to keep looking at on the way. A straight leg turns from its first
+   * aim to its last and nothing in between needs saying; a long arc over the
+   * roofs with the aim interpolated the same way spends its middle looking
+   * at sky. On a path the camera looks at this instead, and only eases onto
+   * its landing aim at the end.
+   */
+  track?: THREE.Vector3
 }
+
+/**
+ * How far outside the massif a flight keeps.
+ *
+ * The massif is an ellipsoid drawn round a bounding box, so it is already
+ * proud of the stone at the middle of every face and tight at the corners —
+ * and a flight path is a curve fitted through points *on* it, which can cut
+ * a little inside between two of them. The margin covers both.
+ */
+const FLIGHT_CLEAR = 10
+/** How far above the roofs a flight that goes over the building passes. */
+const FLIGHT_OVER = 0.2
 
 /** Smootherstep: zero first *and* second derivative at both ends. */
 function ease(t: number): number {
@@ -439,6 +466,38 @@ export class Viewer {
   }
 
   /**
+   * The door a double-click on the building meant.
+   *
+   * The nearest door to the point under the cursor — but only among the
+   * doors that face the camera. A pick on a façade is pulled back toward the
+   * middle of the building (see `along`), and the nearest door to a point
+   * halfway inside the plan can be one in the wall behind, which sent a
+   * double-click on the Nativity porch on a flight round the building to the
+   * far side. Nothing facing, and the caller falls back to the door it would
+   * have offered anyway.
+   */
+  private doorToward(point: THREE.Vector3): Doorway | null {
+    const doors = this.envelope?.doors
+    if (!doors) return null
+    const p = this.rig.position
+    let best: Doorway | null = null
+    let near = Infinity
+    for (const door of doors) {
+      const dx = door.x - p.x
+      const dz = door.z - p.z
+      const range = Math.hypot(dx, dz)
+      if (range < 1e-3) continue
+      if ((-dx * door.nx - dz * door.nz) / range < 0.25) continue
+      const d = Math.hypot(door.x - point.x, door.z - point.z)
+      if (d < near) {
+        near = d
+        best = door
+      }
+    }
+    return best
+  }
+
+  /**
    * Go in.
    *
    * Two legs with a beat between them, rather than one curve. A spline that
@@ -452,6 +511,10 @@ export class Viewer {
   enter(offered?: Doorway | null): void {
     const e = this.envelope
     if (!e) return
+    // A second press while the first flight is still in the air used to
+    // restart it from wherever the camera had got to. One flight at a time;
+    // a click on the stage skips to the end of it if that is what is wanted.
+    if (this.legs.length > 0) return
     // Whichever door was asked for; failing that the one being looked at;
     // failing that the nearest, which is what the keyboard and the corner
     // button come in by when nothing is facing the camera at all.
@@ -487,12 +550,20 @@ export class Viewer {
     // straight line — you and it are on the same side of the same wall. It is
     // not always: the keyboard and the fallback button will both happily
     // offer a door round the far side of the apse, and the line to that one
-    // goes through the building. Over the top, then, rather than through.
-    const over = this.cresting(here, stage)
-    if (over) {
-      const climb = aimAt(over, stage, REGARD_FOV, REGARD_SHIFT)
-      this.legs.push(leg(here, over, this.aim(), climb, approach))
-      this.legs.push(leg(over, stage, climb, atDoor, approach * 0.8))
+    // goes through the building. Round it, then, or over it — see `clearway`,
+    // which used to be one point above the roof and a straight descent from
+    // there to the door, and the straight descent from a point above the
+    // middle of the building to a point sixteen metres from its wall goes
+    // through the towers.
+    const way = this.clearway(here, stage)
+    if (way.length > 0) {
+      const path = this.arc([here, ...way, stage])
+      const length = path.getLength()
+      this.legs.push({
+        ...leg(here, stage, this.aim(), atDoor, THREE.MathUtils.clamp(length / 60, 1.6, 5)),
+        path,
+        track: lookUp,
+      })
     } else {
       this.legs.push(leg(here, stage, this.aim(), atDoor, approach))
     }
@@ -503,30 +574,119 @@ export class Viewer {
     this.onTravel?.(true)
   }
 
+  /** The massif with the flight's margin round it. */
+  private flightMassif(): Massif {
+    const m = this.massif
+    return {
+      centre: m.centre,
+      radii: new THREE.Vector3(
+        m.radii.x + FLIGHT_CLEAR,
+        m.radii.y * (1 + FLIGHT_OVER) + FLIGHT_CLEAR,
+        m.radii.z + FLIGHT_CLEAR,
+      ),
+    }
+  }
+
   /**
-   * A point to clear the building by, or null if the way is already clear.
+   * Points to fly by so that a straight line becomes a way round.
    *
-   * Only the crude question is asked — does the straight line pass through
-   * the massif at all — because the answer only has to be safe, and there is
-   * nothing above a cathedral to be in the way.
+   * The line from here to there is tested against the massif; where it
+   * passes through, the middle of the part that is inside is pushed straight
+   * out to the surface, and the two halves either side of that point are
+   * asked the same question. A few rounds of this and the polyline hugs the
+   * outside of the building, over the top if the line went through the
+   * middle and round the flank if it clipped a corner. Empty when the
+   * straight line was already clear, which is nearly always.
    */
-  private cresting(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 | null {
+  private clearway(from: THREE.Vector3, to: THREE.Vector3, depth = 0): THREE.Vector3[] {
+    if (depth > 4) return []
     const span = to.clone().sub(from)
     const length = span.length()
-    if (length < 1) return null
-    const pair = roots(from, span.clone().divideScalar(length), this.massif)
-    if (!pair || pair[1] <= 0 || pair[0] >= length) return null
-    return new THREE.Vector3(
-      (from.x + to.x) / 2,
-      this.massif.centre.y + this.massif.radii.y + 25,
-      (from.z + to.z) / 2,
+    if (length < 1) return []
+    const m = this.flightMassif()
+    const pair = roots(from, span.clone().divideScalar(length), m)
+    if (!pair || pair[1] <= 0 || pair[0] >= length) return []
+    const t = (Math.max(pair[0], 0) + Math.min(pair[1], length)) / 2
+    const mid = from.clone().addScaledVector(span, t / length)
+    const out = this.pushOut(mid, m)
+    return [...this.clearway(from, out, depth + 1), out, ...this.clearway(out, to, depth + 1)]
+  }
+
+  /**
+   * The nearest point on the outside of the massif, leaning upward.
+   *
+   * Radially, in the ellipsoid's own frame, because that is the direction
+   * that gets out of it quickest. The lean is the one bit of taste in it: the
+   * bottom of the massif is under the pavement, so a point pushed straight
+   * down would be in the ground, and a flight that clears a cathedral
+   * clears it over the roofs and not by tunnelling.
+   */
+  private pushOut(point: THREE.Vector3, m: Massif): THREE.Vector3 {
+    const q = new THREE.Vector3(
+      (point.x - m.centre.x) / m.radii.x,
+      (point.y - m.centre.y) / m.radii.y,
+      (point.z - m.centre.z) / m.radii.z,
     )
+    if (q.lengthSq() < 1e-6) q.set(0, 1, 0)
+    q.y = Math.max(q.y, 0.2)
+    q.normalize().multiplyScalar(1.03)
+    const out = new THREE.Vector3(
+      m.centre.x + q.x * m.radii.x,
+      m.centre.y + q.y * m.radii.y,
+      m.centre.z + q.z * m.radii.z,
+    )
+    out.y = Math.max(out.y, this.lowestAt(out.x, out.z) + 4)
+    return out
+  }
+
+  /**
+   * A smooth curve through the waypoints, checked against the massif.
+   *
+   * A spline through points on the surface of a convex body bows a little
+   * inside it between them; the margin absorbs most of that, and any sample
+   * that still lands inside is pushed out and added to the control points
+   * for a second fit. Two rounds have always been enough.
+   */
+  private arc(points: THREE.Vector3[]): THREE.CatmullRomCurve3 {
+    const m = this.flightMassif()
+    let control = points
+    let curve = new THREE.CatmullRomCurve3(control, false, 'centripetal')
+    for (let round = 0; round < 2; round++) {
+      const samples = curve.getSpacedPoints(48)
+      let clean = true
+      const next: THREE.Vector3[] = [control[0]!]
+      for (let i = 1; i < samples.length - 1; i++) {
+        const s = samples[i]!
+        const q = Math.hypot(
+          (s.x - m.centre.x) / m.radii.x,
+          (s.y - m.centre.y) / m.radii.y,
+          (s.z - m.centre.z) / m.radii.z,
+        )
+        if (q < 1) {
+          clean = false
+          next.push(this.pushOut(s, m))
+        }
+      }
+      if (clean) break
+      next.push(control[control.length - 1]!)
+      // The old waypoints are kept as well, so the fit only ever gains
+      // constraints. Sorted along the original curve so the polyline does not
+      // double back.
+      control = [...control.slice(1, -1), ...next.slice(1, -1)]
+        .map((p) => ({ p, at: nearestParameter(curve, p) }))
+        .sort((a, b) => a.at - b.at)
+        .map((entry) => entry.p)
+      control = [points[0]!, ...control, points[points.length - 1]!]
+      curve = new THREE.CatmullRomCurve3(control, false, 'centripetal')
+    }
+    return curve
   }
 
   /** And come back out, by the same arithmetic in reverse. */
   stepOut(): void {
     const e = this.envelope
     if (!e) return
+    if (this.legs.length > 0) return
     const here = this.rig.position.clone()
     const door = nearestDoor(e.doors, here)
     if (!door) return
@@ -577,9 +737,14 @@ export class Viewer {
     const current = this.legs[0]!
     this.legAt += dt
     const t = ease(this.legAt / current.duration)
-    this.rig.position.lerpVectors(current.from, current.to, t)
-    this.rig.yaw = current.aimFrom.yaw + current.turn * t
-    this.rig.pitch = THREE.MathUtils.lerp(current.aimFrom.pitch, current.aimTo.pitch, t)
+    if (current.path) current.path.getPointAt(t, this.rig.position)
+    else this.rig.position.lerpVectors(current.from, current.to, t)
+    if (current.track) {
+      this.aimAlong(current, t)
+    } else {
+      this.rig.yaw = current.aimFrom.yaw + current.turn * t
+      this.rig.pitch = THREE.MathUtils.lerp(current.aimFrom.pitch, current.aimTo.pitch, t)
+    }
     this.rig.fov = THREE.MathUtils.lerp(current.aimFrom.fov, current.aimTo.fov, t)
     this.rig.shiftCorrection = THREE.MathUtils.lerp(current.aimFrom.shift, current.aimTo.shift, t)
     if (this.legAt < current.duration) return
@@ -589,6 +754,25 @@ export class Viewer {
     if (this.legs.length > 0) return
     this.land(current)
     this.onTravel?.(false)
+  }
+
+  /**
+   * Where to look on a leg that has something to look at.
+   *
+   * Off the starting aim and onto the tracked point over the first third,
+   * holding it through the middle, and off it onto the landing aim over the
+   * last quarter. Both blends are on the shortest way round.
+   */
+  private aimAlong(current: Leg, t: number): void {
+    const look = aimAt(this.rig.position, current.track!, 0, 0)
+    const onto = THREE.MathUtils.smoothstep(t, 0, 0.3)
+    const off = THREE.MathUtils.smoothstep(t, 0.75, 1)
+    let yaw = current.aimFrom.yaw + shortestTurn(current.aimFrom.yaw, look.yaw) * onto
+    let pitch = THREE.MathUtils.lerp(current.aimFrom.pitch, look.pitch, onto)
+    yaw += shortestTurn(yaw, current.aimTo.yaw) * off
+    pitch = THREE.MathUtils.lerp(pitch, current.aimTo.pitch, off)
+    this.rig.yaw = yaw
+    this.rig.pitch = pitch
   }
 
   /** Settle into whichever relation the flight was heading for. */
@@ -1017,6 +1201,12 @@ export class Viewer {
     const el = this.element
 
     el.addEventListener('pointerdown', (event) => {
+      // A press on one of the controls drawn over the stage is theirs. Taking
+      // the pointer here as well would capture it, and a captured pointer's
+      // release is retargeted to the stage — so the button under the finger
+      // never received its click, and the one thing on screen asking to be
+      // pressed did nothing when it was.
+      if (fromControl(event)) return
       // Capture is a nicety — the release below is bound to the same element
       // and fires anyway — and it throws outright on a pointer id that is no
       // longer active, which synthetic events and some pen hardware manage.
@@ -1091,8 +1281,9 @@ export class Viewer {
 
     el.addEventListener('dblclick', (event) => {
       if (this.relation !== 'regard' || this.legs.length > 0) return
+      if (fromControl(event)) return
       const hit = this.pick(event.clientX, event.clientY)
-      this.enter(hit ? nearestDoor(this.envelope?.doors ?? [], hit) : null)
+      this.enter(hit ? this.doorToward(hit) : null)
     })
 
     el.addEventListener(
@@ -1216,6 +1407,27 @@ function leg(
     turn: shortestTurn(aimFrom.yaw, aimTo.yaw),
     duration,
   }
+}
+
+/** Whether a pointer event began on a control drawn over the stage. */
+function fromControl(event: Event): boolean {
+  const target = event.target
+  return target instanceof Element && target.closest('button, input, select, textarea, a') !== null
+}
+
+/** Where along a curve a point is nearest to, by sampling. Good enough to sort by. */
+function nearestParameter(curve: THREE.Curve<THREE.Vector3>, point: THREE.Vector3): number {
+  const samples = curve.getSpacedPoints(64)
+  let best = 0
+  let near = Infinity
+  for (let i = 0; i < samples.length; i++) {
+    const d = samples[i]!.distanceToSquared(point)
+    if (d < near) {
+      near = d
+      best = i / (samples.length - 1)
+    }
+  }
+  return best
 }
 
 function nearestDoor(doors: readonly Doorway[], point: THREE.Vector3): Doorway | null {

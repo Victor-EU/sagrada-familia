@@ -215,6 +215,7 @@ uniform float uGlow;
 uniform float uFront;
 uniform float uBlaze;
 uniform float uFocus;
+uniform vec3 uCentre;
 varying vec3 vPaneColor;
 varying vec3 vPaneNormal;
 varying vec3 vPaneWorld;
@@ -223,6 +224,14 @@ void main() {
   vec3 V = normalize( cameraPosition - vPaneWorld );
   float towardSun = dot( N, uSunDirection );
   float towardEye = dot( N, V );
+
+  // Only the room side of a window has the sky behind it. From the plaza a
+  // window has a building behind it, and the sun being on the far side of
+  // that building does not light it — but the test below cannot tell the two
+  // apart, and lit every pane on the shaded front of the church as if it were
+  // being looked at from the nave. The room side is the side the middle of
+  // the building is on.
+  float roomSide = step( 0.0, dot( N, uCentre - vPaneWorld ) * towardEye );
 
   // Opposite signs mean the sun is behind the pane from where we stand.
   // Fading by |towardSun| stops a grazing sun from lighting the whole window.
@@ -247,7 +256,15 @@ void main() {
   // Looking along the ray that continues into the disc is the only direction
   // that sees it, which costs one dot product and gives both at once.
   float solar = pow( max( dot( - V, uSunDirection ), 0.0 ), uFocus );
-  float gain = mix( uFront, uGlow + uBlaze * solar, backlit );
+  // From outside, a window in the shade is a dark thing: the colour it shows
+  // is the sun through it or the sky off it, and on the front the sun has
+  // left it is neither. Left at the sunlit value, the glazing on a shaded
+  // front was the brightest thing on it and read as lit from within. Only
+  // outside — a window seen from the room is the sky, whichever way it faces.
+  vec3 faceToEye = towardEye < 0.0 ? - N : N;
+  float sunOnFace = max( dot( faceToEye, uSunDirection ), 0.0 );
+  float front = uFront * mix( mix( 0.35, 1.0, sunOnFace ), 1.0, roomSide );
+  float gain = mix( front, uGlow + uBlaze * solar, backlit * roomSide );
 
   gl_FragColor = vec4( vPaneColor * gain, 1.0 );
   #include <tonemapping_fragment>
@@ -262,6 +279,8 @@ export interface GlassMaterial extends THREE.ShaderMaterial {
     uFront: { value: number }
     uBlaze: { value: number }
     uFocus: { value: number }
+    /** The middle of the building, which is the side of a pane the room is on. */
+    uCentre: { value: THREE.Vector3 }
   }
 }
 
@@ -269,6 +288,7 @@ export function glassMaterial(glow = 1.7): GlassMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       uSunDirection: { value: new THREE.Vector3(0, 1, 0) },
+      uCentre: { value: new THREE.Vector3(0, 20, 0) },
       uGlow: { value: glow },
       // Seen from the sunlit side a window is darker than the stone around it.
       uFront: { value: 0.22 },

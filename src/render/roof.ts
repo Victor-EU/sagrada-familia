@@ -47,6 +47,11 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js'
 const RESOLUTION = 1024
 /** How far a hole in a roof may be and still have a room under it, metres. */
 const CLOSE = 4
+/**
+ * Pieces that stand over open air rather than over a room, by the name the
+ * field gives their meshes — see plan/shell.ts, where the porches are built.
+ */
+const OPEN_AIR = /^porch\b/
 
 const HEIGHT_FRAGMENT = /* glsl */ `
 precision highp float;
@@ -236,10 +241,23 @@ export class RoofMap {
 
     // Opaque geometry only. Glass is vertical and roofs nothing.
     this.camera.layers.set(0)
+    // And a porch roofs nothing either: it is a hood over a door, open on
+    // three sides, and the air under it is the plaza's. Recorded as a room,
+    // that air filled with lit dust the moment a low sun reached under the
+    // hood — a bright dithered block on the Nativity front every evening,
+    // and the only thing in the frame that was not stone or sky.
+    const hidden: THREE.Object3D[] = []
+    scene.traverse((node) => {
+      if (node.visible && OPEN_AIR.test(node.name)) {
+        node.visible = false
+        hidden.push(node)
+      }
+    })
     scene.overrideMaterial = this.depthMaterial
     renderer.setRenderTarget(this.depthTarget)
     renderer.setClearColor(0x000000, 1)
     renderer.render(scene, this.camera)
+    for (const node of hidden) node.visible = true
 
     scene.overrideMaterial = previousOverride
     scene.background = previousBackground

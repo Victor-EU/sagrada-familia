@@ -11,6 +11,15 @@
       <img id="overlay" alt="" />
       <div id="toast"></div>
     </div>
+    <!-- The name, in the page itself so it is on screen while the building is
+         being generated — which takes seconds, during which the script has the
+         thread and can paint nothing. The last line goes when the first frame
+         does, and the rest fades a few seconds after. -->
+    <div id="intro">
+      <h1>Sagrada Família</h1>
+      <p>Barcelona &middot; begun 1882 &middot; every surface generated from Gaudí&rsquo;s own rules, lit by the real sun</p>
+      <p class="wait">Cutting the stone &middot; a few seconds</p>
+    </div>
     <div id="hud"></div>
     <div id="hint">
       <strong>P</strong> closes this panel · <strong>L</strong> copies a link to this moment ·

@@ -35,6 +35,23 @@ const canvas = document.querySelector<HTMLCanvasElement>('#view')!
 const overlayImg = document.querySelector<HTMLImageElement>('#overlay')!
 const stageEl = document.querySelector<HTMLDivElement>('#stage')!
 const hudEl = document.querySelector<HTMLDivElement>('#hud')!
+const introEl = document.querySelector<HTMLDivElement>('#intro')!
+
+/**
+ * Let the page paint before the building is generated.
+ *
+ * Generating the model takes seconds, all of them on this thread, and a
+ * module script runs before the first paint — so the first thing anybody saw
+ * of this app was nothing at all for ten seconds, and the name and the line
+ * about the wait in index.html were never drawn until they were no longer
+ * true. One frame's grace here and they are on screen for the whole of it.
+ */
+performance.mark('boot')
+await new Promise<void>((resolve) =>
+  // Two frames, not one: the first callback runs before that frame is
+  // painted, and it is the frame after that which is certain to have been.
+  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
+)
 
 /**
  * Whether this is the instrument or the building.
@@ -61,6 +78,7 @@ const FUNNEL_BASE_HEIGHT = 2.6
 const FUNNEL_OFFSET_X = 16
 
 const stage = createStage(canvas)
+performance.mark('stage')
 /**
  * The camera, and the two ways of being with a building it offers — see
  * camera/viewer.ts. Bound to the stage rather than the canvas so that screen
@@ -396,7 +414,8 @@ window.addEventListener('keydown', (event) => {
 
   switch (event.key) {
     case 'Escape':
-      if (viewer.mode === 'inhabit') viewer.stepOut()
+      if (viewer.travelling) viewer.skip()
+      else if (viewer.mode === 'inhabit') viewer.stepOut()
       else viewer.home()
       return
     case 'Enter':
@@ -420,6 +439,7 @@ window.addEventListener('keydown', (event) => {
 })
 
 rebuild()
+performance.mark('built')
 applyRender()
 applySun()
 setDev(dev)
@@ -505,12 +525,62 @@ window.harness = {
   shot,
 }
 
-const clock = new THREE.Clock()
+/**
+ * Pixels per CSS pixel, moved to hold the frame rate.
+ *
+ * Half-resolution occlusion, the shafts, bloom and two shadow maps at two
+ * device pixels per CSS pixel is three million pixels a frame, and on a
+ * laptop that was twelve frames a second across the plaza — an orbit that
+ * stutters under the hand is not something to admire a building through.
+ * Nothing about the model is cheaper to give up than pixels the eye cannot
+ * count, so the ratio steps down while frames are slow and creeps back up
+ * only when they have been fast for a good while. Both thresholds have room
+ * between them, or a frame that is cheap because it is small would be made
+ * large because it is cheap, and back, every few seconds.
+ */
+const RATIO_CEILING = Math.min(window.devicePixelRatio || 1, 2)
+const RATIO_FLOOR = 1
+const RATIO_STEP = 0.25
+/** Slower than this on average, for this long, and the ratio comes down. */
+const SLOW_FRAME = 1 / 40
+const SLOW_FOR = 1
+/** Faster than this on average, for this long, and it goes back up. */
+const QUICK_FRAME = 1 / 72
+const QUICK_FOR = 6
+/** How much of the average one frame is. Individual frames are too noisy to act on. */
+const AVERAGE_BLEND = 0.08
+let ratio = RATIO_CEILING
+let averageFrame = 1 / 60
+let slowFor = 0
+let quickFor = 0
+
+function pace(dt: number): void {
+  averageFrame += (dt - averageFrame) * AVERAGE_BLEND
+  slowFor = averageFrame > SLOW_FRAME ? slowFor + dt : 0
+  quickFor = averageFrame < QUICK_FRAME ? quickFor + dt : 0
+  let next = ratio
+  if (slowFor >= SLOW_FOR && ratio > RATIO_FLOOR) next = Math.max(RATIO_FLOOR, ratio - RATIO_STEP)
+  else if (quickFor >= QUICK_FOR && ratio < RATIO_CEILING)
+    next = Math.min(RATIO_CEILING, ratio + RATIO_STEP)
+  if (next === ratio) return
+  // The average starts again from the boundary it just crossed, so the next
+  // step is earned by the new size rather than inherited from the old one.
+  averageFrame = next < ratio ? SLOW_FRAME : QUICK_FRAME
+  ratio = next
+  slowFor = 0
+  quickFor = 0
+  stage.setPixelRatio(ratio)
+  layout()
+}
+
+const timer = new THREE.Timer()
 let hudAt = 0
+let painted = false
 
 function frame(): void {
   requestAnimationFrame(frame)
-  const dt = Math.min(clock.getDelta(), 0.1)
+  timer.update()
+  const dt = Math.min(timer.getDelta(), 0.1)
 
   viewer.update(dt)
   // The pupil, which the viewer moves as it crosses the threshold, and which
@@ -518,6 +588,29 @@ function frame(): void {
   stage.setExposure(render.exposure * viewer.eyeStop)
   stage.render()
   controls.update()
+
+  if (!painted) {
+    // The first frame is drawn. The wait line goes, the name stays a few
+    // seconds longer, and the controls start saying what the cursor does —
+    // none of which could be timed from when the script started, because
+    // the script started ten seconds before there was anything to see.
+    painted = true
+    performance.mark('first-frame')
+    introEl.classList.add('built')
+    window.setTimeout(() => introEl.classList.add('gone'), 7000)
+    controls.begin()
+    const at = (name: string): number =>
+      Math.round(performance.getEntriesByName(name, 'mark')[0]?.startTime ?? 0)
+    console.debug(
+      `sagrada: stage ${at('stage') - at('boot')} ms, ` +
+        `model ${at('built') - at('stage')} ms, ` +
+        `first frame ${at('first-frame') - at('built')} ms after that`,
+    )
+  } else {
+    // Not the first frame: that one compiles every shader in the building
+    // and says nothing about the frames that follow.
+    pace(dt)
+  }
 
   const now = performance.now()
   link.update(now)
@@ -549,7 +642,8 @@ function frame(): void {
         `${viewer.height.toFixed(1)} m above the floor  ` +
         `eye ${(render.exposure * viewer.eyeStop).toFixed(2)}`,
       `mesh  ${Math.round(tris).toLocaleString()} tris  ${draws} draws  ` +
-        `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
+        `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps  ` +
+        `${ratio.toFixed(2)}× pixels`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
         `${cm.polygonCount}×${cm.polygonSides}-gon`,
       `tree  ${nave.levels} levels  ${plan.tree.branches} branches  taper ${plan.tree.taper}  ` +

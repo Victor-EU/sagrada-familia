@@ -95,6 +95,13 @@ export interface Stage {
    * left alone and only the glazing and the sun spill.
    */
   setBloom(options: { strength: number; radius: number; threshold: number }): void
+  /**
+   * Device pixels per CSS pixel. Followed by a `resize`, because every
+   * buffer in the chain is sized from it. The frame loop moves this to keep
+   * the frame rate up — see `pace` in main.ts.
+   */
+  setPixelRatio(ratio: number): void
+  readonly pixelRatio: number
   dispose(): void
 }
 
@@ -446,6 +453,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setModelBounds(box, ceiling) {
       sun.setBounds(box)
       roof.setBounds(box, ceiling)
+      box.getCenter(glass.uniforms.uCentre.value)
       // The glazing's own rig does not care where the sun is, only where the
       // glass is — so it runs on a rebuild and on nothing else.
       wash.setBounds(box, ceiling)
@@ -501,6 +509,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     },
     setExposure(value) {
       renderer.toneMappingExposure = value
+    },
+    setPixelRatio(ratio) {
+      renderer.setPixelRatio(ratio)
+    },
+    get pixelRatio() {
+      return renderer.getPixelRatio()
     },
     setGroundLevel(y) {
       // The plaza sits at the foot of the podium, so the church stands on

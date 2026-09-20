@@ -471,8 +471,15 @@ vec3 sfSunlight( const in vec3 shadingNormal ) {
   // Slope-scaled offset along the light direction. The rig is orthographic, so
   // stepping toward the sun in world space is exactly a depth bias, and
   // scaling it by grazing angle is what keeps the twisted columns clean.
+  // The quadratic covers ordinary slopes. The sixth power is for the plaza
+  // under a sun ten degrees up: a texel of the map lands on a plane that
+  // shallow as a metre-long footprint, and the plane's own depth changes by
+  // more than the bias across that footprint, which came out as stripes of
+  // shadow across the whole ground. The high power leaves everything under
+  // forty degrees of slope alone.
   float slope = 1.0 - facing;
-  float grazing = uSunOffset * ( 1.0 + 6.0 * slope * slope );
+  float slopeScale = 1.0 + 6.0 * slope * slope + 24.0 * pow( slope, 6.0 );
+  float grazing = uSunOffset * slopeScale;
 
   vec4 clip = uSunMatrix * vec4( vSunWorld + uSunDirWorld * grazing, 1.0 );
   vec3 coord = clip.xyz / clip.w * 0.5 + 0.5;
@@ -487,7 +494,7 @@ vec3 sfSunlight( const in vec3 shadingNormal ) {
   float lit = -1.0;
   if ( uSunNearOn > 0.5 ) {
     vec4 nearClip = uSunNearMatrix *
-      vec4( vSunWorld + uSunDirWorld * ( uSunNearOffset * ( 1.0 + 6.0 * slope * slope ) ), 1.0 );
+      vec4( vSunWorld + uSunDirWorld * ( uSunNearOffset * slopeScale ), 1.0 );
     vec3 nearCoord = nearClip.xyz / nearClip.w * 0.5 + 0.5;
     float edge = min( min( nearCoord.x, 1.0 - nearCoord.x ), min( nearCoord.y, 1.0 - nearCoord.y ) );
     float blend = nearCoord.z <= 1.0 ? smoothstep( 0.005, 0.045, edge ) : 0.0;
