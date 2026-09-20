@@ -17,6 +17,7 @@ import { PhotoOverlay } from './dev/overlay.ts'
 import { censusFrame, type FrameCensus } from './dev/probe.ts'
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
+import { ShareLink } from './share.ts'
 import {
   BUILDING_BEARING_DEG,
   barcelonaTime,
@@ -229,9 +230,30 @@ function goTo(index: number): void {
   if (viewpoint) applyViewpoint(viewpoint, cam, sun, applySun)
 }
 
-buildPanel({
+/**
+ * The address bar is the save format.
+ *
+ * Nothing about this building's light is authored, so a moment of it is
+ * entirely described by where the camera stands and what the clock says —
+ * see share.ts.
+ */
+const link = new ShareLink(
+  () => ({ camera: cam.getState(), day: sun.dayOfYear, hour: sun.hour }),
+  (moment) => {
+    cam.setState(moment.camera)
+    sun.dayOfYear = moment.day
+    sun.hour = moment.hour
+    applySun()
+    cam.refresh()
+    panel.refresh()
+  },
+)
+link.bind()
+
+const panel = buildPanel({
   plan, hyper, view, render, sun, cam, overlay,
   rebuild, applyView, applyRender, applySun, goTo,
+  copyLink: () => void link.copy(),
 })
 
 // Number and letter keys jump to the curated views, which is how the same
@@ -239,6 +261,12 @@ buildPanel({
 // needed the outside of the building in the harness.
 window.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return
+  // A panel field has the focus: these are characters, not shortcuts.
+  if (event.target instanceof HTMLInputElement) return
+  if (event.key === 'l' || event.key === 'L') {
+    void link.copy()
+    return
+  }
   const index = VIEWPOINTS.findIndex((v) => v.key === event.key)
   if (index >= 0) goTo(index)
 })
@@ -248,8 +276,9 @@ applyRender()
 applySun()
 layout()
 
-// Open standing in the bay looking up, which is the whole point of the space.
-goTo(0)
+// A link decides where we open, and otherwise we open standing in the bay
+// looking up, which is the whole point of the space.
+if (!link.restore()) goTo(0)
 
 // Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
@@ -306,6 +335,7 @@ function frame(): void {
   reticle.classList.toggle('on', cam.isLocked)
 
   const now = performance.now()
+  link.update(now)
   if (now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position
