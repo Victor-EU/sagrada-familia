@@ -5,13 +5,19 @@ import { buildPavement } from './floor.ts'
 import { MODULE } from './module.ts'
 import {
   buildArchFringe,
-  buildCrust,
   buildCypress,
   buildFrontBridge,
   buildHood,
   buildPassionPortico,
 } from '../geometry/portico.ts'
 import { buildFruit, buildGable, buildGargoyle } from '../geometry/roofwork.ts'
+import {
+  buildCresting,
+  buildFigure,
+  buildFoliage,
+  buildNicheCanopy,
+} from '../geometry/statuary.ts'
+import { mulberry32 } from '../geometry/glass.ts'
 import { mergeOrEmpty } from '../geometry/window.ts'
 import { named, type Parts } from './parts.ts'
 import { FRUIT_PALETTE, type StoneName } from '../render/materials.ts'
@@ -211,7 +217,8 @@ type FrontKind = 'nativity' | 'passion' | 'glory'
  *
  * Three fronts, three dates, three colours, and they stand in the same frame
  * from anywhere on the plaza: Gaudí's Nativity finished in 1930 and gone
- * nearly black, Subirachs' Passion of the nineteen sixties in pale matched
+ * brown — warm where everything newer is grey, and black only in the
+ * crevices — Subirachs' Passion of the nineteen sixties in pale matched
  * stone, and a Glory end nobody has seen yet, which gets the newest stone
  * there is. Given one albedo for all three the building reads as having been
  * made at once — see the fabrics in render/materials.ts.
@@ -219,8 +226,8 @@ type FrontKind = 'nativity' | 'passion' | 'glory'
  * The porch is not always its wall's stone. The Passion portico is
  * deliberately *not* the colour of the front behind it — it is the white
  * stone that throws the one hard edge on that façade — and the Nativity's
- * hoods and encrustation are the same blackened fabric as the wall they grow
- * out of.
+ * hoods, sculpture and encrustation are the same weathered fabric as the
+ * wall they grow out of.
  */
 const FRONT_STONE: Record<FrontKind, { wall: StoneName; porch: StoneName }> = {
   nativity: { wall: 'nativity', porch: 'nativity' },
@@ -618,23 +625,199 @@ export function buildShell(
         hood.translate(bay.centre, 0, 0)
         porch.push(hood)
       }
-      // The piers are the stone that stands at the front plane; the bays
-      // behind them are a metre back and are somebody else's surface.
-      // Denser and deeper than it was, and stopped well below the top.
-      // What that front is from across the plaza is a stone cliff that has
-      // been rained on for a century, thickest round the portals and running
-      // out as it climbs — not an even rash over the whole height, which is
-      // what an unweighted scatter gives and what this looked like.
-      porch.push(
-        buildCrust({
-          bands: pierLines(width).map((centre) => ({ centre, width: s.pier })),
-          from: 2,
-          to: s.portalHeight + s.gable * 1.4,
-          depth: 0,
-          count: 900,
-          seed: 19,
-        }),
-      )
+
+      /**
+       * The planes this front is built out of, written down once.
+       *
+       * Everything below is placed in the porch's own frame, where the pier
+       * faces are z = 0 and every other surface on the front is set back
+       * from them by a fixed amount the slabs above already chose. A figure
+       * given the wrong one of these is a figure standing in mid-air a metre
+       * clear of the building — which is the failure the first encrustation
+       * fell into, and the reason it was confined to the piers and allowed
+       * nowhere else. Named here, the rest of the front is open to it.
+       */
+      const tympanumFace = -(s.archivolts - 1) * s.ring
+      const mullionFace = -s.relief * 0.6
+      const courseFace = -s.relief * 0.45
+      const gableFace = 0.5
+      const piers = pierLines(width)
+      /** How far out of the wall the stone is at this point across the front. */
+      const faceAt = (x: number): number =>
+        piers.some((line) => Math.abs(x - line) < s.pier / 2) ? 0 : mullionFace
+
+      /**
+       * One figure, on its bracket, under its hood.
+       *
+       * Girth is tied to height rather than given, because the one thing
+       * that gives away a figure on a building is being the wrong shape for
+       * its size: a two-metre saint and a three-metre saint are the same
+       * proportion, and the model has no business having an opinion about
+       * which. A seventh of the height at the hem puts the shoulders at
+       * about a fifth, which is a person in a robe.
+       */
+      const figure = (x: number, y: number, height: number, depth: number, hood = true): void => {
+        const girth = height * 0.155
+        const body = buildFigure({ height, girth })
+        // Well clear of its own bracket. A figure at the same depth as the
+        // hood over it stands *behind* that hood's eaves and is lost in its
+        // shade from every angle but straight on.
+        body.translate(x, y, depth + girth * 1.5)
+        porch.push(body)
+        if (!hood) return
+        const canopy = buildNicheCanopy({ span: girth * 2.4, reach: girth * 2.1, rise: height })
+        canopy.translate(x, y, depth)
+        porch.push(canopy)
+      }
+
+      /** A cluster of growth, each one a different cluster. */
+      let sown = 0
+      const foliage = (x: number, y: number, spread: number, depth: number): void => {
+        const cluster = buildFoliage({
+          spread,
+          reach: spread * 0.85,
+          lobes: 4 + (sown % 3),
+          seed: 41 + sown * 13,
+        })
+        sown += 1
+        cluster.translate(x, y, depth)
+        porch.push(cluster)
+      }
+
+      const clearSpan = MODULE - s.pier
+      const archRise = clearSpan * 1.15
+
+      for (const bay of portals(s.pier, width)) {
+        /*
+         * Two registers of figures on the piers either side of the way in.
+         *
+         * These are the nearest sculpture on the building to anybody who has
+         * walked up to it, and the only pieces of it whose scale a visitor
+         * can check against themselves — which is the whole reason for
+         * putting the lower register at four metres rather than somewhere
+         * more flattering. A front whose carving all begins above the
+         * fifteenth metre is a front seen from a helicopter.
+         */
+        for (const side of [-1, 1]) {
+          const x = bay.centre + side * (clearSpan / 2 + s.pier * 0.3)
+          figure(x, 4.2, 2.6, 0.12)
+          figure(x, 8.6, 2.4, 0.12)
+        }
+
+        /*
+         * Growth up both sides of the portal head, set out along the soffit.
+         *
+         * The arch is where this front is thickest with carving and the one
+         * curve on it with a shadow under it at every hour, so a cluster
+         * hung just outside the soffit is in shade from above and lit from
+         * the side all day. Following the same `(1 - t)^0.55` the archivolts
+         * were cut to, because growth that ignores the arch it is on reads
+         * as a rash rather than as an order.
+         */
+        for (let i = 0; i < 7; i++) {
+          const t = 0.06 + (i / 6) * 0.86
+          const dx = (clearSpan / 2) * Math.pow(1 - t, 0.55) + 1.05
+          for (const side of [-1, 1]) {
+            foliage(bay.centre + side * dx, springing + archRise * t, 0.95, 0.18)
+          }
+        }
+
+        /*
+         * The tympanum group: three standing on the innermost ring's face,
+         * two archivolts deep, where the sun never reaches at any hour. A
+         * figure in that much shade is a silhouette and nothing else, which
+         * is both what the photographs show and all this can honestly say —
+         * so they get no hoods, only the arch they are already under.
+         */
+        for (const dx of [-1.25, 0, 1.25]) {
+          figure(bay.centre + dx, 16.7, dx === 0 ? 2.3 : 1.9, tympanumFace, false)
+        }
+        foliage(bay.centre, 19.4, 1.1, tympanumFace)
+
+        /*
+         * Crockets up both rakes of the hood.
+         *
+         * The hoods were three clean triangles and at any distance that is
+         * what they stayed — the one shape on this front with a hard
+         * straight edge, and the real ones have none. A crocket every metre
+         * and a half up the rake is what a Gothic gable is for: it breaks
+         * the line against whatever is behind it, and every one of them has
+         * its own small shadow on the slope below.
+         */
+        const hoodSpan = (MODULE - s.pier + 1.6) / 2
+        const hoodSill = s.portalHeight * 0.86
+        for (let i = 0; i < 5; i++) {
+          const t = 0.14 + (i / 4) * 0.74
+          for (const side of [-1, 1]) {
+            foliage(
+              bay.centre + side * hoodSpan * (1 - t),
+              hoodSill + 5.4 * t,
+              0.72,
+              s.porchReach * 0.52 * (1 - t * 0.65),
+            )
+          }
+        }
+
+        // On the gable over each portal: one low on each slope, where the
+        // stone is still wide enough to carry it, and a crown at the apex.
+        for (const side of [-1, 1]) figure(bay.centre + side * 2.0, 20.4, 2.0, gableFace, false)
+        foliage(bay.centre, 25.4, 1.2, gableFace)
+      }
+
+      /*
+       * The upper wall, which was eight mullions and two flat bands.
+       *
+       * Above the gables this front had nothing on it at all — the part of
+       * the façade that fills most of the frame from anywhere on the plaza
+       * was the one part with no relief above a metre. Two registers of
+       * figures standing on the string courses fix that for the price of the
+       * old encrustation, and each one stands at whatever depth the stone
+       * behind it happens to be at, so the ones over a pier come forward and
+       * the ones over a bay stay back — which is the stepping the front
+       * already has and never showed.
+       */
+      const firstCourse = s.portalHeight + s.gable + 1.2
+      const secondCourse = (firstCourse + top) / 2
+      for (let x = -width / 2 + 1.25; x < width / 2; x += 2.5) {
+        figure(x, firstCourse + 0.9, 2.3, faceAt(x) + 0.12)
+        figure(x, secondCourse + 0.9, 2.1, faceAt(x) + 0.12, false)
+        foliage(x, secondCourse - 1.6, 0.8, faceAt(x) + 0.1)
+      }
+
+      /*
+       * Cresting on both string courses and the cornice.
+       *
+       * The horizontals were the last straight lines left on this front, and
+       * a hundred-metre pencil line is the one thing a Gaudí façade never
+       * has. See `buildCresting`.
+       */
+      for (const [y, depth] of [
+        [firstCourse + 0.9, courseFace + 0.2],
+        [secondCourse + 0.9, courseFace + 0.2],
+        [top, 0.55],
+      ] as const) {
+        porch.push(buildCresting({ width, count: 44, rise: 1.1, reach: depth }).translate(0, y, 0))
+      }
+
+      /*
+       * And the growth itself, at the size it is actually carved.
+       *
+       * What stood here was nine hundred spheres of a quarter of a metre on
+       * the pier faces. A quarter of a metre is below the size any of this
+       * is seen at: past forty metres they average into one flat tone and
+       * the front goes back to being a wall, which is exactly what it did.
+       * Two hundred and sixty sprays of about a metre, thickest at the
+       * portals and thinning as they climb, cost half the triangles and are
+       * the first thing on this front that reads.
+       */
+      const growth = mulberry32(19)
+      for (let i = 0; i < 260; i++) {
+        const t = growth()
+        const y = THREE.MathUtils.lerp(2.4, s.portalHeight + s.gable * 1.3, Math.pow(t, 0.6))
+        const line = piers[Math.min(piers.length - 1, Math.floor(growth() * piers.length))]!
+        const x = line + (growth() - 0.5) * s.pier * 0.86
+        foliage(x, y, THREE.MathUtils.lerp(1.15, 0.58, Math.pow(t, 0.7)), 0.14)
+      }
     }
     if (porch.length > 0) {
       const merged = mergeOrEmpty(porch)

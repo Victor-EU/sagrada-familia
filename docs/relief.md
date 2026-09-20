@@ -605,3 +605,156 @@ about the transept and the two end streets about the nave.
   the comb is coarser than the real fringe.
 - **Cornices and drip mouldings on the flank walls.** The fronts carry string
   courses already; the flanks do not.
+
+
+# The front that had no sculpture, and the stone that was never black
+
+Two things, brought back off five photographs held against the app: *it is
+not the dark charcoal you drew*, and *the sculpture is way too far away*.
+Both are right, and both turn out to have the same root — a measurement taken
+off the wrong frame, and a design note that talked itself out of the work.
+
+## The stone was measured in shadow
+
+`NATIVITY_STONE` was `0x4a4139`. Its note said the Nativity front is *the
+darkest thing in any skyline it appears in* and quoted 77 66 64 **on the
+sunlit flank**, off `ex-plaza-nativity.jpg`.
+
+Open that file. It is not the arrival view its name promises: it is a long
+lens on two tower shafts in their own shade, backlit, against a blown sky.
+The 77 66 64 is a reading of shadow, and an albedo set from it makes the
+oldest fabric on the building two and a half times darker than everything
+else.
+
+Taken off `ex-flank-elevation.jpg` instead — low winter sun straight onto
+this front, three fabrics in one frame at one exposure:
+
+| patch | median luminance | hue | saturation |
+| --- | --- | --- | --- |
+| Nativity shaft, sunlit | 106 | 23° | 0.18 |
+| Nativity front body, sunlit | 105 | 21° | 0.16 |
+| central tower, panel | 105 | — | 0.06 |
+| white terrace canopy | 147 | 17° | 0.06 |
+
+**The old stone and the new panel are the same luminance.** What separates
+them is not value at all: one is warm at a fifth saturated, the other neutral
+at a twentieth. A century of Barcelona traffic did not blacken these blocks,
+it browned them — and it blackened the places rain never reaches, which is a
+different claim and one `sfWeather` was already making. Carrying it in the
+albedo as well was counting the soot twice.
+
+So the albedo moved to the colour of a washed block and the age moved into
+the weather, where it belongs: `soot` 0.34 → 0.52, `streak` 0.24 → 0.32,
+`vary` 0.10 → 0.17, and the pale-mortar `tone` down from 0.24 to 0.14 now
+that the blocks it contrasts with are no longer black.
+
+A ratio in a photograph is not an albedo, so it was then swept against the
+live frame. At `0xac9b88` the front rendered at 0.80 of the white cloister
+beside it where the photograph has 0.72, and the two fabrics were hard to
+tell apart standing in the same frame. Twelve per cent down — `0x9a8b7a` —
+puts it at 0.755 measured, with hue 31° and saturation 0.20 against 23° and
+0.18 in the photograph.
+
+## The sculpture was talked out of existence
+
+`buildCrust`'s note said it plainly: *the sculpture is out of scope and would
+be a lie to fake*, on the grounds that *from the width of the plaza that
+front is not read as figures*.
+
+Hold any plaza photograph against that claim and it fails. At a hundred
+metres you cannot read a face, but you read **people**: uprights a little
+taller than a door, in rows, on brackets, each under a pointed hood that puts
+a hard black triangle over it. That reading survives to the far side of the
+plaza, and it is most of what separates this front from the Passion front,
+which really is bare.
+
+The scale it chose instead was the second half of the error. Nine hundred
+bosses of a quarter of a metre on a front thirty metres wide are below the
+size any of this is seen at: past forty metres they average into one flat
+tone and the front is a wall again. What the eye catches on in the
+photographs is a metre or two of projection, over and over.
+
+### `src/geometry/statuary.ts`
+
+**`buildFigure`** — one swept shell, not a body with a head set on it. Eleven
+readings up a profile, and every one of them is load-bearing in the
+silhouette: hem spread on the bracket, waist drawn in, shoulders wider than
+anything above them, neck pinched to a third, crown closed. Without the waist
+it is a bollard; without the neck it is a chess piece; without the spread hem
+it floats off its bracket. Seven sides, because an even count puts a flat
+face square to whoever is standing in front of it.
+
+**`buildNicheCanopy`** — the bracket under and the hood over. This is the
+part that does the work at distance: a figure alone on a wall is a light lump
+against light stone and at eighty metres it is gone, but the hood is in its
+own shadow at every sun angle and the black triangle carries. The first hood
+had a spire half as tall again as the figure and a row of them read as a row
+of spires with something small underneath; it is `span * 0.95` now.
+
+**`buildFoliage`** — three goes at this, and the first two are worth
+recording because they fail in opposite directions. Quarter-metre spheres on
+a lattice are gravel. The same spheres at a metre and a half, five to a
+cluster, are unmistakably grapes. Flat pointed blades fanned about the way
+out of the wall — which is what the carving actually *is* — turn every pier
+into a row of small birds, because five spikes leaving one point
+symmetrically is a shuttlecock and no jitter on the angles fixes it. What the
+photographs show close up is a **mass**: lumpy, asymmetric, hanging below its
+own root, low against the stone. One body carrying the outline, lobes
+overlapping it far enough to merge rather than read as separate balls,
+weighted below the root, and two or three tips carried further out — those
+tips are the only thing that breaks the silhouette, and without them it is a
+bun.
+
+**`buildCresting`** — a row of gablets on a string course, sixteen triangles
+apiece. The horizontals were the last straight lines on this front, and a
+hundred-metre pencil line is the one thing a Gaudí façade never has.
+
+### Where it all stands, in `plan/shell.ts`
+
+The planes are written down once at the top of the block — pier faces at
+z = 0, and the mullion, course, tympanum and gable faces set back from them
+by the amounts the slabs already chose. A figure given the wrong one of these
+stands in mid-air a metre off the building, which is exactly why the first
+encrustation was confined to the piers and allowed nowhere else. Named, the
+rest of the front opens up:
+
+- **Portal jambs**, two registers at 4.2 m and 8.6 m on the piers either side
+  of each way in. The lower one is deliberately at four metres and not
+  somewhere more flattering: a front whose carving all begins above the
+  fifteenth metre is a front seen from a helicopter.
+- **Portal heads**, seven clusters a side set out along the same
+  `(1 − t)^0.55` the archivolts were cut to. Growth that ignores the arch it
+  is on reads as a rash rather than as an order.
+- **Tympanum**, three figures on the innermost ring's face, two archivolts
+  deep, where the sun never reaches at any hour. No hoods: in that much shade
+  a figure is a silhouette and nothing else, which is both what the
+  photographs show and all this can honestly say.
+- **Hood rakes**, five crockets a side. The hoods were three clean triangles
+  and at any distance that is what they stayed.
+- **Gables**, one figure low on each slope where the stone is still wide
+  enough to carry it, and a crown at the apex.
+- **The upper wall**, which had nothing on it at all — the part of the façade
+  that fills most of the frame from anywhere on the plaza was the one part
+  with no relief above a metre. Two registers of twelve, each standing at
+  whatever depth the stone behind it happens to be, so the ones over a pier
+  come forward and the ones over a bay stay back. That stepping was always in
+  the front and never showed.
+- **260 clusters** up the piers, thickest at the portals and thinning as they
+  climb, at about a metre — half the triangles the old gravel cost.
+
+## Still open
+
+- **The four Nativity towers** are still smooth below the inscription bands.
+  In every plaza photograph they are the most encrusted things in frame.
+- **The figures read as skittles at fifteen metres.** At sixty they are
+  people. The profile is as far as one swept shell goes; arms would need a
+  second piece and a reason to believe where they are.
+- **No mullion column in the portals.** The real ones are split by a
+  free-standing shaft — the tortoise columns, and the nearest sculpture on
+  the building to anyone walking in. At 4.1 m clear these portals cannot take
+  one without blocking a door there is a walker behind.
+The opening frame was on this list and came off it. The app opens at
+`(146.6, 2, 9.3)`, which is 100.6 m from the Nativity front at eye height —
+squarely inside the 40 to 120 m band every reference photograph is taken
+from. The 181 m in the frame that prompted this round was an orbited
+position, not the default, and `home()` needed nothing.

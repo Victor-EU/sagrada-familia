@@ -184,6 +184,8 @@ the building anyone is standing in.
 | The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
 | Two ways of being with a building: an orbit outside, a walk inside, and a door between them | `src/camera/viewer.ts` |
 | The interface — the way in, the way out, what the cursor does here, and the hour | `src/ui/controls.ts` |
+| Figures, canopies, carved growth and cresting — the Nativity front's sculpture | `src/geometry/statuary.ts` |
+| The cover — Gaudí's hanging chains, dropped, settled and turned over while the stone is cut | `src/ui/cover.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
 
 ## Running
@@ -374,14 +376,31 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   round: 7.63 to 7.59 in the coarse band against a photograph's 16.56. That
   band is the porch, the cornice and the window reveal, and none of them was
   touched. See `docs/relief.md`.
-- **The exterior's fabrics are four, and the model had one.** Every figure
-  is measured: the Nativity front photographs at 77 66 64 and the new panel
-  of the central towers at 157 151 143, and a render that puts both within
-  ten points of each other is a render of an object that was manufactured all
-  at once, which is what a maquette is. The albedo for each was found by
-  sweeping the live material against the December porch frame rather than
+- **The exterior's fabrics are four, and the model had one.** A render that
+  puts all four within ten points of each other is a render of an object that
+  was manufactured all at once, which is what a maquette is. Each albedo was
+  found by sweeping the live material against a reference frame rather than
   picked in a colour dialog, so the number is what the curve and the sky make
   of it. See `docs/exterior.md` for the table and the diagnosis it came from.
+- **Measure a fabric on a frame where it is in sun.** The Nativity front was
+  given a charcoal albedo on the strength of 77 66 64 *on the sunlit flank* —
+  read off a long lens on two tower shafts in their own shade, backlit,
+  against a blown sky. It is a reading of shadow. On a frame with low sun
+  straight onto that front, the ninety-year-old stone and the new factory
+  panel are **the same luminance**: 106 against 105. What separates them is
+  hue and saturation, not value — one warm at a fifth saturated, the other
+  neutral at a twentieth. The age of a fabric lives in its crevices, which
+  the weather term was already doing; carrying it in the albedo as well
+  counted the soot twice. See `docs/relief.md`.
+- **A design note is not evidence.** The Nativity front's encrustation came
+  with a note ruling sculpture out on the grounds that *from the width of the
+  plaza that front is not read as figures*. Held against any plaza
+  photograph, that is not true: you cannot read a face at a hundred metres,
+  but you read people — uprights a little taller than a door, in rows, under
+  pointed hoods that put a hard black triangle over each one. What was there
+  instead was nine hundred bosses of a quarter of a metre, which is below the
+  size any of this is seen at. `src/geometry/statuary.ts` and
+  `docs/relief.md`.
 - A tower's **kind key carried its geometry and not its stone**, and a kind
   carries one material. The Passion's outer pair stands at 107 m, the same
   height, girth and taper as the Nativity's inner pair, so it joined that kind

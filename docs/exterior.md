@@ -15,9 +15,19 @@ surface named. sRGB, then hue / saturation / value.
 | --- | --- | --- |
 | Passion belfry, December sun | 159 139 122 · sat 0.23 | 192 184 172 · sat 0.10 |
 | Passion belfry, April sun | 119 107 95 · sat 0.20 | — |
-| Nativity tower, 1920s stone | 77 66 64 · sat 0.17 | 176 168 159 · sat 0.10 |
+| Nativity tower, 1920s stone | 77 66 64 · sat 0.17 | 176 168 159 · sat 0.10 |[^nat]
 | New central towers, panel stone | 157 151 143 · sat 0.09 | 192 184 172 · sat 0.10 |
 | Sky, December | 26 72 111 · hue 208 | 43 92 127 · hue 205 |
+
+[^nat]: **Later correction.** This row is wrong, and it is the only one in
+    this document that is. It was sampled on `ex-plaza-nativity.jpg`, which
+    is not the arrival view its filename promises: it is a long lens on two
+    tower shafts in their own shade, backlit, against a blown sky. 77 66 64
+    is a reading of shadow. Measured instead on `ex-flank-elevation.jpg`,
+    with low winter sun straight onto that front, the sunlit shaft is **106,
+    hue 23°, sat 0.18** — the same luminance as the new panel stone beside it
+    in the same frame. See `docs/relief.md`, *The front that had no sculpture,
+    and the stone that was never black*.
 
 The sky is matched. The stone is thirty points too bright and half as
 saturated, and — the larger fault — it is one number. The building is not one
@@ -208,7 +218,7 @@ photographs:
 
 | Fabric | Render | Photograph |
 | --- | --- | --- |
-| Nativity front | 75 63 53 | 77 66 64 |
+| Nativity front | 75 63 53 | 77 66 64 — *see the correction above; the photograph reads 106 in sun* |
 | Passion belfry, December | 158 143 120 | 159 139 122 |
 | New white stone | 194 189 182 | 160 156 152 |
 | Panel, central towers | 204 198 189 | 157 151 143 |

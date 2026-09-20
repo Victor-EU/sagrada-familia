@@ -126,14 +126,42 @@ export const FACADE = 0xc2b49c
 /**
  * The Nativity front and its four towers — 1894 to 1930.
  *
- * The oldest stone on the building and the darkest thing in any skyline it
- * appears in: ninety years of Barcelona traffic on porous Montjuïc sandstone,
- * with the mortar still pale behind it, which is why that front reads as a
- * dark cliff with a light net over it rather than as a dark wall. Measured on
- * the plaza frame: 77 66 64 on the sunlit flank, 98 88 76 where the light
- * grazes. Nothing else on the building is within forty points of that.
+ * This was charcoal, and it was wrong, and it was wrong for a reason worth
+ * writing down: the number under it was measured off the wrong photograph.
+ * `ex-plaza-nativity.jpg` is not the arrival view its filename promises — it
+ * is a long lens on two tower shafts in their own shade, backlit, against a
+ * blown sky. The 77 66 64 quoted here as *the sunlit flank* is a reading of
+ * shadow. An albedo set from it makes the oldest fabric on the building
+ * darker than everything else by a factor of two and a half, and what that
+ * produces is the one thing every photograph says this front is not: a black
+ * cliff with four black towers on it.
+ *
+ * Taken instead off `ex-flank-elevation.jpg`, where low winter sun is
+ * straight onto this front and three fabrics are in the same frame at the
+ * same exposure:
+ *
+ *   Nativity shaft, sunlit     106    hue 23°   sat 0.18
+ *   Nativity front body        105    hue 21°   sat 0.16
+ *   central tower, panel       105    hue —     sat 0.06
+ *   white terrace canopy       147    hue 17°   sat 0.06
+ *
+ * The old stone and the new panel are *the same luminance*. What separates
+ * them is not value at all — it is that one is warm at a fifth saturated and
+ * the other is neutral at a twentieth. Ninety years of Barcelona traffic did
+ * not blacken these blocks; it browned them, and it blackened the places
+ * rain never reaches, which is a different claim and one the weather term in
+ * the masonry shader was already making. Carrying it in the albedo as well
+ * was counting the soot twice — see MASONRY below, where the age of this
+ * fabric now lives in full.
+ *
+ * Swept against the plaza frame afterwards, because a ratio in a photograph
+ * is not an albedo: at 0xac9b88 the front rendered at 0.80 of the white
+ * cloister beside it where the photograph has 0.72, and standing in the same
+ * frame the two fabrics were hard to tell apart. Twelve per cent down puts
+ * the ratio at 0.71, with the hue and saturation — 30° and a fifth, against
+ * 23° and a fifth measured — left where they were.
  */
-export const NATIVITY_STONE = 0x4a4139
+export const NATIVITY_STONE = 0x9a8b7a
 
 /**
  * The Passion front and its four towers — 1954 to 1976.
@@ -1223,9 +1251,16 @@ if ( uMasonry.x > 0.0 ) {
  * `course` and `block` are metres; `joint` is the half-width of the cut, in
  * metres, so it is a real gap and not a fraction of anything. `tone` is
  * signed on purpose: a joint is *darker* than the stone on every fabric here
- * except the Nativity front, where ninety years of soot have left the blocks
- * black and the mortar pale, and the front reads as a dark cliff with a
- * light net over it. Getting that one sign wrong loses the front.
+ * except the Nativity front, where the blocks have taken the dirt and the
+ * mortar has stayed cleaner than they have. Getting that one sign wrong
+ * loses the front.
+ *
+ * This is also where the Nativity front's age lives, now that its albedo has
+ * stopped claiming to be soot. `soot` blackens what faces away from the sky
+ * and is never washed, `streak` runs dirt down the vertical faces, and
+ * `vary` lets one block differ from the next — all three of them strong
+ * here, and all three of them things that leave the sunlit, rained-on face
+ * of a block exactly the warm stone colour the photographs show it to be.
  */
 interface Masonry {
   course: number
@@ -1267,8 +1302,8 @@ const MASONRY: Partial<Record<StoneName, Masonry>> = {
   // Gaudí's own front: small stone, finely jointed, black with pale mortar,
   // and every sheltered face of it crusted.
   nativity: {
-    course: 0.38, block: 0.95, joint: 0.022, tone: 0.24,
-    vary: 0.1, soot: 0.34, wash: 0.12, streak: 0.24, seam: false, relief: 0.75,
+    course: 0.38, block: 0.95, joint: 0.022, tone: 0.14,
+    vary: 0.17, soot: 0.52, wash: 0.14, streak: 0.32, seam: false, relief: 0.75,
   },
   // Sixties work, larger blocks, joints darker than the stone.
   passion: {
