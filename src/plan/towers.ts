@@ -145,7 +145,7 @@ export const defaultTowers: TowerParams = {
    * Stated as a length, the taller towers get more rows instead of larger
    * ones, which is what the building does and what a count can never do.
    */
-  pitch: 1.5,
+  pitch: 1.3,
   // Wider than tall, which is the other half of what makes a ladder. The
   // old figures — two thirds of a row tall and a fifth of the shaft's
   // circumference wide — drew lozenges standing on end, and a column of

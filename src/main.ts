@@ -1,7 +1,7 @@
 import './style.css'
 import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
-import { rulingMaterial } from './render/materials.ts'
+import { rulingMaterial, setSkyline } from './render/materials.ts'
 import { defaultShafts } from './render/shafts.ts'
 import { CLASSIC_CHROME } from './render/film.ts'
 import { columnMetrics } from './geometry/column.ts'
@@ -146,7 +146,7 @@ const render: RenderFlags = {
   // through uRoomGain — see render/materials.ts.
   bounce: 0.16,
   // The envelope's share of the sky — see OUTDOOR_INDIRECT in materials.ts.
-  skyFill: 3.2,
+  skyFill: 2.1,
   sunOffset: 0.06,
   sunNear: true,
   // Stone under a nearly uniform probe has little shading of its own, so this
@@ -233,6 +233,11 @@ function rebuildChurch(): void {
   // The field picks its level of detail once per pass, so the stage has to
   // know it exists.
   stage.passes.push(built.field)
+
+  // Where the eighteen stand, so the envelope knows how much sky they leave
+  // each other. A slider can move any of them, so it is read off what was
+  // actually built rather than off the plan — see OUTDOOR_INDIRECT.
+  setSkyline(stage.outdoor, built.towers)
 
   // The sun rig fits itself to what is actually built, so it has to be told.
   // Instanced pieces are invisible to Box3.setFromObject, which reads a

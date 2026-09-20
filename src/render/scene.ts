@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
 import {
   cityPatch,
+  foliagePatch,
   cityUniforms,
   grainUniforms,
   groundMaterial,
@@ -29,7 +30,7 @@ import { ShaftPass, type ShaftSettings } from './shafts.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
 import { EYE_HEIGHT } from '../camera/envelope.ts'
-import { buildCity, defaultCity, type City } from '../plan/city.ts'
+import { CANOPY_HEART, CANOPY_RADIUS, buildCity, defaultCity, type City } from '../plan/city.ts'
 import { PAVING_PATCH, pavingUniforms, type PavingUniforms } from '../plan/floor.ts'
 
 export interface Stage {
@@ -313,15 +314,43 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   })
   const cityFill = cityUniforms()
   patchForSunlight(cityMassing, sun.uniforms, cityPatch(cityFill))
+  /**
+   * The leaves, which are the same material with a hole-punch in it.
+   *
+   * `alphaTest` rather than transparency: an alpha-tested fragment either
+   * exists or does not, so there is no sorting to get wrong between two
+   * hundred crossed quads, and the pass that writes depth writes the shape
+   * of the leaf. Double-sided because the back of a quad is the same leaves
+   * seen from behind, and a tree lit only from one side is a cardboard cut
+   * out — which is what the icosahedron was.
+   */
+  const cityFoliage = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.86,
+    metalness: 0,
+    side: THREE.DoubleSide,
+    alphaTest: 0.5,
+  })
+  patchForSunlight(cityFoliage, sun.uniforms, foliagePatch(cityFill, CANOPY_HEART, CANOPY_RADIUS))
+
+  /**
+   * The pond in Plaça de Gaudí, which is a mirror and was a grey disc.
+   *
+   * Every photograph taken from that corner has the whole front upside down
+   * in the water, and it is half of why that is the view everybody takes. A
+   * little metalness is what makes a standard material read the environment
+   * probe as a reflection rather than as more ambient — and the probe here
+   * is the sky, which is what the water is mostly reflecting anyway.
+   */
   const cityWater = new THREE.MeshStandardMaterial({
-    color: 0x5f7486,
-    roughness: 0.12,
-    metalness: 0.1,
+    color: 0x53687c,
+    roughness: 0.05,
+    metalness: 0.55,
   })
   patchForSunlight(cityWater, sun.uniforms, cityPatch(cityFill))
   const city = buildCity(
     defaultCity,
-    { massing: cityMassing, water: cityWater },
+    { massing: cityMassing, foliage: cityFoliage, water: cityWater },
     new THREE.Color().setRGB(0.52, 0.66, 0.9).convertSRGBToLinear(),
   )
   city.group.traverse((node) => {
@@ -415,6 +444,10 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   composer.addPass(shafts)
   composer.addPass(new LayerGate(camera, LAYER_GLASS, false))
   const occlusion = new HalfResGTAO(scene, camera, 1, 1)
+  /** What the panel asked for, and what the distance scaling last applied. */
+  let occlusionRadius = 3
+  let occlusionApplied = 3
+  const modelSphere = new THREE.Sphere(new THREE.Vector3(), 100)
   // Radius is in metres, because the scene is. The default is a quarter of
   // one, which is tuned for a scene the size of a chair and finds nothing at
   // all in a cathedral.
@@ -481,6 +514,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setSun,
     wash,
     setModelBounds(box, ceiling) {
+      box.getBoundingSphere(modelSphere)
       sun.setBounds(box)
       roof.setBounds(box, ceiling)
       box.getCenter(glass.uniforms.uCentre.value)
@@ -528,6 +562,30 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       renderer.getDrawingBufferSize(drawingBuffer)
       for (const participant of passes) participant.prepareForView(camera, drawingBuffer.y)
       sun.syncView(camera)
+
+      /**
+       * The occlusion radius follows the camera back.
+       *
+       * Three metres is the right figure for a person standing in the nave —
+       * it is the depth of a flute, the throat of a funnel, the gap between
+       * two columns — and it is nothing at all from the far side of the
+       * plaza, where three metres is four pixels and the pass may as well be
+       * off. The features that want occluding out there are the fifteen
+       * metres between two bell towers and the seven-metre cave of a portal.
+       *
+       * A screen-space pass has one radius for the whole frame, so the
+       * honest thing is to scale it with how far back the frame is taken
+       * from: near the building it stays where the interior needs it, and
+       * from two hundred metres it opens out to something that can see a
+       * gap between towers. Capped, because past a point the half-resolution
+       * pass is sampling noise.
+       */
+      const away = Math.max(0, camera.position.distanceTo(modelSphere.center) - modelSphere.radius)
+      const want = Math.min(24, occlusionRadius * (1 + away * 0.06))
+      if (Math.abs(want - occlusionApplied) > 0.15) {
+        occlusionApplied = want
+        occlusion.updateGtaoMaterial({ radius: want })
+      }
       composer.render()
     },
     resize(width, height) {
@@ -560,6 +618,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setOcclusion({ intensity, radius }) {
       occlusion.enabled = intensity > 0
       occlusion.blendIntensity = intensity
+      occlusionRadius = radius
       occlusion.updateGtaoMaterial({ radius })
     },
     setSunNear(on) {

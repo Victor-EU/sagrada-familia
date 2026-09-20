@@ -533,8 +533,31 @@ export interface SurfacePatch {
   uniforms?: Record<string, THREE.IUniform>
   /** Declarations, added to the top of the fragment shader. */
   pars?: string
+  /**
+   * The vertex shader's share: declarations, and statements run where the
+   * vertex's own untransformed position is still in hand.
+   *
+   * One surface needs it so far, and it is the street trees: a leaf mask has
+   * to be drawn in the *quad's* own coordinates and there is no `vUv` here,
+   * because three only declares one when a material carries a texture and
+   * nothing in this project carries one. Passing the local position down is
+   * the whole of what a uv would have been for.
+   */
+  vertex?: { pars?: string; body?: string }
   /** Statements run where `diffuseColor` is still open to change. */
   colour?: string
+  /**
+   * Statements run where the shading normal has been established and
+   * nothing has used it yet.
+   *
+   * The one hook where a surface can change *both* what it is made of and
+   * which way it faces: `diffuseColor` is still open here and `normal` and
+   * `geometryNormal` have just been set. That pairing is what a cut joint
+   * needs — a groove is a line of darker stone *and* a line where the
+   * surface tips, and drawn as tone alone it is a stripe of paint rather
+   * than a course of masonry. `roughnessFactor` is live too.
+   */
+  surface?: string
   /**
    * Statements run once the probe's irradiance has been read and before it
    * is spent — `iblIrradiance` is live here and the hemisphere's is not.
@@ -563,7 +586,10 @@ export function patchForSunlight(
     Object.assign(shader.uniforms, uniforms, extra.uniforms ?? {})
 
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vSunWorld;')
+      .replace(
+        '#include <common>',
+        `#include <common>\nvarying vec3 vSunWorld;\n${extra.vertex?.pars ?? ''}`,
+      )
       .replace(
         '#include <project_vertex>',
         [
@@ -577,6 +603,7 @@ export function patchForSunlight(
           '    sunLocal = instanceMatrix * sunLocal;',
           '  #endif',
           '  vSunWorld = ( modelMatrix * sunLocal ).xyz;',
+          extra.vertex?.body ?? '',
         ].join('\n'),
       )
 
@@ -586,6 +613,12 @@ export function patchForSunlight(
       // surface that wants to decide its own albedo per fragment says so
       // here and nothing downstream has to know.
       .replace('#include <color_fragment>', `#include <color_fragment>\n${extra.colour ?? ''}`)
+      // After the normal maps rather than before, so a surface that tips the
+      // normal is tipping the one the lighting will actually use.
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>\n${extra.surface ?? ''}`,
+      )
       .replace(
         '#include <lights_fragment_maps>',
         `#include <lights_fragment_maps>\n${extra.indirect ?? ''}`,
@@ -598,7 +631,7 @@ export function patchForSunlight(
   // Three caches compiled programs by this key, so two materials that patch
   // the same base shader differently have to name themselves differently or
   // the second one silently gets the first one's program.
-  const key = `sf-sunlight-4${extra.key ? `-${extra.key}` : ''}`
+  const key = `sf-sunlight-6${extra.key ? `-${extra.key}` : ''}`
   material.customProgramCacheKey = () => key
   material.needsUpdate = true
 }

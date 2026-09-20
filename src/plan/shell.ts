@@ -3,11 +3,19 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { buildPinnacle } from '../geometry/tower.ts'
 import { buildPavement } from './floor.ts'
 import { MODULE } from './module.ts'
-import { buildCrust, buildHood, buildPassionPortico } from '../geometry/portico.ts'
+import {
+  buildArchFringe,
+  buildCrust,
+  buildCypress,
+  buildFrontBridge,
+  buildHood,
+  buildPassionPortico,
+} from '../geometry/portico.ts'
 import { buildFruit, buildGable } from '../geometry/roofwork.ts'
 import { mergeOrEmpty } from '../geometry/window.ts'
 import { named, type Parts } from './parts.ts'
 import type { StoneName } from '../render/materials.ts'
+import { LAYER_SKYLINE } from '../render/sunrig.ts'
 
 /**
  * The outside of the building: what closes it, and what it stands up as.
@@ -261,6 +269,22 @@ export function buildShell(
     }
   }
 
+  /**
+   * Something that stands above the roofs and roofs nothing.
+   *
+   * The pass that asks what is over a point of the plan must not be told
+   * that a bridge forty-five metres up between two bell towers is a ceiling
+   * — it answers by filling the whole column of air beneath it with the
+   * indoor medium, and the Nativity front came back with a vertical plume of
+   * haze down the middle of it like a searchlight. The towers learned this
+   * in phase five; anything new that stands out in front of a façade has to
+   * be told the same thing. See LAYER_SKYLINE.
+   */
+  const skyline = <T extends THREE.Object3D>(node: T): T => {
+    node.layers.set(LAYER_SKYLINE)
+    return node
+  }
+
   const rect = (x0: number, x1: number, z0: number, z1: number): THREE.Vector2[] => [
     new THREE.Vector2(x0, z0),
     new THREE.Vector2(x1, z0),
@@ -453,6 +477,8 @@ export function buildShell(
 
     const clear = MODULE - s.pier
     const springing = s.portalHeight * 0.55
+    /** Stalactite fringes, collected and stood with the rest of the porch. */
+    const fringes: THREE.BufferGeometry[] = []
 
     for (const bay of portals(s.pier, width)) {
       // One shallow jamb step each side below the springing, so the reveal
@@ -500,6 +526,21 @@ export function buildShell(
         s.project + 0.5,
         1.4,
       )
+
+      // The fringe. Gaudí's front hangs its portals with carved stalactites
+      // and what they do at plaza distance is put a row of small dark shapes
+      // across the top of the way in — which is the difference between a
+      // deep portal and a hole. Only here: the Passion front is stripped of
+      // ornament on purpose and giving it one would be the worse lie.
+      if (kind === 'nativity') {
+        // In the porch's own frame — x across, y up, z out from the wall
+        // face — because that is what `stand` is about to turn. Given the
+        // front's projection here as well it would be stood out twice and
+        // hang eight metres clear of the building.
+        const fringe = buildArchFringe(clear - 2 * s.jamb, (clear - 2 * s.jamb) * 1.15, 13, 1.1)
+        fringe.translate(bay.centre, springing, - s.ring * 0.5)
+        fringes.push(fringe)
+      }
     }
 
     // The wall above, set well back — it is the thing everything else on the
@@ -548,6 +589,7 @@ export function buildShell(
     }
 
     const porch: THREE.BufferGeometry[] = []
+    if (fringes.length > 0) porch.push(...fringes)
     if (kind === 'passion' && s.porch) {
       porch.push(
         buildPassionPortico({
@@ -574,13 +616,18 @@ export function buildShell(
       }
       // The piers are the stone that stands at the front plane; the bays
       // behind them are a metre back and are somebody else's surface.
+      // Denser and deeper than it was, and stopped well below the top.
+      // What that front is from across the plaza is a stone cliff that has
+      // been rained on for a century, thickest round the portals and running
+      // out as it climbs — not an even rash over the whole height, which is
+      // what an unweighted scatter gives and what this looked like.
       porch.push(
         buildCrust({
           bands: pierLines(width).map((centre) => ({ centre, width: s.pier })),
           from: 2,
-          to: top - 3,
+          to: s.portalHeight + s.gable * 1.4,
           depth: 0,
-          count: 640,
+          count: 900,
           seed: 19,
         }),
       )
@@ -589,6 +636,31 @@ export function buildShell(
       const merged = mergeOrEmpty(porch)
       merged.applyMatrix4(stand(s.project))
       parts.piece(named('porch', merged, parts.stone(FRONT_STONE[kind].porch)), merged)
+    }
+
+    /**
+     * What stands between the two middle towers.
+     *
+     * Both finished fronts have something there and the model had a gap, so
+     * from every street-level frame the four bell towers of a front read as
+     * four separate objects standing in a row rather than as one façade.
+     * The Passion's bridge carries the Ascension; the Nativity's carries the
+     * cypress, which is the only colour on that whole front. The Glory end
+     * is not built and gets neither.
+     */
+    if (kind !== 'glory') {
+      const bridgeAt = height + s.parapet + MODULE * 1.1
+      const bridge = buildFrontBridge(MODULE * 1.35, MODULE * 0.5, MODULE * 0.42)
+      bridge.translate(0, bridgeAt, 0)
+      bridge.applyMatrix4(stand(s.project + MODULE * 0.2))
+      parts.piece(skyline(named('bridge', bridge, parts.stone(FRONT_STONE[kind].porch))), bridge)
+
+      if (kind === 'nativity') {
+        const cypress = buildCypress(MODULE * 3.4, MODULE * 0.44)
+        cypress.translate(0, bridgeAt + MODULE * 0.42, 0)
+        cypress.applyMatrix4(stand(s.project + MODULE * 0.2))
+        parts.piece(skyline(named('cypress', cypress, parts.stone('mosaic'))), cypress)
+      }
     }
 
     // A box comes back indexed and an extrusion does not, and a merge of the

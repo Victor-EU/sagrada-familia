@@ -270,9 +270,9 @@ export const VIEWPOINTS: Viewpoint[] = [
       'Twenty-four millimetres from the foot of the steps, the framing of ' +
       'the author’s own December frame. The portico fills the bottom and ' +
       'the four towers converge out of the top.',
-    position: [-58, 1.6, -30],
-    target: [-42, 52, -30],
-    fov: 66,
+    position: [-68, 1.6, -30],
+    target: [-44, 58, -30],
+    fov: 64,
     shiftCorrection: 0,
     day: 352,
     hour: 15.17,

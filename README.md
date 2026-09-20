@@ -79,6 +79,32 @@ heights and on the grid's own positions: each bell tower is **one module
 across**, so four of them side by side is the thirty metres of the transept
 front.
 
+Then the outside. With the colour settled the model was still a maquette
+from the plaza, and the reasons were measurable rather than atmospheric. It
+was cut from **one stone** where the building has four fabrics whose dates a
+visitor reads before anything else — the Nativity front black with ninety
+years of city air, the Passion front pale and half a century younger, the
+portico white, the six towers over the crossing grey panel craned into place
+after 2016. Its **towers were striped** where the photographs show a ladder:
+level rows of hooded apertures cut in the channels between ribs, on a pitch
+of about a metre and a third, with a stone hood over each one that takes the
+sun on top and throws a hard shadow into the slot beneath. It was **not made
+of pieces** — a hundred metres of coursed masonry at one flat albedo, with
+the grain shader saying something true at a scale nothing outdoors can see.
+And it had **no light at the scale of the group**: between the three metres
+ambient occlusion reaches and the hundred a shadow map covers there was
+nothing at all, which is the band this building's exterior lives in.
+
+All four are built, and each was judged on a number off a photograph rather
+than on looking better. The Passion belfry lands at 158 143 120 against the
+photograph's 159 139 122; the apertures count 23 rows on the strip where the
+photograph counts 22, against 12 before; the spread between the sunlit and
+shaded stone in a plaza frame is 3.38 where two photographs give 3.54 and
+3.58, against 2.68 before. The plaza got trees with edges instead of green
+balls, lamp posts to say how big the building is, and a pond that reflects.
+The Nativity front got the two things it reads by from across the square and
+had neither of: the bridge between its middle towers, and the cypress.
+
 Phase 5's bar is *someone can send a link to a specific moment of light*, and
 it was met first: the address bar is the save format, because nothing about this
 building's light is authored and a moment is therefore only a camera, a day and
@@ -108,6 +134,17 @@ the building anyone is standing in.
 | Stone grain — two octaves on world position, laid in courses | `src/render/materials.ts` |
 | Bloom above the white point, so only the glazing spills | `src/render/scene.ts` |
 | The film: AgX, then a Classic Chrome grade — muted, deep, hard shadows | `src/render/film.ts` |
+| Grain, vignette and halation — a photograph, not a frame | `src/render/film.ts` |
+| Four ages of stone, plus glass mosaic and enamel, assigned by front and date | `src/render/materials.ts` |
+| Masonry drawn from world position: courses, blocks, joints that tip the light | `src/render/materials.ts` |
+| Weathering — rain-washed above, sooty beneath, runnels down every face | `src/render/materials.ts` |
+| The belfry from the photographs: level rows, channels, a hood over every slot | `src/geometry/tower.ts` |
+| A panel tower is faceted, untwisted and lit by slits, not pierced by sound holes | `src/geometry/tower.ts`, `src/plan/towers.ts` |
+| Venetian glass on the twelve crowns, banded up the profile | `src/geometry/tower.ts` |
+| How much sky the eighteen leave each other | `src/render/materials.ts` |
+| The occlusion radius follows the camera back | `src/render/scene.ts` |
+| Leaves cut out of crossed quads, and lamp posts for scale | `src/plan/city.ts`, `src/render/materials.ts` |
+| The bridge between two towers, the cypress, and a fringe over every portal | `src/geometry/portico.ts`, `src/plan/shell.ts` |
 | A stone asks the roof map which side of the wall it is on | `src/render/materials.ts` |
 | The envelope takes the sky; the eye closes a stop on the plaza | `src/render/materials.ts`, `src/camera/viewer.ts` |
 | Double-twist column, all four orders, from the published rule | `src/geometry/column.ts` |
@@ -137,6 +174,7 @@ the building anyone is standing in.
 | Seventeen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
 | The building's bearing, measured off its footprint: 314.4° | `src/light/sun.ts` |
 | Three frames matched to the author's own December photographs | `src/dev/viewpoints.ts`, `reference/SOURCES.md` |
+| Three more at the lens the photographs use: twenty-four millimetres, eye height, up | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
 | Two-thumb touch controls, with a stick that appears under the thumb | `src/camera/touch.ts` |
 | The address bar as the save format — a link to a moment of light | `src/share.ts` |
@@ -195,7 +233,7 @@ screen says, and changes when it changes.
 | P | the parameter panel and the readouts (also `?dev` in the address) |
 | O, X, `[` `]` | the reference photo, difference blend, its opacity — with the panel |
 | drop an image | load it as a reference |
-| 1–9, 0, N D G T X W V | the curated viewpoints — **only with the panel open** |
+| 1–9, 0, N D G T U M F X W V | the curated viewpoints — **only with the panel open** |
 
 The curated viewpoints are the regression harness rather than a visit: they
 move the camera without telling the interface, so they live behind the same
@@ -248,6 +286,63 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
 
 ## Notes
 
+- **The exterior's fabrics are four, and the model had one.** Every figure
+  is measured: the Nativity front photographs at 77 66 64 and the new panel
+  of the central towers at 157 151 143, and a render that puts both within
+  ten points of each other is a render of an object that was manufactured all
+  at once, which is what a maquette is. The albedo for each was found by
+  sweeping the live material against the December porch frame rather than
+  picked in a colour dialog, so the number is what the curve and the sky make
+  of it. See `docs/exterior.md` for the table and the diagnosis it came from.
+- A tower's **kind key carried its geometry and not its stone**, and a kind
+  carries one material. The Passion's outer pair stands at 107 m, the same
+  height, girth and taper as the Nativity's inner pair, so it joined that kind
+  and came back cut from ninety-year-old blackened stone in the middle of the
+  1960s front — two of the twelve bell towers the wrong colour, with identical
+  geometry, which is exactly the mistake a shared key is for making invisible.
+- The **hood over an aperture is the whole of the belfry**. A slot cut flush
+  in a shaft is a flat mark the colour of whatever stands behind it, and a
+  hundred of them average out to a faint mottling: that is what the towers
+  were. The real ones are roofed, so the top of each takes the sun and the
+  underside throws a hard shadow across the opening beneath — bright dash over
+  dark dash, twelve to a row and twenty-three rows up. The rows are level, not
+  helical, and their pitch is a *length*, so a taller tower gets more rows
+  rather than larger ones; given a count instead, the 98.4 m towers and the
+  117 m towers came out identically spaced at different sizes, which is the
+  one thing that says a building was made in a modelling package.
+- What is behind an aperture needed **its own share of sky**. The envelope's
+  fill is set for a surface standing in the open, and the panel behind a
+  louvre sits a metre down a slot cut in a metre of masonry, where what it can
+  see of the sky is a letterbox. Given the open figure it came back lit, and
+  the lattice went back to being a mottled cone.
+- **Masonry is where the age of a fabric lives**, and it is mostly not the
+  joint. It is what water has done around it: paler where the stone faces the
+  sky and is rained on, black where it is sheltered and never washed, and
+  runnels down every vertical face. On the Nativity front the joints are
+  *lighter* than the blocks — the stone went black and the mortar did not —
+  and that sign reversal is half of what tells the two fronts apart at a
+  glance. Every line knows its own filter width and retires once a course is
+  down to a couple of pixels, which is the pavement's machinery: there is no
+  texture here to mip, so a line that outlives its sampling rate is moiré.
+- The **shelter test was averaging five roof probes equally**, and one tap of
+  the ring always steps back across the wall it is standing on and finds the
+  terrace over it — so the outer face of every enclosing wall got a fifth of a
+  vote for being indoors. A fifth would be harmless if the two fills were the
+  same size and they are nothing like it: the room's is a window counted at
+  nearly three and a floor counted at eight, against an outdoor probe cut hard
+  so the towers keep their modelling. The nave's flank came back as a sheet of
+  interior gold in a frame taken from two streets away. The centre tap decides
+  now and the ring only leans.
+- **A bridge forty-five metres up is not a ceiling.** The roof map saw the new
+  bridge between two bell towers, decided the column of air under it was
+  indoors, and filled it with the volumetric medium — a vertical plume of haze
+  down the middle of the Nativity front. The towers learned this in phase
+  five; anything that stands out in front of a façade has to be told the same.
+- `uFillScale` was declared by two shader chunks that both reach an indoor
+  stone, and **GLSL calls a second declaration a redefinition**. Three's
+  fallback for a shader that will not compile is a material that silently
+  draws with somebody else's program, so the interior lost its lighting
+  without anything throwing.
 - Dimensions in `defaultHyperboloid` are placeholders. Real funnel sizes are an
   open question in the design doc and land here once photo-matched.
 - The bearing is **measured now**, not assumed: 314.4° from the Glory end to

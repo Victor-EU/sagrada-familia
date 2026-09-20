@@ -214,50 +214,103 @@ function slab(shape: THREE.Shape, height: number): THREE.BufferGeometry {
 }
 
 /**
- * A tree, cheaply.
+ * A tree, in two parts, because a tree is two materials.
  *
  * Barcelona's street tree is the plane, and what matters here is not the
- * species but that there is something eight metres tall with a soft edge
- * standing between the eye and the building. A cathedral behind trees is a
- * cathedral you are looking at from somewhere; a cathedral on bare ground is
- * an object on a table.
+ * species: it is that there is something eight metres tall with a *ragged*
+ * edge standing between the eye and the building. The first version was an
+ * icosahedron on a cylinder, and a sphere of flat green has exactly the fault
+ * the whole exterior was being rebuilt to lose — a smooth closed outline with
+ * no edge anywhere in it. Three crossed quads with the leaves cut out of them
+ * cost the same and read as a tree; see `foliagePatch` in render/materials.ts
+ * for the cutting.
  */
-function treeGeometry(): THREE.BufferGeometry {
-  const trunk = flat(new THREE.CylinderGeometry(0.16, 0.24, 3.0, 6))
-  trunk.translate(0, 1.5, 0)
-  const crown = flat(new THREE.IcosahedronGeometry(2.2, 1))
-  crown.scale(1, 0.82, 1)
-  crown.translate(0, 4.5, 0)
-  const bark = new THREE.Color(0x6d6152)
-  const leaf = new THREE.Color(0x5a6b3e)
-  for (const [g, c] of [
-    [trunk, bark],
-    [crown, leaf],
-  ] as const) {
-    const n = g.getAttribute('position').count
-    const colour = new Float32Array(n * 3)
-    const shade = new THREE.Color()
-    for (let i = 0; i < n; i++) {
-      // A flat green ball reads as a ball. Shading it by height gives the
-      // crown a lit top and a dark underside for nothing.
-      const y = g.getAttribute('position').getY(i)
-      shade.copy(c).multiplyScalar(0.78 + 0.34 * THREE.MathUtils.clamp(y / 8, 0, 1))
-      colour[i * 3] = shade.r
-      colour[i * 3 + 1] = shade.g
-      colour[i * 3 + 2] = shade.b
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(colour, 3))
+
+/** Where the crown's middle sits above the foot, and how far it reaches. */
+export const CANOPY_HEART = 6.0
+export const CANOPY_RADIUS = 3.8
+
+function tintAll(g: THREE.BufferGeometry, colour: THREE.Color, lift: number): void {
+  const position = g.getAttribute('position')
+  const n = position.count
+  const array = new Float32Array(n * 3)
+  const shade = new THREE.Color()
+  for (let i = 0; i < n; i++) {
+    // A flat green plane reads as a plane. Shading by height gives the crown
+    // a lit top and a dark underside for nothing.
+    const y = position.getY(i)
+    shade.copy(colour).multiplyScalar(0.74 + lift * THREE.MathUtils.clamp(y / 8, 0, 1))
+    array[i * 3] = shade.r
+    array[i * 3 + 1] = shade.g
+    array[i * 3 + 2] = shade.b
   }
-  const merged = mergeGeometries([trunk, crown], false)
-  if (!merged) throw new Error('city: tree geometry could not be merged')
-  trunk.dispose()
-  crown.dispose()
+  g.setAttribute('color', new THREE.BufferAttribute(array, 3))
+}
+
+function trunkGeometry(): THREE.BufferGeometry {
+  const trunk = flat(new THREE.CylinderGeometry(0.14, 0.26, 3.4, 6))
+  trunk.translate(0, 1.7, 0)
+  tintAll(trunk, new THREE.Color(0x6d6152), 0.34)
+  return trunk
+}
+
+/**
+ * The crown: three quads crossed about the trunk.
+ *
+ * Three rather than two, because two read as a cross from directly above and
+ * as a flat card from forty-five degrees off either of them. At sixty degrees
+ * apart there is no angle from which the tree has no depth. They are
+ * double-sided by the material, so the back of a quad is the same leaves seen
+ * from behind.
+ */
+function canopyGeometry(): THREE.BufferGeometry {
+  const blades: THREE.BufferGeometry[] = []
+  for (let i = 0; i < 3; i++) {
+    const blade = new THREE.PlaneGeometry(CANOPY_RADIUS * 2.2, CANOPY_RADIUS * 2.5)
+    blade.translate(0, CANOPY_HEART, 0)
+    blade.rotateY((i / 3) * Math.PI)
+    blades.push(flat(blade))
+  }
+  const merged = mergeGeometries(blades, false)
+  if (!merged) throw new Error('city: canopy could not be merged')
+  for (const blade of blades) blade.dispose()
+  tintAll(merged, new THREE.Color(0x5e7040), 0.4)
+  return merged
+}
+
+/**
+ * A kerb, a lamp post and a bollard.
+ *
+ * Nothing about them is Sagrada Família and that is the point. A plaza with
+ * no street furniture on it has no scale in it either: the building is a
+ * hundred and seventy metres tall only if something in the frame is four,
+ * and a render of a cathedral standing on an unbroken sheet of paving is a
+ * render of a model of a cathedral. These are the cheapest four-metre objects
+ * there are.
+ */
+function lampGeometry(): THREE.BufferGeometry {
+  const pieces: THREE.BufferGeometry[] = []
+  const post = flat(new THREE.CylinderGeometry(0.07, 0.12, 5.2, 6))
+  post.translate(0, 2.6, 0)
+  pieces.push(post)
+  const head = flat(new THREE.CylinderGeometry(0.34, 0.18, 0.5, 8))
+  head.translate(0, 5.4, 0)
+  pieces.push(head)
+  const foot = flat(new THREE.CylinderGeometry(0.2, 0.26, 0.45, 8))
+  foot.translate(0, 0.22, 0)
+  pieces.push(foot)
+  const merged = mergeGeometries(pieces, false)
+  if (!merged) throw new Error('city: lamp could not be merged')
+  for (const piece of pieces) piece.dispose()
+  tintAll(merged, new THREE.Color(0x4c4a46), 0.3)
   return merged
 }
 
 export interface CityMaterials {
-  /** Takes vertex colour; used for blocks, trees and the parks. */
+  /** Takes vertex colour; used for blocks, parks, trunks and lamp posts. */
   massing: THREE.Material
+  /** The same, plus the leaf cut-out. Double-sided, alpha-tested. */
+  foliage: THREE.Material
   water: THREE.Material
 }
 
@@ -413,22 +466,47 @@ export function buildCity(
   group.add(pond)
 
   if (params.trees && treeSpots.length > 0) {
-    const geometry = treeGeometry()
-    disposables.push(geometry)
-    const trees = new THREE.InstancedMesh(geometry, materials.massing, treeSpots.length)
-    trees.name = 'city-trees'
+    // One set of placements, two meshes: the trunks go with the rest of the
+    // massing and the crowns need the material that cuts leaves out of them.
+    const placements: THREE.Matrix4[] = []
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
     const s = new THREE.Vector3()
-    for (let i = 0; i < treeSpots.length; i++) {
+    for (const spot of treeSpots) {
       const scale = 0.78 + random() * 0.55
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), random() * Math.PI * 2)
       s.set(scale, scale * (0.85 + random() * 0.4), scale)
-      m.compose(treeSpots[i]!, q, s)
-      trees.setMatrixAt(i, m)
+      placements.push(m.clone().compose(spot, q, s))
     }
-    trees.instanceMatrix.needsUpdate = true
-    group.add(trees)
+    for (const [geometry, material, name] of [
+      [trunkGeometry(), materials.massing, 'city-trunks'],
+      [canopyGeometry(), materials.foliage, 'city-leaves'],
+    ] as const) {
+      disposables.push(geometry)
+      const mesh = new THREE.InstancedMesh(geometry, material, placements.length)
+      mesh.name = name
+      for (const [i, placement] of placements.entries()) mesh.setMatrixAt(i, placement)
+      mesh.instanceMatrix.needsUpdate = true
+      group.add(mesh)
+    }
+
+    // Lamp posts down the four streets round the temple. Every third tree
+    // spot that is out on a kerb, which is about the spacing Barcelona uses
+    // and, more to the point, enough of them to read as a rhythm.
+    const lamps = lampGeometry()
+    disposables.push(lamps)
+    const posts = placements.filter((_, i) => i % 3 === 1)
+    const lampMesh = new THREE.InstancedMesh(lamps, materials.massing, posts.length)
+    lampMesh.name = 'city-lamps'
+    const upright = new THREE.Quaternion()
+    for (const [i, placement] of posts.entries()) {
+      const at = new THREE.Vector3().setFromMatrixPosition(placement)
+      // Off the tree and toward the road, so the two do not stand in one spot.
+      at.x += 3.2
+      lampMesh.setMatrixAt(i, m.clone().compose(at, upright, new THREE.Vector3(1, 1, 1)))
+    }
+    lampMesh.instanceMatrix.needsUpdate = true
+    group.add(lampMesh)
   }
 
   return {

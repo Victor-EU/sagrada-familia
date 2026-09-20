@@ -523,7 +523,29 @@ float sfSheltered = 0.0;
    */
   sfSheltered = smoothstep( 0.34, 0.86, sfCentre * 0.68 + sfRing * 0.32 );
 }
-iblIrradiance *= mix( uSkyFill, 1.0, sfSheltered ) * uFillScale;
+// Outdoors the skyline shades this the same as anything else; indoors the
+// room's own fill takes over and the towers are irrelevant. See
+// OUTDOOR_INDIRECT for what the term is.
+{
+  vec3 sfSkyN = inverseTransformDirection( normal, viewMatrix );
+  float sfHidden = 0.0;
+  for ( int i = 0; i < 18; i ++ ) {
+    if ( i >= uSkylineCount ) break;
+    vec4 sfTower = uSkyline[ i ];
+    vec2 sfTo = sfTower.xy - vSunWorld.xz;
+    float sfDist = length( sfTo );
+    if ( sfDist < sfTower.z * 1.25 ) continue;
+    float sfRise = sfTower.w - vSunWorld.y;
+    if ( sfRise <= 0.0 ) continue;
+    float sfPatch =
+      ( asin( clamp( sfTower.z / sfDist, 0.0, 1.0 ) ) / 3.14159265 ) *
+      ( atan( sfRise / sfDist ) / 1.5707963 );
+    vec3 sfDir = normalize( vec3( sfTo.x, sfRise * 0.5, sfTo.y ) );
+    sfHidden += sfPatch * max( 0.0, dot( sfSkyN, sfDir ) ) * 2.0;
+  }
+  float sfOpen = uSkyFill * ( 1.0 - clamp( sfHidden, 0.0, 0.88 ) );
+  iblIrradiance *= mix( sfOpen, 1.0, sfSheltered ) * uFillScale;
+}
 `
 
 // `uFillScale` is declared by OUTDOOR_PARS, which every indoor stone also
@@ -810,21 +832,112 @@ export function grainUniforms(): GrainUniforms {
  * So the envelope scales the probe's irradiance and nothing else: the sun is
  * untouched, the hemisphere is untouched, and the room never sees it.
  */
+/**
+ * How much sky the eighteen leave each other.
+ *
+ * The one thing missing from the exterior's light was the scale in the
+ * middle. Cast shadows are there, and ambient occlusion runs at three metres
+ * — but between three metres and a hundred there was nothing at all, and
+ * that band is where this building's exterior lives. In every photograph of
+ * a group of four bell towers the *inner* flanks are markedly darker than
+ * the outer ones, and it is not shadow: it is that a tower standing seven
+ * and a half metres from three others can only see a third of the sky, and
+ * the sky is what lights everything the sun has missed. Given the open
+ * hemisphere for all of them, the four came back as four identical objects
+ * that happen to be near each other, which is the reading that makes a
+ * model of a group rather than a group.
+ *
+ * Analytic, off the towers themselves, because they are the only occluders
+ * at this scale and there are eighteen of them. Each is a vertical shaft at
+ * an (x, z) with a radius and a top; the half-angle it subtends horizontally
+ * and the elevation it reaches together give the patch of sky it hides, and
+ * a surface loses it in proportion to how squarely it faces it. A fragment
+ * standing on a tower skips that tower, which is what the radius test is
+ * for — otherwise every shaft occludes itself completely and the whole
+ * skyline goes out.
+ *
+ * It costs eighteen iterations of about fifteen operations on outdoor stone
+ * only. The alternative — baking a sky-visibility term into the geometry —
+ * would have to be redone on every rebuild, and the geometry here is rebuilt
+ * whenever a slider moves.
+ */
+const SKYLINE_MAX = 18
+
 const OUTDOOR_INDIRECT = /* glsl */ `
-iblIrradiance *= uSkyFill * uFillScale;
+{
+  vec3 sfSkyN = inverseTransformDirection( normal, viewMatrix );
+  float sfHidden = 0.0;
+  for ( int i = 0; i < ${SKYLINE_MAX}; i ++ ) {
+    if ( i >= uSkylineCount ) break;
+    vec4 sfTower = uSkyline[ i ];
+    vec2 sfTo = sfTower.xy - vSunWorld.xz;
+    float sfDist = length( sfTo );
+    // Standing on it. A shaft cannot shade itself with itself, and asking it
+    // to puts every tower in the building into its own shadow.
+    if ( sfDist < sfTower.z * 1.25 ) continue;
+    float sfRise = sfTower.w - vSunWorld.y;
+    if ( sfRise <= 0.0 ) continue;
+
+    // The wedge of sky it stands in front of: how wide it is from here, and
+    // how high it reaches.
+    float sfHalf = asin( clamp( sfTower.z / sfDist, 0.0, 1.0 ) );
+    float sfElev = atan( sfRise / sfDist );
+    float sfPatch = ( sfHalf / 3.14159265 ) * ( sfElev / 1.5707963 );
+
+    // And only for a face that is looking at it.
+    vec3 sfDir = normalize( vec3( sfTo.x, sfRise * 0.5, sfTo.y ) );
+    sfHidden += sfPatch * max( 0.0, dot( sfSkyN, sfDir ) ) * 2.0;
+  }
+  iblIrradiance *= uSkyFill * uFillScale * ( 1.0 - clamp( sfHidden, 0.0, 0.88 ) );
+}
 `
 
 const OUTDOOR_PARS = /* glsl */ `
 uniform float uSkyFill;
 uniform float uFillScale;
+uniform vec4 uSkyline[ ${SKYLINE_MAX} ];
+uniform int uSkylineCount;
 `
 
 export interface OutdoorUniforms extends Record<string, THREE.IUniform> {
   uSkyFill: { value: number }
+  /** Each tower as (x, z, radius, top). Shared by every outdoor stone. */
+  uSkyline: { value: THREE.Vector4[] }
+  uSkylineCount: { value: number }
 }
 
 export function outdoorUniforms(): OutdoorUniforms {
-  return { uSkyFill: { value: 3.2 } }
+  return {
+    /**
+     * Down from 3.2, now that the towers take their share of it.
+     *
+     * The old figure was set with nothing shading the envelope at all, so it
+     * had to stand for both an open sky and a sheltered one at once and was
+     * too bright for the second. With the skyline term doing that job the
+     * open figure can be what an open figure should be.
+     */
+    uSkyFill: { value: 2.1 },
+    uSkyline: { value: Array.from({ length: SKYLINE_MAX }, () => new THREE.Vector4()) },
+    uSkylineCount: { value: 0 },
+  }
+}
+
+/**
+ * Tell the envelope where the towers are standing.
+ *
+ * Called on a rebuild, because a slider can move every one of them.
+ */
+export function setSkyline(
+  outdoor: OutdoorUniforms,
+  towers: readonly { x: number; z: number; radius: number; top: number }[],
+): void {
+  const list = outdoor.uSkyline.value
+  const n = Math.min(SKYLINE_MAX, towers.length)
+  for (let i = 0; i < n; i++) {
+    const t = towers[i]!
+    list[i]!.set(t.x, t.z, t.radius, t.top)
+  }
+  outdoor.uSkylineCount.value = n
 }
 
 /**
@@ -849,6 +962,286 @@ const FILL_SCALE: Partial<Record<StoneName, number>> = {
 }
 
 /**
+ * The masonry, and it is the claim that this building is made of pieces.
+ *
+ * Every exterior surface in every reference photograph is laid stone, and at
+ * the distances anybody stands from this one the laying shows: courses about
+ * four hundred millimetres tall, blocks between two thirds of a metre and a
+ * metre and a half long, a joint every few pixels even from the far side of
+ * the plaza. On the Nativity front the joints are *lighter* than the blocks,
+ * because the stone went black and the mortar did not; on the Passion front
+ * they are darker. That reversal is half of what tells the two fronts apart
+ * at a glance, and it is a sign in a uniform.
+ *
+ * The grain shader that was already here says something different and
+ * smaller — that one block is not quite the colour of the next — at a scale
+ * of one metre eight, and at exterior exposure it is invisible. What was
+ * missing is the *edges*. A hundred metres of surface with no edge in it is
+ * an extrusion, and an extrusion is a 3D print.
+ *
+ * Three things make a joint rather than a stripe of paint:
+ *
+ *  1. **It is a recess**, so the surface tips at it. Drawn as tone alone a
+ *     course line stays put when the sun moves, which is the giveaway. Drawn
+ *     as a tilt it catches the sun on one side and loses it on the other,
+ *     and a wall of them turns over as the hour slider moves.
+ *  2. **It retires.** Each line knows its own filter width and fades out
+ *     once a whole course is down to a couple of pixels — the same
+ *     machinery the pavement uses, and for the same reason: there is no
+ *     texture here to mip, so a line that outlives its sampling rate becomes
+ *     moiré. A tower seen from across the Eixample must go smooth, not
+ *     sparkly.
+ *  3. **The courses break joint.** Every row is offset half a block from the
+ *     one below, plus a little per row, because a stack bond is a tile and a
+ *     running bond is a wall.
+ *
+ * The frame is world space, which matters twice over: a piece's masonry
+ * belongs to where it stands in the building rather than to its own local
+ * coordinates, so the four hundred instanced pieces that share one geometry
+ * are not all marked identically; and the courses come out of world `y`, so
+ * they ring a tower and run level along a wall without either needing to say
+ * which it is.
+ *
+ * The along-wall coordinate is the awkward one, because there is no single
+ * world axis that runs along every surface. It is snapped to whichever
+ * horizontal axis the face is *not* pointing down — z for a wall facing x,
+ * x for a wall facing z. On a tower that switches four times round the
+ * circumference, and what a switch costs is one vertical break in the
+ * bonding pattern at each of the four diagonals. Masonry has those; a
+ * seam-free blend of two stripe fields, which is the alternative, has a band
+ * of mush at every diagonal instead, and mush is not a thing stone does.
+ */
+const MASONRY_PARS = /* glsl */ `
+uniform vec4 uMasonry;
+uniform vec4 uWeather;
+uniform vec2 uSeam;
+
+/** Distance from x to the nearest line of a grid of this period. */
+float sfToLine( const in float x, const in float period ) {
+  return abs( fract( x / period + 0.5 ) - 0.5 ) * period;
+}
+
+/**
+ * How much of this pixel a joint covers.
+ *
+ * The pavement's function, moved up the wall. The first smoothstep is the
+ * joint's own edge softened by the filter width, so a line narrower than a
+ * pixel comes back grey rather than stippled; the second retires the line
+ * once a whole course is down to a couple of pixels.
+ */
+float sfSeam( const in float distance, const in float halfWidth, const in float filterWidth, const in float period ) {
+  float edge = 1.0 - smoothstep( halfWidth - filterWidth, halfWidth + filterWidth, distance );
+  return edge * ( 1.0 - smoothstep( period * 0.14, period * 0.5, filterWidth ) );
+}
+
+float sfCellHash( const in vec2 cell ) {
+  return fract( sin( dot( cell, vec2( 127.1, 311.7 ) ) ) * 43758.5453123 );
+}
+`
+
+/**
+ * What the masonry does to a fragment.
+ *
+ * Runs where the normal has just been established: see `SurfacePatch.surface`.
+ * A stone whose course height is zero opts out entirely, which is every
+ * monolithic shaft in the building — a column here is a turned drum and not
+ * a wall, and coursing one would be a different and wrong claim.
+ */
+const MASONRY_SURFACE = /* glsl */ `
+if ( uMasonry.x > 0.0 ) {
+  vec3 sfWorld = vSunWorld;
+  vec3 sfFace = inverseTransformDirection( normal, viewMatrix );
+
+  // The horizontal axis this face runs along — see the note above.
+  float sfAlongFlip = abs( sfFace.x ) > abs( sfFace.z ) ? 1.0 : 0.0;
+  float sfAlong = mix( sfWorld.x, sfWorld.z, sfAlongFlip );
+  vec3 sfAlongDir = mix( vec3( 1.0, 0.0, 0.0 ), vec3( 0.0, 0.0, 1.0 ), sfAlongFlip );
+  float sfUp = sfWorld.y;
+
+  float sfFwUp = max( fwidth( sfUp ), 1e-6 );
+  float sfFwAl = max( fwidth( sfAlong ), 1e-6 );
+
+  float sfShade = 0.0;
+  float sfTone = 0.0;
+  vec3 sfTilt = vec3( 0.0 );
+
+  if ( uSeam.x > 0.5 ) {
+    // Panel, not masonry. The six towers over the crossing are hoisted in
+    // prefabricated pieces, so what shows is a long horizontal seam every
+    // few metres and the diagonal lattice of the facing — no bond, no
+    // courses, and nothing that could be mistaken for a block.
+    float sfBed = sfSeam( sfToLine( sfUp, uMasonry.x ), uMasonry.z, sfFwUp, uMasonry.x );
+    float sfDiagA = sfToLine( ( sfAlong + sfUp ) * 0.7071, uMasonry.y );
+    float sfDiagB = sfToLine( ( sfAlong - sfUp ) * 0.7071, uMasonry.y );
+    float sfFwD = max( sfFwUp, sfFwAl );
+    sfShade = max(
+      sfBed,
+      max(
+        sfSeam( sfDiagA, uMasonry.z, sfFwD, uMasonry.y ),
+        sfSeam( sfDiagB, uMasonry.z, sfFwD, uMasonry.y )
+      )
+    );
+    sfTilt = vec3( 0.0, - sign( fract( sfUp / uMasonry.x + 0.5 ) - 0.5 ) * sfBed, 0.0 );
+  } else {
+    float sfRow = floor( sfUp / uMasonry.x );
+    // A course is not laid in one length of block. Ashlar comes out of the
+    // quarry in whatever the bed gave and is laid to whatever the mason had,
+    // so the length changes from course to course — and held constant, a
+    // wall of it reads as brick, which is the wrong material by two orders
+    // of size and the one thing this shader must not say.
+    float sfLen = uMasonry.y * ( 0.78 + sfCellHash( vec2( sfRow, 7.0 ) ) * 0.52 );
+    // Break joint: half a block every course, and a little more so the
+    // pattern does not repeat every two rows.
+    float sfStagger = ( mod( sfRow, 2.0 ) * 0.5 + sfCellHash( vec2( sfRow, 3.0 ) ) * 0.28 ) * sfLen;
+    float sfRun = sfAlong + sfStagger;
+
+    float sfBed = sfSeam( sfToLine( sfUp, uMasonry.x ), uMasonry.z, sfFwUp, uMasonry.x );
+    float sfPerp = sfSeam( sfToLine( sfRun, sfLen ), uMasonry.z, sfFwAl, sfLen );
+    sfShade = max( sfBed, sfPerp );
+
+    // One block, one tone. Blocks were cut at different times from different
+    // beds of the same quarry and they have never matched.
+    sfTone = ( sfCellHash( vec2( floor( sfRun / sfLen ), sfRow ) ) - 0.5 ) * uWeather.x;
+
+    sfTilt =
+      vec3( 0.0, - sign( fract( sfUp / uMasonry.x + 0.5 ) - 0.5 ) * sfBed, 0.0 ) +
+      sfAlongDir * ( - sign( fract( sfRun / sfLen + 0.5 ) - 0.5 ) * sfPerp );
+  }
+
+  /**
+   * The weather, which is where the age of a fabric actually lives.
+   *
+   * Three things, all of them things water does. What faces the sky is
+   * rained on and comes back paler than the wall it belongs to. What faces
+   * away is sheltered, never washed, and on hundred-year-old Montjuïc stone
+   * that is where the black crust is. And between the two, the runnels: dirt
+   * carried down a vertical face in streaks, which is the single most
+   * legible sign of age on any masonry building and costs one noise lookup.
+   */
+  float sfSky = max( 0.0, sfFace.y );
+  float sfUnder = max( 0.0, - sfFace.y );
+  float sfVertical = 1.0 - abs( sfFace.y );
+  float sfRun = sfValueNoise( vec3( sfAlong * 2.3, sfUp * 0.09, 17.0 ) );
+  float sfWeather =
+    1.0
+    + uWeather.z * sfSky
+    - uWeather.y * sfUnder
+    - uWeather.w * sfVertical * smoothstep( 0.42, 0.95, sfRun );
+
+  diffuseColor.rgb *= ( 1.0 + sfShade * uMasonry.w ) * ( 1.0 + sfTone ) * sfWeather;
+  // A joint is cut and a block face is dressed, so the joint is the rougher
+  // of the two — and a weathered block is rougher than a clean one.
+  roughnessFactor = clamp( roughnessFactor + sfShade * 0.08, 0.0, 1.0 );
+
+  // The shading normal only. There is no geometryNormal at this point in the
+  // chain: three declares that one from this one further down, in
+  // lights_fragment_begin, so tipping this tips both — and naming the other
+  // here is naming an identifier the shader has not met yet.
+  if ( uSeam.y > 0.0 ) {
+    normal = normalize( normal + mat3( viewMatrix ) * sfTilt * uSeam.y );
+  }
+}
+`
+
+/**
+ * One fabric's masonry.
+ *
+ * `course` and `block` are metres; `joint` is the half-width of the cut, in
+ * metres, so it is a real gap and not a fraction of anything. `tone` is
+ * signed on purpose: a joint is *darker* than the stone on every fabric here
+ * except the Nativity front, where ninety years of soot have left the blocks
+ * black and the mortar pale, and the front reads as a dark cliff with a
+ * light net over it. Getting that one sign wrong loses the front.
+ */
+interface Masonry {
+  course: number
+  block: number
+  joint: number
+  tone: number
+  /** Block-to-block tone, soot on sheltered faces, rain-wash, dirt runnels. */
+  vary: number
+  soot: number
+  wash: number
+  streak: number
+  /** Panel seams rather than courses, and how far a joint tips the normal. */
+  seam: boolean
+  relief: number
+}
+
+const NO_MASONRY: Masonry = {
+  course: 0,
+  block: 0,
+  joint: 0,
+  tone: 0,
+  vary: 0,
+  soot: 0,
+  wash: 0,
+  streak: 0,
+  seam: false,
+  relief: 0,
+}
+
+/**
+ * Which stones are laid, and how.
+ *
+ * Only the ones that are walls. A column in this building is a turned shaft
+ * and the vault is a thin web; coursing either would be a different claim
+ * and a false one, and the interior has been matched against photographs
+ * without it. What is missing here is missing deliberately.
+ */
+const MASONRY: Partial<Record<StoneName, Masonry>> = {
+  // Gaudí's own front: small stone, finely jointed, black with pale mortar,
+  // and every sheltered face of it crusted.
+  nativity: {
+    course: 0.38, block: 0.95, joint: 0.022, tone: 0.24,
+    vary: 0.1, soot: 0.34, wash: 0.12, streak: 0.24, seam: false, relief: 0.75,
+  },
+  // Sixties work, larger blocks, joints darker than the stone.
+  passion: {
+    course: 0.46, block: 1.3, joint: 0.02, tone: -0.15,
+    vary: 0.07, soot: 0.12, wash: 0.07, streak: 0.11, seam: false, relief: 0.62,
+  },
+  // New white stone, cut large and barely weathered at all.
+  white: {
+    course: 0.56, block: 1.65, joint: 0.016, tone: -0.1,
+    vary: 0.04, soot: 0.05, wash: 0.04, streak: 0.05, seam: false, relief: 0.5,
+  },
+  // Not laid at all: panels, seamed long and straight, and a diamond facing.
+  panel: {
+    course: 2.6, block: 3.2, joint: 0.03, tone: -0.13,
+    vary: 0.03, soot: 0.03, wash: 0.03, streak: 0.03, seam: true, relief: 0.42,
+  },
+  // The generic envelope, and the two that face both ways.
+  facade: {
+    course: 0.46, block: 1.25, joint: 0.02, tone: -0.14,
+    vary: 0.07, soot: 0.1, wash: 0.06, streak: 0.09, seam: false, relief: 0.6,
+  },
+  shell: {
+    course: 0.46, block: 1.25, joint: 0.02, tone: -0.13,
+    vary: 0.06, soot: 0.08, wash: 0.07, streak: 0.07, seam: false, relief: 0.55,
+  },
+  wall: {
+    course: 0.44, block: 1.3, joint: 0.018, tone: -0.12,
+    vary: 0.06, soot: 0.06, wash: 0.05, streak: 0.06, seam: false, relief: 0.55,
+  },
+}
+
+export interface MasonryUniforms extends Record<string, THREE.IUniform> {
+  uMasonry: { value: THREE.Vector4 }
+  uWeather: { value: THREE.Vector4 }
+  uSeam: { value: THREE.Vector2 }
+}
+
+function masonryUniforms(name: StoneName): MasonryUniforms {
+  const m = MASONRY[name] ?? NO_MASONRY
+  return {
+    uMasonry: { value: new THREE.Vector4(m.course, m.block, m.joint, m.tone) },
+    uWeather: { value: new THREE.Vector4(m.vary, m.soot, m.wash, m.streak) },
+    uSeam: { value: new THREE.Vector2(m.seam ? 1 : 0, m.relief) },
+  }
+}
+
+/**
  * How one stone is patched.
  *
  * Every stone gets the grain; the ones standing indoors get the ambient
@@ -868,17 +1261,19 @@ export function stonePatch(
 ): SurfacePatch {
   const indoors = INDOORS.includes(name)
   const fillScale = { uFillScale: { value: FILL_SCALE[name] ?? 1 } }
+  const laid = masonryUniforms(name)
   return {
     uniforms: indoors
-      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale }
-      : { ...grain, ...outdoor, ...fillScale },
+      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale, ...laid }
+      : { ...grain, ...outdoor, ...fillScale, ...laid },
     pars: indoors
-      ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}`
-      : `${GRAIN_PARS}\n${OUTDOOR_PARS}`,
+      ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}\n${MASONRY_PARS}`
+      : `${GRAIN_PARS}\n${OUTDOOR_PARS}\n${MASONRY_PARS}`,
     colour: GRAIN_COLOUR,
+    surface: MASONRY_SURFACE,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-5' : 'stone-sky-2',
+    key: indoors ? 'stone-room-7' : 'stone-sky-4',
   }
 }
 
@@ -983,6 +1378,86 @@ export function cityUniforms(): CityUniforms {
 
 export function cityPatch(fill: CityUniforms): SurfacePatch {
   return { uniforms: { ...fill }, pars: CITY_PARS, light: CITY_LIGHT, key: 'city-1' }
+}
+
+/**
+ * The street trees, which were the last thing on the plaza still made of
+ * primitives.
+ *
+ * A cathedral seen across bare ground is an object on a table, and the city
+ * already understood that — every reference frame has this building seen
+ * *through* something. What it had to see it through was an icosahedron on a
+ * cylinder, and a sphere of flat green has exactly the property the whole
+ * exterior was failing on: a smooth closed outline, with no edge anywhere in
+ * it. At eight metres tall and twenty from the camera that is the most
+ * conspicuously modelled object in the frame.
+ *
+ * What a tree actually gives a photograph is a *ragged silhouette* — a few
+ * thousand small holes round its edge that break the light behind it. So the
+ * crown is three quads crossed about the trunk and the leaves are cut out of
+ * them: a radial falloff for the overall shape, two octaves of noise for the
+ * edge, and an alpha test rather than blending, so there is no sorting to get
+ * wrong and the shadow of a leaf is the shape of the leaf.
+ *
+ * The mask is drawn in the quad's own coordinates, which is what the vertex
+ * hook is carrying — see `SurfacePatch.vertex`. The noise is offset by where
+ * the tree stands, so two hundred instances of one geometry are two hundred
+ * different trees.
+ */
+const FOLIAGE_PARS = /* glsl */ `
+varying vec3 vLeafLocal;
+uniform vec2 uCanopy;
+`
+
+const FOLIAGE_VERTEX_PARS = /* glsl */ `
+varying vec3 vLeafLocal;
+`
+
+const FOLIAGE_VERTEX = /* glsl */ `
+  vLeafLocal = position;
+`
+
+const FOLIAGE_COLOUR = /* glsl */ `
+{
+  // How far out in the crown this fragment is, as a fraction of its radius.
+  vec3 sfFromHeart = vLeafLocal - vec3( 0.0, uCanopy.x, 0.0 );
+  sfFromHeart.y *= 1.25;
+  float sfOut = length( sfFromHeart ) / max( uCanopy.y, 0.01 );
+
+  // Three octaves, offset by where this tree is standing so no two instances
+  // are cut the same way. The finest one is what a leaf is: at two octaves
+  // the crown came back cut into scallops the size of a hand of bananas,
+  // which from the pavement is a shape no tree has.
+  vec3 sfSeed = vLeafLocal * 3.4 + floor( vSunWorld * 0.37 ) * 5.3;
+  float sfLeaf =
+    sfValueNoise( sfSeed ) * 0.46 +
+    sfValueNoise( sfSeed * 2.7 ) * 0.33 +
+    sfValueNoise( sfSeed * 7.1 ) * 0.21;
+
+  // Dense in the middle, ragged at the edge, gone past it.
+  diffuseColor.a = smoothstep( 1.06, 0.18, sfOut ) * ( 0.46 + sfLeaf * 1.0 );
+
+  // A leaf that has sky behind it is brighter than one that has the tree
+  // behind it, and the crown's own depth is the only thing that says so.
+  diffuseColor.rgb *= 0.72 + 0.5 * smoothstep( 0.95, 0.25, sfOut );
+}
+`
+
+export interface FoliageUniforms extends Record<string, THREE.IUniform> {
+  /** Where the crown's middle is above the foot, and how wide it is. */
+  uCanopy: { value: THREE.Vector2 }
+}
+
+export function foliagePatch(fill: CityUniforms, heart: number, radius: number): SurfacePatch {
+  const canopy: FoliageUniforms = { uCanopy: { value: new THREE.Vector2(heart, radius) } }
+  return {
+    uniforms: { ...fill, ...canopy },
+    pars: `${GRAIN_PARS}\n${CITY_PARS}\n${FOLIAGE_PARS}`,
+    vertex: { pars: FOLIAGE_VERTEX_PARS, body: FOLIAGE_VERTEX },
+    colour: FOLIAGE_COLOUR,
+    light: CITY_LIGHT,
+    key: 'foliage-1',
+  }
 }
 
 export function groundMaterial(): THREE.MeshStandardMaterial {

@@ -310,3 +310,178 @@ function mulberry(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
+
+/**
+ * The cypress: the Tree of Life, over the central portal of the Nativity
+ * front.
+ *
+ * Not a decoration on that façade — it is the top of it, a green shaft
+ * standing between the two middle bell towers with twenty-one white doves on
+ * it and a cross above. In every photograph taken from Plaça de Gaudí it is
+ * the one piece of *colour* in a hundred metres of blackened stone, and its
+ * absence is why the middle of that front read as a gap.
+ *
+ * It is made of exactly what the model can honestly claim: green ceramic and
+ * white ceramic. A tapered shaft of foliage cut into tiers — the real one is
+ * a stack of cypress-green scallops — with the doves as small white knots
+ * scattered over it. Colour rides on the vertices, so one geometry carries
+ * both.
+ */
+export function buildCypress(height: number, radius: number, seed = 31): THREE.BufferGeometry {
+  const random = mulberry(seed)
+  const positions: number[] = []
+  const colours: number[] = []
+  const rows = 22
+  const cols = 14
+
+  const green = new THREE.Color(0x4f6f46).convertSRGBToLinear()
+  const deep = new THREE.Color(0x35502f).convertSRGBToLinear()
+  const shade = new THREE.Color()
+
+  const at = (row: number, col: number): THREE.Vector3 => {
+    const t = row / rows
+    // A cypress: widest a third of the way up, closing to a point.
+    const profile = Math.sin(Math.pow(t, 0.72) * Math.PI * 0.92) * (1 - t * 0.12)
+    // Tiers, so the silhouette is scalloped rather than a smooth cone. The
+    // real one is a stack of foliage and reads as a saw against the sky.
+    const tier = 1 + 0.16 * Math.cos(t * rows * 0.9)
+    const a = (col / cols) * Math.PI * 2
+    const r = radius * profile * tier
+    return new THREE.Vector3(Math.cos(a) * r, t * height, Math.sin(a) * r)
+  }
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const quad = [at(row, col), at(row, col + 1), at(row + 1, col + 1), at(row + 1, col)]
+      // Darker low down and inside the scallops, which is where the light
+      // does not get in.
+      shade.copy(deep).lerp(green, 0.35 + 0.65 * (row / rows) + (random() - 0.5) * 0.3)
+      for (const i of [0, 1, 2, 0, 2, 3]) {
+        const p = quad[i]!
+        positions.push(p.x, p.y, p.z)
+        colours.push(shade.r, shade.g, shade.b)
+      }
+    }
+  }
+
+  // The doves. Twenty-one is the published count and they are the whole
+  // reason the tree reads white-flecked from the plaza.
+  const white = new THREE.Color(0xf2efe6).convertSRGBToLinear()
+  for (let i = 0; i < 21; i++) {
+    const t = 0.12 + random() * 0.84
+    const a = random() * Math.PI * 2
+    const profile = Math.sin(Math.pow(t, 0.72) * Math.PI * 0.92) * (1 - t * 0.12)
+    const r = radius * profile * 1.04
+    const centre = new THREE.Vector3(Math.cos(a) * r, t * height, Math.sin(a) * r)
+    const size = radius * 0.11
+    const dove = new THREE.SphereGeometry(size, 5, 3)
+    dove.scale(1.5, 0.8, 0.9)
+    dove.translate(centre.x, centre.y, centre.z)
+    const flat = dove.toNonIndexed()
+    dove.dispose()
+    const p = flat.getAttribute('position')
+    for (let v = 0; v < p.count; v++) {
+      positions.push(p.getX(v), p.getY(v), p.getZ(v))
+      colours.push(white.r, white.g, white.b)
+    }
+    flat.dispose()
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3))
+  geometry.computeVertexNormals()
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
+/**
+ * The bridge between the two middle towers of a front.
+ *
+ * Both finished fronts have one — the Passion's carries the Ascension and
+ * the Nativity's carries the cypress — and from the pavement it is the thing
+ * that turns four separate spires into one façade. Without it the towers
+ * read as four objects that happen to stand in a row, which is how this
+ * model has read from every street-level frame.
+ *
+ * A shallow arch, because the photographs show a curve and not a lintel: the
+ * soffit rises to the middle and the deck over it is flat.
+ */
+export function buildFrontBridge(span: number, width: number, rise: number): THREE.BufferGeometry {
+  const pieces: THREE.BufferGeometry[] = []
+  const steps = 14
+  const thick = rise * 0.34
+
+  const positions: number[] = []
+  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): void => {
+    positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
+  }
+  // The arch band: an extruded strip following the soffit.
+  const soffit = (t: number): number => Math.sin(t * Math.PI) * rise
+  for (let i = 0; i < steps; i++) {
+    const t0 = i / steps
+    const t1 = (i + 1) / steps
+    const x0 = (t0 - 0.5) * span
+    const x1 = (t1 - 0.5) * span
+    const y0 = soffit(t0)
+    const y1 = soffit(t1)
+    for (const z of [-width / 2, width / 2]) {
+      const a = new THREE.Vector3(x0, y0, z)
+      const b = new THREE.Vector3(x1, y1, z)
+      const c = new THREE.Vector3(x1, y1 + thick, z)
+      const d = new THREE.Vector3(x0, y0 + thick, z)
+      tri(a, b, c)
+      tri(a, c, d)
+    }
+    // Soffit and back, so the band is a solid seen from below.
+    const la = new THREE.Vector3(x0, y0, -width / 2)
+    const lb = new THREE.Vector3(x1, y1, -width / 2)
+    const ra = new THREE.Vector3(x0, y0, width / 2)
+    const rb = new THREE.Vector3(x1, y1, width / 2)
+    tri(la, lb, rb)
+    tri(la, rb, ra)
+    const ta = new THREE.Vector3(x0, y0 + thick, -width / 2)
+    const tb = new THREE.Vector3(x1, y1 + thick, -width / 2)
+    const tc = new THREE.Vector3(x1, y1 + thick, width / 2)
+    const td = new THREE.Vector3(x0, y0 + thick, width / 2)
+    tri(ta, tb, tc)
+    tri(ta, tc, td)
+  }
+  const band = new THREE.BufferGeometry()
+  band.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  band.computeVertexNormals()
+  pieces.push(band)
+
+  // The deck standing on it.
+  const deck = new THREE.BoxGeometry(span * 0.92, thick * 0.8, width * 1.15)
+  deck.translate(0, rise + thick * 1.3, 0)
+  pieces.push(deck)
+
+  return mergeOrEmpty(pieces)
+}
+
+/**
+ * The fringe under an archivolt.
+ *
+ * What a deep Gothic portal does at a distance is hang a row of small dark
+ * shapes over the way in, and on this front they are stalactites of carved
+ * stone. Cones on the arc of the ring, each one throwing its own shadow onto
+ * the one behind, is the honest reading of that at the scale anybody sees it:
+ * not sculpture, but the *shadow* sculpture casts.
+ */
+export function buildArchFringe(clear: number, rise: number, count: number, drop: number): THREE.BufferGeometry {
+  const pieces: THREE.BufferGeometry[] = []
+  const half = clear / 2
+  for (let i = 0; i <= count; i++) {
+    const t = i / count
+    // The same ogival soffit the archivolts use, so the fringe hangs on it.
+    const x = half * Math.pow(1 - Math.abs(t * 2 - 1), 0.55) * (t < 0.5 ? -1 : 1)
+    const y = rise * (1 - Math.abs(t * 2 - 1))
+    const size = drop * (0.55 + 0.45 * Math.sin(t * Math.PI))
+    const cone = new THREE.ConeGeometry(size * 0.34, size, 5, 1)
+    cone.rotateX(Math.PI)
+    cone.translate(x, y - size / 2, 0)
+    pieces.push(cone)
+  }
+  return mergeOrEmpty(pieces)
+}

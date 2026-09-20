@@ -186,6 +186,113 @@ building is made of pieces; the light is what makes the pieces sit in a group.
 The base board and the Nativity's caves are last because they are the least
 of what a visitor sees, and the most work per pixel.
 
+---
+
+# Built, 20 September 2026
+
+All seven. What each one cost against what it bought, and the number each was
+judged on. Measurements are taken with the harness, sampling the render and
+the reference frame over a patch of the same named surface.
+
+## The bars, and where they landed
+
+| Step | Bar | Result |
+| --- | --- | --- |
+| Five fabrics | Passion belfry within 10 points of 159 139 122, saturation within 0.05 | 158 143 120 at 0.24 against 0.23 |
+| The belfry | rows within two of the photograph on the same strip | 23 against 22, from 12 |
+| Masonry | courses visible close up, no moiré at three hundred metres | holds; every line retires on its own filter width |
+| Group light | modelling within 20 % of the photographs | 3.38 against 3.54 and 3.58, from 2.68 |
+
+The ladder of fabrics, all four in one frame under one sun, against the
+photographs:
+
+| Fabric | Render | Photograph |
+| --- | --- | --- |
+| Nativity front | 75 63 53 | 77 66 64 |
+| Passion belfry, December | 158 143 120 | 159 139 122 |
+| New white stone | 194 189 182 | 160 156 152 |
+| Panel, central towers | 204 198 189 | 157 151 143 |
+
+The two new fabrics read bright because the frame they are measured in is a
+June morning and the photographs of them are December and April. Their
+*ratio* to the Passion stone beside them in the same frame is what was being
+matched, and it holds.
+
+## What each step turned out to be
+
+**The fabrics were a lookup, not a search.** Every piece of the envelope
+already knew which front or which decade it belonged to; nothing had ever
+asked it. The one real bug was in the tower registry: the key carried the
+geometry and not the material, so the first caller to open a kind set its
+stone, and the Passion's outer pair — same height, same girth, same taper as
+the Nativity's inner pair — silently joined that kind and came back cut from
+blackened Montjuïc stone in the middle of the 1960s front.
+
+**The belfry was the biggest single change in any exterior frame.** The
+hood over each aperture is the whole of the effect: a lit slab over a black
+slot, twelve to a row and twenty-three rows up a shaft. Without it an opening
+is a flat mark the colour of whatever stands behind it. Two things had to go
+with it — the helix, because the photographs show level rows, and the row
+*count*, because the real spacing is a length and a taller tower simply has
+more rows.
+
+**The louvres needed their own share of sky.** A panel a metre down a slot
+cut in a metre of masonry cannot see the hemisphere the envelope's fill is
+set for, and given the open figure every opening on the building came back as
+a lit grey rectangle. One constant per stone, and the lattice appeared.
+
+**Masonry is where the age of a fabric lives.** Not the joint itself so much
+as what water has done around it: rain-washed where it faces the sky, sooty
+where it is sheltered, and runnels down every vertical face. On the Nativity
+the joints are *lighter* than the blocks, because the stone went black and the
+mortar did not, and that sign reversal is half of what tells the two fronts
+apart at a glance.
+
+**The group light was the missing scale.** Between the three metres ambient
+occlusion covers and the hundred a shadow map covers there was nothing at
+all, and that band is where this building's exterior lives. Eighteen towers
+as vertical shafts, each subtending a patch of sky, is cheap and stable and
+it is what makes four bell towers read as a group rather than as four objects
+standing in a row.
+
+**The trees were the last primitives on the plaza.** A sphere of flat green
+has exactly the fault the whole exterior was being rebuilt to lose: a smooth
+closed outline with no edge in it. Three crossed quads with the leaves cut out
+of them cost the same.
+
+**The Nativity front got its light and not its figures.** The bridge and the
+cypress, which is the only colour on that front; a fringe of stalactites over
+each portal; and a crust that is dense at the portals and stops climbing, as
+a hundred years of weather actually leaves it.
+
+## Two bugs the work turned up
+
+**The shelter test was averaging five roof probes equally**, so the *outer*
+face of every enclosing wall in the building got a fifth of a vote for being
+indoors — one tap of the ring always steps back across the wall it is
+standing on and finds the terrace over it. A fifth would be harmless if the
+two fills were the same size, and they are nothing like it: the room's is a
+window counted at nearly three and a floor counted at eight, against an
+outdoor probe cut hard so the towers keep their modelling. The nave's flank
+came back a sheet of interior gold on a frame taken from two streets away.
+The centre tap decides now and the ring only leans.
+
+**A bridge forty-five metres up is not a ceiling.** The pass that asks what
+roofs a room saw the new bridge between two bell towers, decided the column of
+air beneath it was indoors, and filled it with the volumetric medium — a
+vertical plume of haze down the middle of the Nativity front like a
+searchlight. The towers learned this in phase five; anything that stands out
+in front of a façade has to be told the same thing.
+
+## Still open
+
+- The Glory front is white stone because nothing else would be honest, but
+  nobody has photographed it and nothing here is matched to anything.
+- The crust is still a field of bosses. It reads at plaza distance and it
+  will not survive anyone walking up to it.
+- The interior is unchanged and still carries the gap recorded in the README:
+  the glass palette and about a stop of indoor exposure.
+
 ## Risks
 
 - Masonry lines alias at distance. The pavement solved this once with
