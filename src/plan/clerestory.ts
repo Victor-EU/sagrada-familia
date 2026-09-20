@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { buildGlassPanel, type GlassSide } from '../geometry/glass.ts'
+import { glazing, mergeOrEmpty, pierced, windowField } from '../geometry/window.ts'
 
 /**
  * A bay's side wall: stone frame, glass in the gaps.
@@ -42,6 +42,36 @@ export interface RegisterParams {
    * frame — jambs, lintel, threshold — is the same frame either way.
    */
   glazed?: boolean
+  /**
+   * The figure of openings this register is pierced with.
+   *
+   * Given one, the register stops being a row of rectangles shared out across
+   * the bay and becomes a single pierced wall carrying lancets, oculi and a
+   * daisy — which is what the wall actually is. `lights` and `panesAcross`
+   * are then unused; the figure sets its own.
+   *
+   * Left out, the old rectangles are built instead. Doors need them, and so
+   * does anywhere a plain opening is the honest answer.
+   */
+  figure?: {
+    /** Rows of lancets. */
+    tiers: number
+    /** Lancets in a row. */
+    across: number
+    /** Stone between two lancets, and at the ends of the row. */
+    mullion?: number
+    margin?: number
+    /** Stone between one row of heads and the next row of sills. */
+    transom?: number
+    /** Daisy diameter as a fraction of the bay's width. Zero for none. */
+    rose?: number
+    /** Head shape: 0 a semicircle, 1 a point. */
+    point?: number
+    /** Circles in the spandrels over the mullions. */
+    oculi?: boolean
+    /** Depth of the splay cut round every opening. */
+    splay?: number
+  }
 }
 
 export interface ClerestoryParams {
@@ -130,6 +160,44 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
 
   for (const [index, register] of registers.entries()) {
     const tall = register.head - register.sill
+
+    // A register with a figure is one pierced wall, not a row of slots. The
+    // stone and the glass are cut from the same set of rings, so they cannot
+    // disagree about where an opening is.
+    if (register.figure && register.glazed !== false) {
+      const f = register.figure
+      const figures = windowField({
+        width: p.span,
+        height: tall,
+        tiers: f.tiers,
+        across: f.across,
+        margin: f.margin ?? p.margin,
+        mullion: f.mullion ?? p.mullion,
+        transom: f.transom ?? 0.9,
+        rose: f.rose ?? 0,
+        point: f.point ?? 0,
+        oculi: f.oculi ?? true,
+        seed: p.seed * 977 + index * 23,
+      })
+      const stone = pierced(p.span, tall, p.thickness, figures, f.splay ?? 0.18)
+      stone.translate(0, register.sill, 0)
+      stonePieces.push(stone)
+
+      const panes = glazing(figures, {
+        gradeBase: register.sill / p.gradeHeight,
+        gradeTop: register.head / p.gradeHeight,
+        height: tall,
+        side: p.side,
+        along: p.along,
+        seed: p.seed * 131 + index * 17,
+      })
+      if ((panes.getAttribute('position')?.count ?? 0) > 0) {
+        panes.translate(0, register.sill, 0)
+        glassPieces.push(panes)
+      }
+      continue
+    }
+
     const openings = lay(p, register)
     if (openings.length === 0) continue
 
@@ -173,9 +241,9 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
   }
 
   return {
-    stone: mergeGeometries(stonePieces, false),
+    stone: mergeOrEmpty(stonePieces),
     // A wall that is all doors has no glass in it, and merging nothing throws.
-    glass: glassPieces.length > 0 ? mergeGeometries(glassPieces, false) : new THREE.BufferGeometry(),
+    glass: mergeOrEmpty(glassPieces),
   }
 }
 

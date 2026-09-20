@@ -7,6 +7,50 @@ import { InstancedField } from '../render/field.ts'
 import { LAYER_GLASS } from '../render/sunrig.ts'
 import { buildApse, type Apse, type ApseParams } from './apse.ts'
 import { buildClerestory, defaultClerestory, type RegisterParams } from './clerestory.ts'
+
+/**
+ * The figure the nave is glazed with.
+ *
+ * Four rows of round-headed lancets about a metre wide, an oculus standing in
+ * the stone over every mullion, and a daisy in the head of the bay — which is
+ * what the elevation photographs show, bay after bay, from the Glory end to
+ * the crossing. The numbers are read off them: the lights are a metre, the
+ * rows are four, the rose is a little under half the bay.
+ *
+ * It is the same figure at every height because it is the same wall. What
+ * changes is the colour in it, and that was always somebody else's business.
+ */
+const AISLE_FIGURE: NonNullable<RegisterParams['figure']> = {
+  tiers: 4,
+  across: 4,
+  mullion: 0.42,
+  margin: 0.95,
+  transom: 1.05,
+  rose: 0.44,
+  point: 0,
+  oculi: true,
+  splay: 0.13,
+}
+
+/**
+ * The clerestory's, which is the same wall higher up and in a hurry.
+ *
+ * Two rows rather than four, and the heads come to a point: at this height
+ * the lights are narrower for the same wall and a semicircle on a narrow
+ * light is a stub. No rose — the daisy belongs to the bay, and the bay is
+ * twenty metres below.
+ */
+const CLERESTORY_FIGURE: NonNullable<RegisterParams['figure']> = {
+  tiers: 2,
+  across: 3,
+  mullion: 0.5,
+  margin: 1.0,
+  transom: 0.95,
+  rose: 0,
+  point: 0.5,
+  oculi: true,
+  splay: 0.11,
+}
 import { MODULE, VAULT_HEIGHT } from './module.ts'
 import {
   buildBase,
@@ -275,8 +319,8 @@ export const defaultChurch: ChurchParams = {
     margin: 1.1,
     mullion: 0.55,
     lights: 3,
-    lowSill: 3.2,
-    lowHead: 17,
+    lowSill: 2.2,
+    lowHead: 26.5,
     clerestoryOffset: 0.55,
     clerestoryRise: 0.2,
     clerestoryCrest: 4,
@@ -698,25 +742,30 @@ function buildWalls(
         })
       }
     }
+    const lowHead = Math.min(w.lowHead, outerBand.crown - 2.6)
     outer.registers.push(
       ...over(doorway, {
         sill: w.lowSill,
-        head: Math.min(w.lowHead, outerBand.crown - 3),
+        head: lowHead,
         lights: w.lights,
         panesAcross: 4,
         panesUp: 12,
+        figure: AISLE_FIGURE,
       }),
     )
     // A wall that closes a transept end is not an aisle wall with a taller
     // top; it gets a second register, which is what makes the Nativity and
-    // Passion fronts read as façades from inside as well as out.
-    if (outerBand.crown > 35 || transeptEnd) {
+    // Passion fronts read as façades from inside as well as out. Only where
+    // there is room for one: the aisle glazing now runs most of the way to
+    // the vault, so on an ordinary bay there is nothing left above it.
+    if (outerBand.crown - lowHead > 9) {
       outer.registers.push({
-        sill: Math.max(outerBand.crown - 13, w.lowHead + 2),
-        head: outerBand.crown - 4,
+        sill: lowHead + 2.4,
+        head: outerBand.crown - 3,
         lights: w.lights,
         panesAcross: 3,
         panesUp: 8,
+        figure: CLERESTORY_FIGURE,
       })
     }
     addWall(parts, outer, sign * wallCentre, centre, (sign * Math.PI) / 2)
@@ -742,6 +791,7 @@ function buildWalls(
           lights: w.lights,
           panesAcross: 3,
           panesUp: 8,
+          figure: CLERESTORY_FIGURE,
         },
       ]
       addWall(parts, high, sign * (inner.outer + w.clerestoryOffset), centre, (sign * Math.PI) / 2)
@@ -825,22 +875,29 @@ function buildGloryWall(parts: Parts, p: ChurchParams, z: number, doors: Doorway
           doors.push({ x: x + opening.centre, z, nx: 0, nz: 1, halfWidth: opening.width / 2 })
         }
       }
+      const gloryHead = Math.min(w.lowHead, band.crown - 3)
       panel.registers.push(
         ...over(doorway, {
           sill: w.lowSill,
-          head: Math.min(w.lowHead, band.crown - 3),
+          head: gloryHead,
           lights: Math.max(2, Math.round(width / 5)),
           panesAcross: 4,
           panesUp: 12,
+          // The Glory end is the view down the nave, and it was the one wall
+          // the figure had not been given: from the crossing it closed the
+          // building with a blank slab and two doors in it. It takes the same
+          // openings as the flanks, spread wider because the panel is wider.
+          figure: { ...AISLE_FIGURE, across: Math.max(4, Math.round(width / 1.9)) },
         }),
       )
-      if (band.crown > 35) {
+      if (band.crown - gloryHead > 9) {
         panel.registers.push({
-          sill: band.crown - 15,
+          sill: gloryHead + 2.4,
           head: band.crown - 4,
           lights: 3,
           panesAcross: 4,
           panesUp: 10,
+          figure: { ...CLERESTORY_FIGURE, across: Math.max(3, Math.round(width / 2.6)) },
         })
       }
       addWall(parts, panel, x, z, 0)

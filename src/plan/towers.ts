@@ -69,6 +69,21 @@ export interface TowerSite {
   radius: number
   points: ColumnOrder
   crown: TowerCrown
+  /**
+   * What is left of the foot radius at the top of this tower's shaft.
+   *
+   * Per tower, because the eighteen are not one family. A bell tower is a
+   * needle — seven metres across where it leaves the façade and under two at
+   * the belfry, which is a taper near a fifth — and it is that slenderness,
+   * repeated twelve times, that makes the building read as tall. The tower
+   * of Jesus Christ is the opposite: a broad shaft carrying a cross, barely
+   * narrower at the top than at the bottom.
+   *
+   * Held in common at the old figure of 0.44 the twelve came out as traffic
+   * cones, and a hundred-metre traffic cone does not look a hundred metres
+   * tall. It was the first thing anybody said about the exterior.
+   */
+  taper: number
 }
 
 export interface TowerParams {
@@ -103,7 +118,11 @@ export const defaultTowers: TowerParams = {
   // Gentle. The ribs of the real towers lean rather than spiral, and a shaft
   // that turns much more than this reads as a drill bit at this slenderness.
   twistDeg: 22,
-  taper: 0.44,
+  /**
+   * The fallback taper, for anything that does not state its own. The three
+   * central towers do; see `TowerSite.taper`.
+   */
+  taper: 0.4,
   bands: 11,
   // Taller and narrower than they were. The openings on these towers are
   // lozenges standing on end, not square punches; at 0.52 × 0.5 they read as
@@ -125,6 +144,15 @@ export const defaultTowers: TowerParams = {
   reveal: 1.05,
   pinnacle: 0.17,
 }
+
+/**
+ * The twelve bell towers' taper.
+ *
+ * Seven and a half metres across at the façade and a shade under two at the
+ * belfry: the ratio is read straight off an elevation, and it is the number
+ * the whole exterior silhouette turns on.
+ */
+const BELL_TAPER = 0.23
 
 /** The published crown heights, which come out of the tower's total. */
 const CROSS_HEIGHT = 13.5
@@ -185,6 +213,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
         radius,
         points: 12,
         crown: 'pinnacle',
+        taper: BELL_TAPER,
       })
     }
   }
@@ -223,6 +252,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     radius: MODULE * 1.5,
     points: 12,
     crown: 'cross',
+    taper: 0.46,
   })
   sites.push({
     name: 'Virgin Mary',
@@ -235,6 +265,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     radius: MODULE,
     points: 8,
     crown: 'star',
+    taper: 0.36,
   })
   for (const x of [MODULE * 2, -MODULE * 2]) {
     for (const z of [p.crossNear, p.crossFar]) {
@@ -247,6 +278,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
         radius: MODULE * 0.75,
         points: 10,
         crown: 'finial',
+        taper: 0.3,
       })
     }
   }
@@ -293,7 +325,8 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
           ? STAR_SPAN
           : above * p.pinnacle
     const shaft = Math.max(6, above - crownHeight)
-    const tip = site.radius * p.taper
+    const taper = site.taper ?? p.taper
+    const tip = site.radius * taper
 
     // Everything that decides the mesh goes in the key, so two towers of the
     // same height and girth are one kind however far apart they stand.
@@ -302,6 +335,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
       site.points,
       shaft.toFixed(2),
       site.radius.toFixed(2),
+      taper.toFixed(2),
       site.crown === 'pinnacle' || site.crown === 'finial' ? 'open' : 'lantern',
     ].join(':')
 
@@ -309,7 +343,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
     const shape = (detail: number): TowerShaftParams => ({
       height: shaft,
       footRadius: site.radius,
-      taper: p.taper,
+      taper,
       points: site.points,
       starFoot: p.star,
       // The star runs out as the tower climbs; what is left at the top is a

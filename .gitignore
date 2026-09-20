@@ -11,3 +11,8 @@ reference/*
 
 # Frame grabs from the dev harness.
 reference/.shots
+
+# Victor's own photographs of the building — half a gigabyte of raw JPEG, and
+# the single best reference this project has. Kept out of the history for the
+# same reason reference/ is: they are harness input, not source.
+Photos/

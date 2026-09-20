@@ -140,7 +140,7 @@ export function buildGlassPanel(p: GlassPanelParams): THREE.BufferGeometry {
  * Both feed the hue so the sweep runs diagonally, which is what stops a wall
  * of windows from reading as a set of identical stripes.
  */
-function paneColor(
+export function paneColor(
   out: THREE.Color,
   side: GlassSide,
   u: number,
@@ -150,7 +150,15 @@ function paneColor(
 ): THREE.Color {
   const sweep = SWEEP[side]
   const t = THREE.MathUtils.clamp(grade * 1.25 + (u - 0.5) * 0.14 + (random() - 0.5) * 0.16, 0, 1)
-  const hue = (THREE.MathUtils.lerp(sweep.low, sweep.high, t) + 1) % 1
+  // The sweep says what colour this height is; the pane says how nearly it
+  // agrees. A window with no scatter about its own gradient is a gradient,
+  // and leaded glass is not a gradient — the panes next to each other in
+  // every photograph here are a crimson, an orange and a gold, cut from
+  // different sheets and set by somebody's eye. The jitter has to be in hue
+  // and not in the sweep parameter: the Passion sweep is a sixth of the
+  // circle wide, so a healthy-looking wobble along it moves the hue by about
+  // a degree and comes out as one flat colour.
+  const hue = (THREE.MathUtils.lerp(sweep.low, sweep.high, t) + (random() - 0.5) * 0.075 + 1) % 1
 
   // The wash toward white.
   //
@@ -167,8 +175,8 @@ function paneColor(
   // strongly as before, because the first bay had been glazed nearly clear.
   const entrance = THREE.MathUtils.lerp(0.22, 0, THREE.MathUtils.clamp(along, 0, 1))
   const wash = THREE.MathUtils.clamp((grade - 0.3) / 0.55 + entrance, 0, 1)
-  const saturation = THREE.MathUtils.lerp(0.95, 0.52, wash) * (0.86 + random() * 0.24)
-  const lightness = THREE.MathUtils.lerp(0.4, 0.68, wash) * (0.9 + random() * 0.22)
+  const saturation = THREE.MathUtils.lerp(0.98, 0.56, wash) * (0.74 + random() * 0.44)
+  const lightness = THREE.MathUtils.lerp(0.33, 0.7, wash) * (0.78 + random() * 0.48)
 
   return out.setHSL(
     hue,
@@ -205,6 +213,8 @@ const GLASS_FRAGMENT = /* glsl */ `
 uniform vec3 uSunDirection;
 uniform float uGlow;
 uniform float uFront;
+uniform float uBlaze;
+uniform float uFocus;
 varying vec3 vPaneColor;
 varying vec3 vPaneNormal;
 varying vec3 vPaneWorld;
@@ -220,7 +230,26 @@ void main() {
     smoothstep( 0.0, 0.10, - towardSun * towardEye ) *
     smoothstep( 0.0, 0.22, abs( towardSun ) );
 
-  gl_FragColor = vec4( vPaneColor * mix( uFront, uGlow, backlit ), 1.0 );
+  // What is behind the pane is not one brightness. It is a sky, and somewhere
+  // in that sky is the disc — so a window seen from inside has a core of a
+  // few square metres that is white and unreadable and a whole remaining
+  // acreage that is the deepest colour in the building. Photograph after
+  // photograph in the folder is exactly that: a blazing middle with saturated
+  // crimson and gold around it.
+  //
+  // Lit flat, the window is one brightness, and whatever it is it is wrong.
+  // High enough to blaze and ACES desaturates the entire wall to a pale
+  // wash — which is what this did, and why an interior glazed in Vila-Grau's
+  // reds came out the colour of weak tea. Low enough to keep the colour and
+  // no window in the building is ever the brightest thing in it.
+  //
+  // So the blaze is put where it belongs: on the line of sight to the sun.
+  // Looking along the ray that continues into the disc is the only direction
+  // that sees it, which costs one dot product and gives both at once.
+  float solar = pow( max( dot( - V, uSunDirection ), 0.0 ), uFocus );
+  float gain = mix( uFront, uGlow + uBlaze * solar, backlit );
+
+  gl_FragColor = vec4( vPaneColor * gain, 1.0 );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -231,16 +260,22 @@ export interface GlassMaterial extends THREE.ShaderMaterial {
     uSunDirection: { value: THREE.Vector3 }
     uGlow: { value: number }
     uFront: { value: number }
+    uBlaze: { value: number }
+    uFocus: { value: number }
   }
 }
 
-export function glassMaterial(glow = 3.2): GlassMaterial {
+export function glassMaterial(glow = 1.7): GlassMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       uSunDirection: { value: new THREE.Vector3(0, 1, 0) },
       uGlow: { value: glow },
       // Seen from the sunlit side a window is darker than the stone around it.
       uFront: { value: 0.22 },
+      /** How much brighter the disc is than the sky it sits in. */
+      uBlaze: { value: 26 },
+      /** How tightly that is concentrated. Half a degree, near enough. */
+      uFocus: { value: 900 },
     },
     vertexShader: GLASS_VERTEX,
     fragmentShader: GLASS_FRAGMENT,
@@ -262,7 +297,7 @@ export function transmittanceMaterial(): THREE.MeshBasicMaterial {
 }
 
 /** Small deterministic PRNG, so a rebuild reproduces the same window. */
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0
   return () => {
     a = (a + 0x6d2b79f5) >>> 0

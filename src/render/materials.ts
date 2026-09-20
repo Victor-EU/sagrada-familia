@@ -220,12 +220,50 @@ const INDOOR_LIGHT = /* glsl */ `
   // shading knows the plan, and it is least true at the crossing, where the
   // transept opens the other axis up too.
   vec2 compass = normalize( vec2( roomNormal.x, roomNormal.z ) + vec2( 1e-5 ) );
-  float fromGlass = lateral * mix( uRoomAlong, uRoomSide, abs( compass.x ) );
+  float fromGlass = lateral * mix( uRoomAlong, uRoomSide, abs( compass.x ) ) * uRoomGlass;
 
-  float fill = uRoomFloor * fromFloor + uRoomSky * fromAbove + fromGlass;
+  // And the window is not a grey lamp.
+  //
+  // The glazing was being counted as one more source of the room's average
+  // gold, which is the average of two halves that are nothing like each
+  // other: the Nativity side is glazed green and blue and the Passion side
+  // red and gold, and a nave lit by the mean of them is a nave with the
+  // whole point of Vila-Grau's scheme averaged out of it. A surface turned
+  // east is lit by the east window. It is the cheapest fact in the building
+  // and it was the one being thrown away.
+  //
+  // x is across the church, +x toward the Nativity. The crossfade is wide
+  // because a face turned along the nave sees both walls at a glance.
+  //
+  // And where it stands, not only which way it points. A column in the
+  // Nativity aisle is standing *in* green light: the window is four metres
+  // away on that side and ninety metres away on the other, so even the faces
+  // turned across the church get more green than gold. Told only the normal,
+  // the model gave every surface in the building one of exactly two colours
+  // and the two aisles came out identical — which is the one thing a visitor
+  // notices first and the photographs never let you forget.
+  float standing = clamp( vSunWorld.x / uNaveHalf, -1.0, 1.0 );
+  float toward = clamp( compass.x * 0.72 + standing * 0.58, -1.0, 1.0 );
+  vec3 glass = mix( uGlassPassion, uGlassNativity, smoothstep( -0.45, 0.45, toward ) );
 
-  reflectedLight.indirectDiffuse =
-    mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * uRoomGain * fill;
+  // A sideways face is not looking only at a window. It is looking at a
+  // window and at ninety metres of sandstone, and the sandstone is warm and
+  // enormous. Handed the glass neat, the Nativity half of the nave came out
+  // a green room rather than a gold room with green light in it — which is
+  // the mistake in the other direction from the one before it.
+  glass = mix( uRoomBounce, glass, uGlassShare );
+
+  // The two are not mixed toward the room's average, because they are not
+  // the same kind of claim. The room bounce is a guess at what colour a room
+  // full of sandstone returns, and a guess gets blended with the probe it is
+  // correcting. The glazing is not a guess: it is the light itself, arriving
+  // through a known colour, and diluting it with Barcelona sky is how the
+  // Passion side ends up the same temperature as the Nativity side.
+  float fromRoom = uRoomFloor * fromFloor + uRoomSky * fromAbove;
+  vec3 room = mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * fromRoom;
+  vec3 window = luminance * glass * fromGlass;
+
+  reflectedLight.indirectDiffuse = ( room + window ) * uRoomGain;
 }
 `
 
@@ -237,6 +275,11 @@ uniform float uRoomFloor;
 uniform float uRoomSky;
 uniform float uRoomSide;
 uniform float uRoomAlong;
+uniform float uRoomGlass;
+uniform float uGlassShare;
+uniform float uNaveHalf;
+uniform vec3 uGlassNativity;
+uniform vec3 uGlassPassion;
 `
 
 /** Normalised so rotating onto it changes hue and not how much light there is. */
@@ -253,6 +296,11 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomSky: { value: number }
   uRoomSide: { value: number }
   uRoomAlong: { value: number }
+  uRoomGlass: { value: number }
+  uGlassShare: { value: number }
+  uNaveHalf: { value: number }
+  uGlassNativity: { value: THREE.Color }
+  uGlassPassion: { value: THREE.Color }
 }
 
 /**
@@ -266,6 +314,18 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
  * amount of warm stone under blue sky will produce it.
  */
 export const ROOM_LIGHT = 0xffd8a8
+
+/**
+ * The two halves of the room, measured off the photographs.
+ *
+ * Not the colour of the glass — the colour of what lands on the stone behind
+ * it, which is the thing being modelled. The Nativity side throws a cool
+ * emerald that goes blue where it falls across a soffit; the Passion side
+ * throws the orange that the whole interior is famous for, and which is
+ * nearer to a flame than to amber.
+ */
+export const GLASS_EAST = 0xb6e2cc
+export const GLASS_WEST = 0xffc99a
 
 export function roomUniforms(): RoomUniforms {
   return {
@@ -332,9 +392,42 @@ export function roomUniforms(): RoomUniforms {
     uRoomFloor: { value: 8 },
     uRoomSky: { value: 1.2 },
     /** Turned across the church, at the glazing a few metres away. */
-    uRoomSide: { value: 0.85 },
-    /** Turned along it, at the next column and the ninety metres behind it. */
-    uRoomAlong: { value: 0.12 },
+    uRoomSide: { value: 1.15 },
+    /**
+     * Turned along it, at the next column and the ninety metres behind it.
+     *
+     * Not nearly nothing, which is what 0.12 amounted to once the glazing
+     * became the room's main source. A column in the photographs is lit all
+     * the way round — the two faces turned up and down the nave are darker
+     * than the two turned across it, and that difference is what makes a
+     * fluted shaft read as round, but neither of them is black.
+     */
+    uRoomAlong: { value: 0.16 },
+    /**
+     * How much light the windows are.
+     *
+     * This was the missing half of the room. The sun through the glass was
+     * modelled, carefully, and it is a few per cent of the illumination in
+     * there: a window is a hundred square metres of sky, and the sun's disc
+     * subtends half a degree of it. Every photograph in the folder is of a
+     * surface the sun is not on — a soffit, the shaded flank of a column, the
+     * whole north half of the nave — and all of them are luminous, because
+     * what lights them is the *sky* through Vila-Grau's glass, arriving from
+     * a wall-sized source a few metres away.
+     *
+     * With no term for it the model had to make the room out of a neutral
+     * fill, and a neutral fill at the level a photograph wants is a fog. So
+     * the glazing becomes what it is — the brightest thing in the building
+     * and the reason the stone is gold — and the neutral fill goes back to
+     * being small.
+     */
+    uRoomGlass: { value: 3.0 },
+    /** How much of a sideways face's light is the window and not the room. */
+    uGlassShare: { value: 0.26 },
+    /** Half the width of the glazed envelope, so a position can be a side. */
+    uNaveHalf: { value: 24 },
+    uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
+    uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
 }
 
