@@ -273,7 +273,7 @@ export function buildApse(
             // The chevet is the wall the nave is looking at, so it takes the
             // same figure as the flanks — narrower, because a facet of a
             // nine-sided apse is not a bay.
-            figure: { tiers: 3, across: 3, mullion: 0.4, margin: 0.8, transom: 0.95, rose: 0.5, oculi: true, splay: 0.13 },
+            figure: { tiers: 3, across: 3, mullion: 0.4, margin: 0.8, transom: 0.95, rose: 0.5, oculi: true, splay: 0.5 },
           },
         ],
       )
@@ -291,7 +291,7 @@ export function buildApse(
             lights: 2,
             panesAcross: 3,
             panesUp: 10,
-            figure: { tiers: 2, across: 2, mullion: 0.45, margin: 0.8, transom: 0.9, rose: 0, point: 0.5, oculi: true, splay: 0.11 },
+            figure: { tiers: 2, across: 2, mullion: 0.45, margin: 0.8, transom: 0.9, rose: 0, point: 0.5, oculi: true, splay: 0.38 },
           },
         ],
       )

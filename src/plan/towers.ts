@@ -154,8 +154,23 @@ export const defaultTowers: TowerParams = {
  */
 const BELL_TAPER = 0.23
 
-/** The published crown heights, which come out of the tower's total. */
-const CROSS_HEIGHT = 13.5
+/**
+ * The crown heights, which come out of the tower's total.
+ *
+ * The cross on the tower of Jesus Christ is published by the Basilica at
+ * **17 m tall and 13.5 m wide** — three-dimensional, four-armed, clad in
+ * white enamelled ceramic and glass, and about two hundred tonnes. This model
+ * had it at 13.5 m tall, which is its width: the crown was three and a half
+ * metres short and its arms two metres narrow, on the one element of the
+ * silhouette that every photograph of the finished building is about.
+ *
+ * The total stays 172.5 m, which is the published figure and half a metre
+ * below Montjuïc. What changes is where the shaft stops — 155.5 m rather than
+ * 159 — so the cross is the last tenth of the tower instead of the last
+ * thirteenth.
+ */
+const CROSS_HEIGHT = 17
+const CROSS_WIDTH = 13.5
 /** The star is 7.5 m across, which is one module. */
 const STAR_SPAN = MODULE
 
@@ -392,7 +407,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
     } else if (site.crown === 'cross') {
       const group = new THREE.Group()
       group.position.set(site.x, shaftTop, site.z)
-      const limbs = buildCross(CROSS_HEIGHT)
+      const limbs = buildCross(CROSS_HEIGHT, CROSS_WIDTH)
       for (const limb of limbs) group.add(named('cross', limb, parts.stone('facade')))
       parts.piece(group, ...limbs)
     } else {

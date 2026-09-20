@@ -339,15 +339,168 @@ export function windowField(p: WindowFieldParams): WindowFigure[] {
 }
 
 /**
- * The stone of a pierced wall: one extruded rectangle with the figures as
- * holes in it, bevelled so every opening has a splay.
+ * Widen a closed ring by `d`, along its own outward bisectors.
  *
- * The outer rectangle is grown by the bevel before extrusion, because the
- * bevel eats into whatever contour it is applied to and the wall's own edges
- * have to land where the wall was asked to be. Holes want the opposite and
- * get it for free: a bevelled hole opens out toward both faces, which is a
- * reveal cut from both sides — near enough what the fabric does, and the
- * shadow it throws across the jamb is the whole reason for having it.
+ * Offsetting a polygon properly is a hard problem; offsetting these is not.
+ * Every ring here is a lancet, a circle or a petal — smooth, near-convex, and
+ * sampled finely enough that a vertex bisector is a good normal. The one real
+ * hazard is a small ring swallowing itself, so the offset is capped against
+ * the ring's own inradius rather than trusted.
+ */
+function dilate(ring: THREE.Vector2[], d: number): THREE.Vector2[] {
+  const n = ring.length
+  if (n < 3 || d <= 0) return ring.map((p) => p.clone())
+
+  // Twice the area, and the perimeter: their ratio is the inradius of the
+  // disc of the same shape, which is the most a ring can be grown by before
+  // it starts turning inside out.
+  let twiceArea = 0
+  let perimeter = 0
+  for (let i = 0; i < n; i++) {
+    const a = ring[i]!
+    const b = ring[(i + 1) % n]!
+    twiceArea += a.x * b.y - b.x * a.y
+    perimeter += a.distanceTo(b)
+  }
+  const inradius = Math.abs(twiceArea) / Math.max(perimeter, 1e-6)
+  const grow = Math.min(d, inradius * 0.55)
+  if (grow <= 1e-4) return ring.map((p) => p.clone())
+
+  // Which way is out depends on which way the ring is wound.
+  const sign = twiceArea > 0 ? 1 : -1
+  const out: THREE.Vector2[] = []
+  const e0 = new THREE.Vector2()
+  const e1 = new THREE.Vector2()
+  const bisector = new THREE.Vector2()
+  for (let i = 0; i < n; i++) {
+    const prev = ring[(i - 1 + n) % n]!
+    const here = ring[i]!
+    const next = ring[(i + 1) % n]!
+    // Edge normals, rotated out of the ring.
+    e0.set(here.y - prev.y, prev.x - here.x).multiplyScalar(sign).normalize()
+    e1.set(next.y - here.y, here.x - next.x).multiplyScalar(sign).normalize()
+    bisector.addVectors(e0, e1)
+    if (bisector.lengthSq() < 1e-10) bisector.copy(e1)
+    bisector.normalize()
+    // A corner has to travel further than a flat does to keep the offset
+    // even, and the reciprocal blows up at a spike — so it is clamped.
+    const miter = Math.min(2.5, 1 / Math.max(0.4, bisector.dot(e1)))
+    out.push(new THREE.Vector2(here.x + bisector.x * grow * miter, here.y + bisector.y * grow * miter))
+  }
+  return out
+}
+
+/** A flat cap with holes in it, facing +z or −z. */
+function cap(
+  outline: THREE.Vector2[],
+  holes: THREE.Vector2[][],
+  z: number,
+  facing: 1 | -1,
+): THREE.BufferGeometry {
+  const shape = new THREE.Shape(outline)
+  for (const hole of holes) shape.holes.push(new THREE.Path(hole))
+  const geometry = new THREE.ShapeGeometry(shape, 1)
+  if (facing < 0) {
+    // Flip first, translate second: scaling z after the move would send the
+    // back face straight through to the front.
+    geometry.scale(1, 1, -1)
+    const index = geometry.getIndex()
+    if (index) {
+      for (let i = 0; i < index.count; i += 3) {
+        const b = index.getX(i + 1)
+        index.setX(i + 1, index.getX(i + 2))
+        index.setX(i + 2, b)
+      }
+      index.needsUpdate = true
+    }
+  }
+  geometry.translate(0, 0, z)
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+/** A figure's extent in the wall plane, which is all the spacing test needs. */
+interface Extent {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+/**
+ * How far each opening may be widened before it runs into its neighbour.
+ *
+ * The splay is a number somebody chose and the stone between two lancets is a
+ * number the bay arithmetic produced, and when the first is larger than half
+ * the second the two widened rings overlap. Earcut's answer to overlapping
+ * holes is not an error — it is a triangulation, an arbitrary one, and what
+ * comes back is a wall with triangular tears across it. That is what a 0.55 m
+ * splay between 0.42 m mullions did, and it is not the kind of thing that
+ * should depend on getting a parameter right.
+ *
+ * So the splay asks the bay how much room it has. Extents rather than radii,
+ * because a lancet is eight times taller than it is wide and its bounding
+ * circle would claim most of the panel; the separation of two boxes is the
+ * larger of their two axis gaps, which for a field laid out on rows and
+ * columns is exact.
+ */
+function headroom(figures: WindowFigure[], width: number, height: number): number[] {
+  /** Stone left standing between two widened openings, and at the panel edge. */
+  const RIDGE = 0.07
+
+  const extents: Extent[] = figures.map((f) => {
+    let x0 = Infinity
+    let y0 = Infinity
+    let x1 = -Infinity
+    let y1 = -Infinity
+    for (const p of f.ring) {
+      if (p.x < x0) x0 = p.x
+      if (p.x > x1) x1 = p.x
+      if (p.y < y0) y0 = p.y
+      if (p.y > y1) y1 = p.y
+    }
+    return { x0, y0, x1, y1 }
+  })
+
+  return extents.map((a, i) => {
+    let room = Math.min(
+      a.x0 + width / 2,
+      width / 2 - a.x1,
+      a.y0,
+      height - a.y1,
+    ) - RIDGE
+    for (const [j, b] of extents.entries()) {
+      if (i === j) continue
+      const gap = Math.max(
+        Math.max(b.x0 - a.x1, a.x0 - b.x1),
+        Math.max(b.y0 - a.y1, a.y0 - b.y1),
+      )
+      // Already touching: this pair gets no splay at all rather than a
+      // negative one.
+      room = Math.min(room, (gap - RIDGE) / 2)
+    }
+    return Math.max(0, room)
+  })
+}
+
+/**
+ * The stone of a pierced wall, with the splay built rather than bevelled.
+ *
+ * `ExtrudeGeometry`'s bevel runs the wrong way through a hole: it makes the
+ * opening *narrower* at the two faces and full size in the middle, which is a
+ * reveal turned inside out. Pushed far enough to be visible it closes the
+ * window altogether, which is what a 0.55 m bevel on a 1.08 m lancet did —
+ * an entire nave of blind sockets.
+ *
+ * So the wall is three surfaces instead of one extrusion: a face at either
+ * side carrying the openings widened by the splay, the true opening at the
+ * middle of the thickness, and a throat stitching each widened ring to it.
+ * Every opening is then a funnel from both sides, narrowest where the glass
+ * sits — which is how the fabric is actually cut, and it gives the wall
+ * something a flat slab can never have: at this depth the splays of two
+ * neighbouring lancets flare until they nearly touch, so what is left between
+ * them is a *ridge*. That ridge, repeated across a bay, is the faceted,
+ * folded surface in every interior photograph of this building.
  */
 export function pierced(
   width: number,
@@ -356,27 +509,68 @@ export function pierced(
   figures: WindowFigure[],
   splay = 0.16,
 ): THREE.BufferGeometry {
-  const bevel = Math.min(splay, thickness * 0.45)
-  const shape = new THREE.Shape([
-    new THREE.Vector2(-width / 2 - bevel, -bevel),
-    new THREE.Vector2(width / 2 + bevel, -bevel),
-    new THREE.Vector2(width / 2 + bevel, height + bevel),
-    new THREE.Vector2(-width / 2 - bevel, height + bevel),
-  ])
-  for (const figure of figures) shape.holes.push(new THREE.Path(figure.ring))
+  const outline = [
+    new THREE.Vector2(-width / 2, 0),
+    new THREE.Vector2(width / 2, 0),
+    new THREE.Vector2(width / 2, height),
+    new THREE.Vector2(-width / 2, height),
+  ]
+  const half = thickness / 2
+  const reach = Math.min(splay, thickness * 0.45)
+  const room = headroom(figures, width, height)
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: Math.max(0.02, thickness - 2 * bevel),
-    bevelEnabled: bevel > 1e-3,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelOffset: 0,
-    bevelSegments: 1,
-    curveSegments: 1,
-  })
-  geometry.translate(0, 0, -thickness / 2)
-  geometry.computeVertexNormals()
-  return geometry
+  const rings = figures.map((f) => f.ring)
+  const wide = rings.map((r, i) => dilate(r, Math.min(reach, room[i]!)))
+
+  const pieces: THREE.BufferGeometry[] = [
+    cap(outline, wide, half, 1),
+    cap(outline, wide, -half, -1),
+  ]
+
+  // The throats. Two strips per opening, mirrored about the middle, so a
+  // pane sits in the waist of the funnel and the stone falls away from it
+  // both ways.
+  const positions: number[] = []
+  for (const [k, ring] of rings.entries()) {
+    const lip = wide[k]!
+    const n = ring.length
+    if (lip.length !== n) continue
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n
+      const a = ring[i]!
+      const b = ring[j]!
+      const p = lip[i]!
+      const q = lip[j]!
+      for (const side of [1, -1]) {
+        const z = side * half
+        // Wound so the throat faces into the opening from either side.
+        if (side > 0) {
+          positions.push(p.x, p.y, z, a.x, a.y, 0, b.x, b.y, 0)
+          positions.push(p.x, p.y, z, b.x, b.y, 0, q.x, q.y, z)
+        } else {
+          positions.push(a.x, a.y, 0, p.x, p.y, z, q.x, q.y, z)
+          positions.push(a.x, a.y, 0, q.x, q.y, z, b.x, b.y, 0)
+        }
+      }
+    }
+  }
+  if (positions.length > 0) {
+    const throat = new THREE.BufferGeometry()
+    throat.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    // The caps come from ShapeGeometry and carry a uv; nothing samples it,
+    // but a merge is refused unless every input agrees about which
+    // attributes exist. One in the wall's own plane costs nothing and means
+    // the throat is never the reason a wall fails to build.
+    const uv: number[] = []
+    for (let i = 0; i < positions.length; i += 3) {
+      uv.push(positions[i]! / Math.max(width, 1e-3) + 0.5, positions[i + 1]! / Math.max(height, 1e-3))
+    }
+    throat.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+    throat.computeVertexNormals()
+    pieces.push(throat)
+  }
+
+  return mergeOrEmpty(pieces)
 }
 
 /**

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { SurfacePatch } from './sunrig.ts'
+import { WASH_PARS, type WashUniforms } from './washrig.ts'
 
 /**
  * The stones.
@@ -222,6 +223,15 @@ const INDOOR_LIGHT = /* glsl */ `
   vec2 compass = normalize( vec2( roomNormal.x, roomNormal.z ) + vec2( 1e-5 ) );
   float fromGlass = lateral * mix( uRoomAlong, uRoomSide, abs( compass.x ) ) * uRoomGlass;
 
+  // What the windows actually put on this surface, shadowed and patterned —
+  // see render/washrig.ts. Where the rig has an answer it is a much better
+  // one than the fill above, so the fill is faded out in proportion: the two
+  // are the same light, and the fill is only standing in where the rig
+  // cannot see (outside its fit, behind a wall, facing along the nave).
+  vec3 washed = sfWash( inverseTransformDirection( normal, viewMatrix ), vSunWorld );
+  float covered = clamp( dot( washed, vec3( 0.333 ) ) * uWashCover, 0.0, 1.0 );
+  fromGlass *= 1.0 - covered;
+
   // And the window is not a grey lamp.
   //
   // The glazing was being counted as one more source of the room's average
@@ -263,7 +273,7 @@ const INDOOR_LIGHT = /* glsl */ `
   vec3 room = mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * fromRoom;
   vec3 window = luminance * glass * fromGlass;
 
-  reflectedLight.indirectDiffuse = ( room + window ) * uRoomGain;
+  reflectedLight.indirectDiffuse = ( room + window + washed * luminance ) * uRoomGain;
 }
 `
 
@@ -278,6 +288,7 @@ uniform float uRoomAlong;
 uniform float uRoomGlass;
 uniform float uGlassShare;
 uniform float uNaveHalf;
+uniform float uWashCover;
 uniform vec3 uGlassNativity;
 uniform vec3 uGlassPassion;
 `
@@ -299,6 +310,7 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomGlass: { value: number }
   uGlassShare: { value: number }
   uNaveHalf: { value: number }
+  uWashCover: { value: number }
   uGlassNativity: { value: THREE.Color }
   uGlassPassion: { value: THREE.Color }
 }
@@ -421,11 +433,23 @@ export function roomUniforms(): RoomUniforms {
      * and the reason the stone is gold — and the neutral fill goes back to
      * being small.
      */
-    uRoomGlass: { value: 3.0 },
+    uRoomGlass: { value: 2.8 },
     /** How much of a sideways face's light is the window and not the room. */
     uGlassShare: { value: 0.26 },
     /** Half the width of the glazed envelope, so a position can be a side. */
     uNaveHalf: { value: 24 },
+    /**
+     * How fast the flat fill gives way to the rig that supersedes it.
+     *
+     * Not all the way. The rig is a *directional* source and the two maps run
+     * along one axis, so it can only light what has an unobstructed line to a
+     * window across the church — and most of a colonnade does not. A real
+     * window is a wall of sky subtending a wide angle from everywhere in the
+     * room, and the flat fill is the only thing standing for the part of it
+     * that arrives round a column. Faded out entirely, the nave goes back to
+     * being a cave with bright patches in it.
+     */
+    uWashCover: { value: 0.8 },
     uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
     uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
@@ -513,14 +537,15 @@ export function stonePatch(
   name: StoneName,
   grain: GrainUniforms,
   room: RoomUniforms,
+  wash: WashUniforms,
 ): SurfacePatch {
   const indoors = INDOORS.includes(name)
   return {
-    uniforms: indoors ? { ...grain, ...room } : { ...grain },
-    pars: indoors ? `${GRAIN_PARS}\n${INDOOR_PARS}` : GRAIN_PARS,
+    uniforms: indoors ? { ...grain, ...room, ...wash } : { ...grain },
+    pars: indoors ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}` : GRAIN_PARS,
     colour: GRAIN_COLOUR,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-1' : 'stone-1',
+    key: indoors ? 'stone-room-2' : 'stone-1',
   }
 }
 

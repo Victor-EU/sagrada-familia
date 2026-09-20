@@ -23,13 +23,13 @@ import { buildClerestory, defaultClerestory, type RegisterParams } from './clere
 const AISLE_FIGURE: NonNullable<RegisterParams['figure']> = {
   tiers: 4,
   across: 4,
-  mullion: 0.42,
-  margin: 0.95,
-  transom: 1.05,
+  mullion: 0.78,
+  margin: 1.05,
+  transom: 1.35,
   rose: 0.44,
   point: 0,
   oculi: true,
-  splay: 0.13,
+  splay: 0.55,
 }
 
 /**
@@ -43,13 +43,13 @@ const AISLE_FIGURE: NonNullable<RegisterParams['figure']> = {
 const CLERESTORY_FIGURE: NonNullable<RegisterParams['figure']> = {
   tiers: 2,
   across: 3,
-  mullion: 0.5,
+  mullion: 0.72,
   margin: 1.0,
-  transom: 0.95,
+  transom: 1.15,
   rose: 0,
   point: 0.5,
   oculi: true,
-  splay: 0.11,
+  splay: 0.4,
 }
 import { MODULE, VAULT_HEIGHT } from './module.ts'
 import {
@@ -273,7 +273,7 @@ export const defaultChurch: ChurchParams = {
     skylightRadius: 3.4,
     overhang: 1.5,
     landing: 9,
-    wall: { show: true, thickness: 0.9, margin: 1.1, mullion: 0.55, sill: 3.2, head: 24 },
+    wall: { show: true, thickness: 1.4, margin: 1.1, mullion: 0.55, sill: 3.2, head: 24 },
     // Eight risers of a quarter of a metre. Steeper than a stair anyone
     // would design for a corridor, and that is what the photographs of the
     // real flight count: this is a ceremonial approach, not a circulation
@@ -314,8 +314,26 @@ export const defaultChurch: ChurchParams = {
   },
   walls: {
     show: true,
-    offset: 1.9,
-    thickness: 0.9,
+    /**
+     * How far outboard of the last band the wall's middle stands.
+     *
+     * It moves with the thickness, because what has to stay put is the
+     * wall's *inner face*: the envelope the walker is held inside was fitted
+     * to it, and a thicker wall grown symmetrically puts a quarter of a metre
+     * of stone inside the room.
+     */
+    offset: 2.15,
+    /**
+     * A metre and a bit, not a metre less.
+     *
+     * The splay round an opening can only be as deep as the wall it is cut
+     * in, and the splay is the whole point: in the photographs the reveals of
+     * two neighbouring lancets flare until they nearly meet, so what is left
+     * between them is a ridge rather than a face. That is what makes the wall
+     * read as carved out of something instead of printed on a slab — and at
+     * 0.9 m there was not the depth to cut it.
+     */
+    thickness: 1.4,
     margin: 1.1,
     mullion: 0.55,
     lights: 3,

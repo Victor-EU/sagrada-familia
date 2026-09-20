@@ -474,15 +474,20 @@ export function buildPinnacle(p: PinnacleParams): TowerSurface {
  * is the whole of it; opaque plaster hides the joins, the same as everywhere
  * else in this model.
  */
-export function buildCross(height: number): THREE.BufferGeometry[] {
-  const limb = height * 0.11
-  const arm = height * 0.42
+export function buildCross(height: number, width: number): THREE.BufferGeometry[] {
+  // Four-armed and three-dimensional: two horizontal limbs crossing at right
+  // angles through one upright, which is why it reads as a cross from every
+  // side of the city rather than edge-on from two of them.
+  const limb = width * 0.155
   const upright = new THREE.BoxGeometry(limb, height, limb)
   upright.translate(0, height / 2, 0)
-  const across = new THREE.BoxGeometry(arm * 2, limb, limb)
-  across.translate(0, height * 0.68, 0)
-  const through = new THREE.BoxGeometry(limb, limb, arm * 2)
-  through.translate(0, height * 0.68, 0)
+  // The arms cross where the upright is a little over half way up, which is
+  // where the Basilica's own photographs of the assembly put them.
+  const armY = height * 0.6
+  const across = new THREE.BoxGeometry(width, limb, limb)
+  across.translate(0, armY, 0)
+  const through = new THREE.BoxGeometry(limb, limb, width)
+  through.translate(0, armY, 0)
   return [upright, across, through]
 }
 

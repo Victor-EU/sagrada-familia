@@ -19,6 +19,7 @@ import {
   type StoneName,
 } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
+import { WashRig } from './washrig.ts'
 import { LAYER_CITY, LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
 import { RoofMap } from './roof.ts'
 import { ShaftPass, type ShaftSettings } from './shafts.ts'
@@ -34,6 +35,8 @@ export interface Stage {
   camera: THREE.PerspectiveCamera
   sky: Sky
   sun: SunRig
+  /** The glazing as a source: two static maps of what the windows throw. */
+  wash: WashRig
   /**
    * Every stone the building is cut from — sandstone, granite, basalt,
    * porphyry, and the vault and wall dressings.
@@ -223,8 +226,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const stones = openQuarry()
   const room = roomUniforms()
   const grain = grainUniforms()
+  const wash = new WashRig()
   for (const [name, material] of Object.entries(stones)) {
-    patchForSunlight(material, sun.uniforms, stonePatch(name as StoneName, grain, room))
+    patchForSunlight(material, sun.uniforms, stonePatch(name as StoneName, grain, room, wash.uniforms))
   }
   // Out past the city rather than stopping short of it. At 320 m the disc's
   // own edge was a hard line across the middle distance in every exterior
@@ -438,9 +442,14 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     sunDirection,
     passes,
     setSun,
+    wash,
     setModelBounds(box, ceiling) {
       sun.setBounds(box)
       roof.setBounds(box, ceiling)
+      // The glazing's own rig does not care where the sun is, only where the
+      // glass is — so it runs on a rebuild and on nothing else.
+      wash.setBounds(box, ceiling)
+      wash.invalidate()
       dirty = true
       roofDirty = true
     },
@@ -462,6 +471,10 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
           sun.render(renderer, scene, camera, sunDirection, radiance)
           dirty = false
         }
+      }
+      if (wash.stale) {
+        for (const participant of passes) participant.prepareForSun(SUN_DETAIL_LEVEL)
+        wash.render(renderer, scene)
       }
       // The near shadow map follows the camera, so it is the one sun pass
       // that can be made stale by walking. Re-run under the same coarse level
