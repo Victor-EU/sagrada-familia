@@ -25,6 +25,23 @@ export interface RegisterParams {
   panesAcross: number
   /** Panes up one light. */
   panesUp: number
+  /**
+   * Openings placed by the caller rather than shared out across the bay.
+   *
+   * A window divides the wall it is in: its lights are that wall's own
+   * business, so `lights` and the margins are all it needs. A **door** is not
+   * like that. A door has to line up with the gap between two piers of the
+   * façade standing in front of it, and the façade is set out on the module
+   * and knows nothing about which panel of wall is behind which gap. So a
+   * register may instead be handed the openings it is to have, in the wall's
+   * own coordinates, and the stone is whatever is left between them.
+   */
+  openings?: { centre: number; width: number }[]
+  /**
+   * Whether there is glass in it. A door is a window with no glass, and the
+   * frame — jambs, lintel, threshold — is the same frame either way.
+   */
+  glazed?: boolean
 }
 
 export interface ClerestoryParams {
@@ -113,29 +130,31 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
 
   for (const [index, register] of registers.entries()) {
     const tall = register.head - register.sill
-    const lights = Math.max(1, Math.round(register.lights))
-    const usable = p.span - 2 * p.margin - (lights - 1) * p.mullion
-    const lightWidth = usable / lights
-    if (lightWidth <= 0) continue
+    const openings = lay(p, register)
+    if (openings.length === 0) continue
 
-    // End posts.
-    stonePieces.push(
-      slab(p.margin, tall, p.thickness, -(p.span - p.margin) / 2, register.sill),
-      slab(p.margin, tall, p.thickness, (p.span - p.margin) / 2, register.sill),
-    )
-
-    for (let k = 0; k < lights; k++) {
-      const centre =
-        -p.span / 2 + p.margin + k * (lightWidth + p.mullion) + lightWidth / 2
-
-      if (k > 0) {
-        stonePieces.push(
-          slab(p.mullion, tall, p.thickness, centre - lightWidth / 2 - p.mullion / 2, register.sill),
-        )
+    // The stone is the gaps between the openings, which is the same statement
+    // whether the register subdivides its own bay or was handed its openings
+    // by the façade outside. End posts and mullions stop being two kinds of
+    // thing: both are simply what is left.
+    let edge = -p.span / 2
+    for (const opening of openings) {
+      const left = opening.centre - opening.width / 2
+      if (left > edge + 1e-4) {
+        stonePieces.push(slab(left - edge, tall, p.thickness, (edge + left) / 2, register.sill))
       }
+      edge = opening.centre + opening.width / 2
+    }
+    if (p.span / 2 > edge + 1e-4) {
+      const right = p.span / 2
+      stonePieces.push(slab(right - edge, tall, p.thickness, (edge + right) / 2, register.sill))
+    }
 
+    if (register.glazed === false) continue
+
+    for (const [k, opening] of openings.entries()) {
       const panel = buildGlassPanel({
-        width: lightWidth,
+        width: opening.width,
         height: tall,
         columns: register.panesAcross,
         rows: register.panesUp,
@@ -148,15 +167,38 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
         gradeTop: register.head / p.gradeHeight,
         along: p.along,
       })
-      panel.translate(centre, register.sill, 0)
+      panel.translate(opening.centre, register.sill, 0)
       glassPieces.push(panel)
     }
   }
 
   return {
     stone: mergeGeometries(stonePieces, false),
-    glass: mergeGeometries(glassPieces, false),
+    // A wall that is all doors has no glass in it, and merging nothing throws.
+    glass: glassPieces.length > 0 ? mergeGeometries(glassPieces, false) : new THREE.BufferGeometry(),
   }
+}
+
+/** Where this register's openings fall, in the wall's own coordinates. */
+function lay(
+  p: ClerestoryParams,
+  register: RegisterParams,
+): { centre: number; width: number }[] {
+  if (register.openings) {
+    return register.openings
+      .filter((o) => o.width > 0 && Math.abs(o.centre) + o.width / 2 <= p.span / 2 + 1e-4)
+      .sort((a, b) => a.centre - b.centre)
+  }
+
+  const lights = Math.max(1, Math.round(register.lights))
+  const usable = p.span - 2 * p.margin - (lights - 1) * p.mullion
+  const width = usable / lights
+  if (width <= 0) return []
+
+  return Array.from({ length: lights }, (_, k) => ({
+    centre: -p.span / 2 + p.margin + k * (width + p.mullion) + width / 2,
+    width,
+  }))
 }
 
 /** A box given by its width, height, depth and its bottom-centre position. */

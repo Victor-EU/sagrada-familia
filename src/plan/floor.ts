@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { SurfacePatch } from '../render/sunrig.ts'
 import { PLASTER } from '../render/materials.ts'
 import { MODULE } from './module.ts'
@@ -44,6 +45,10 @@ export interface FloorParams {
   podium: number
   /** How far it runs out past the outside face of the walls. */
   apron: number
+  /** Risers in the flight that gets you from the plaza up onto it. */
+  steps: number
+  /** The going of one of them. */
+  going: number
   /** Slab size. A sixth of the module. */
   slab: number
   /** Half-width of an ordinary joint, and of one on a module line. */
@@ -64,6 +69,13 @@ export const defaultFloor: FloorParams = {
   show: true,
   podium: 1.35,
   apron: 1.6,
+  // Five risers of twenty-seven centimetres, going half a metre. Twice the
+  // rise plus the going is 1.04 m against the 0.63 a stair designed for
+  // circulation wants, which is the proportion of a monumental flight and not
+  // a mistake: a cathedral's base is something you arrive up, and the
+  // presbytery steps inside are steeper still.
+  steps: 5,
+  going: 0.5,
   // Large, because the photographs are: the slabs in the nave read as well
   // over a metre against the people standing on them. A sixth of the module
   // puts six joints between one column and the next.
@@ -182,6 +194,14 @@ export function buildPavement(
   /** Round openings in the lid: the roof terraces need them for skylights. */
   holes: { x: number; z: number; r: number }[] = [],
 ): { lid: THREE.BufferGeometry; skirt: THREE.BufferGeometry } {
+  return { lid: buildLid(outline, holes), skirt: riser(outline, 0, -podium) }
+}
+
+/** The lid on its own: one flat shape at y = 0, holes and all. */
+export function buildLid(
+  outline: THREE.Vector2[],
+  holes: { x: number; z: number; r: number }[] = [],
+): THREE.BufferGeometry {
   // ShapeGeometry lives in xy with its normal on +z, and the mesh that
   // carries it is turned a quarter turn about x, which sends y to -z.
   const shape = new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, -p.y)))
@@ -192,7 +212,55 @@ export function buildPavement(
   }
   const lid = new THREE.ShapeGeometry(shape)
   lid.rotateX(-Math.PI / 2)
+  return lid
+}
 
+/**
+ * The flight of steps the building stands on.
+ *
+ * Phase 3 gave the pavement a podium and drew its edge as a plain skirt, and
+ * that was the right drawing for as long as the ground outside was a grey
+ * disc nobody could stand on. A walker makes the same edge a wall: 1.35 m of
+ * sheer plaster with a pavement visible over the top of it, stopping you for
+ * a reason you cannot see. So it becomes a flight, and it goes all the way
+ * round — which is what the building has, and which is the only version that
+ * needs no gates, no landings and no opinion about which front you arrive at.
+ *
+ * Every ring is the same outline asked for again with a bigger apron, so the
+ * steps follow the Latin cross round its arms and its re-entrant corners for
+ * nothing. The treads face the sky, so the paving pattern draws its joints on
+ * them; the risers do not, so it leaves them alone.
+ */
+export function buildBase(
+  p: FootprintParams,
+  apron: number,
+  step: { going: number; rise: number; risers: number },
+): { treads: THREE.BufferGeometry; risers: THREE.BufferGeometry } {
+  const treads: THREE.BufferGeometry[] = []
+  const risers: THREE.BufferGeometry[] = []
+
+  for (let i = 1; i <= step.risers; i++) {
+    const above = footprint(p, apron + (i - 1) * step.going)
+    const below = footprint(p, apron + i * step.going)
+
+    const shape = new THREE.Shape(below.map((v) => new THREE.Vector2(v.x, -v.y)))
+    shape.holes.push(new THREE.Path(above.map((v) => new THREE.Vector2(v.x, -v.y))))
+    const tread = new THREE.ShapeGeometry(shape)
+    tread.rotateX(-Math.PI / 2)
+    tread.translate(0, -i * step.rise, 0)
+    treads.push(tread)
+
+    risers.push(riser(above, -(i - 1) * step.rise, -i * step.rise))
+  }
+
+  return {
+    treads: mergeGeometries(treads, false),
+    risers: mergeGeometries(risers, false),
+  }
+}
+
+/** A vertical band hung off an outline, from one height down to another. */
+function riser(outline: THREE.Vector2[], top: number, bottom: number): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
   const centroid = outline
@@ -212,12 +280,12 @@ export function buildPavement(
     if (out.dot(mid) < 0) out.negate()
 
     const quad = [
-      [a.x, 0, a.y],
-      [a.x, -podium, a.y],
-      [b.x, -podium, b.y],
-      [a.x, 0, a.y],
-      [b.x, -podium, b.y],
-      [b.x, 0, b.y],
+      [a.x, top, a.y],
+      [a.x, bottom, a.y],
+      [b.x, bottom, b.y],
+      [a.x, top, a.y],
+      [b.x, bottom, b.y],
+      [b.x, top, b.y],
     ]
     for (const [x, y, z] of quad) {
       positions.push(x!, y!, z!)
@@ -225,10 +293,10 @@ export function buildPavement(
     }
   }
 
-  const skirt = new THREE.BufferGeometry()
-  skirt.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  skirt.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-  return { lid, skirt }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  return geometry
 }
 
 /** Where the pattern needs the plan to tell it about itself. */

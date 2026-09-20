@@ -191,10 +191,29 @@ export const VIEWPOINTS: Viewpoint[] = [
       'the tower of Jesus Christ over the crossing beyond. If this frame is ' +
       'not obviously Sagrada Família then the phase has not happened, ' +
       'whatever the model contains.',
-    position: [96, 1.7, 22],
+    position: [96, 0.3, 22],
     target: [10, 120, -26],
     fov: 72,
     shiftCorrection: 0.35,
+    day: 172,
+    hour: 9.6,
+  },
+  {
+    key: 'd',
+    name: 'Out through the Nativity door',
+    note:
+      'The way out, which until phase 5 the building did not have: the walls ' +
+      'held from both sides and the only way over the threshold was to fly. ' +
+      'The Nativity front seen from inside the transept arm: two doorways ' +
+      'under the row of lights that used to run down to the floor, the ' +
+      'lintel between them, and the sunlit portico showing through both. ' +
+      'Half past nine on midsummer morning, with the sun near due east — ' +
+      'the hour this front was oriented for, and the one that puts it ' +
+      'straight into the portico and through the openings.',
+    position: [24, 1.65, -30],
+    target: [62, 14.6, -30],
+    fov: 78,
+    shiftCorrection: 0.45,
     day: 172,
     hour: 9.6,
   },
@@ -206,7 +225,7 @@ export const VIEWPOINTS: Viewpoint[] = [
       'finished. Its four are the tallest of the twelve apostles — the ' +
       'published range tops out at 117 m and the Glory end is where it does ' +
       'it — so the three fronts rise toward this one.',
-    position: [28, 1.7, 118],
+    position: [28, 0.3, 118],
     target: [-4, 110, -10],
     fov: 70,
     shiftCorrection: 0.3,

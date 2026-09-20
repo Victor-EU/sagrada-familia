@@ -61,6 +61,19 @@ heights and on the grid's own positions: each bell tower is **one module
 across**, so four of them side by side is the thirty metres of the transept
 front.
 
+Phase 5's bar is *someone can send a link to a specific moment of light*, and
+it is met: the address bar is the save format, because nothing about this
+building's light is authored and a moment is therefore only a camera, a day and
+an hour. Before that it built the **air**, which had been the one high-value
+item on the beauty list since phase 0 and the last one unbuilt — light that
+lands on surfaces but never fills the space is not what any photograph of this
+interior shows. And after it, the **way in**. A building whose walls hold from
+both sides and whose ground outside is a disc you cannot stand on is a building
+you can only enter by flying over the parapet, which is the one thing a visitor
+to a cathedral never does. There are eight doorways now, set out by the fronts
+in front of them, and the podium's edge is a flight of steps rather than 1.35 m
+of sheer plaster: you arrive on the plaza, you climb, and you walk in.
+
 | Built | Where |
 | --- | --- |
 | Hyperboloid generator — surface + straight generators | `src/geometry/hyperboloid.ts` |
@@ -91,11 +104,14 @@ front.
 | Tower generator — paraboloid shaft, star section, pierced | `src/geometry/tower.ts` |
 | The eighteen, on published heights and on the grid | `src/plan/towers.ts` |
 | Shell — terraces, parapets, roof lanterns, the three fronts | `src/plan/shell.ts` |
-| Thirteen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
+| Fourteen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
 | Two-thumb touch controls, with a stick that appears under the thumb | `src/camera/touch.ts` |
 | The address bar as the save format — a link to a moment of light | `src/share.ts` |
 | Envelope: a rectangle for the nave, a disc for the apse, a terrace you can climb | `src/camera/envelope.ts` |
+| Doors — a window with no glass in it, placed by the front in front of it | `src/plan/clerestory.ts`, `src/plan/church.ts` |
+| A podium you can climb: the skirt as a flight of steps round the footprint | `src/plan/floor.ts` |
+| The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
 
 ## Running
 
@@ -126,7 +142,7 @@ npm run build       # typecheck + production build
 | `[` `]` | photo opacity |
 | drop an image | load it as a reference |
 | 1–9, 0 | the curated interior viewpoints |
-| N G T | the Nativity front, the Glory front, the terraces |
+| N D G T | the Nativity front, the doorway, the Glory front, the terraces |
 | L | copy a link to exactly this frame and hour |
 
 On a touch device the left thumb walks — a stick appears where it lands, and
@@ -209,12 +225,51 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   give the same outside width. This model takes the arm, because a transept
   you can walk across is the thing the plan is for; the other reading is
   recorded in the design doc rather than lost.
-- The envelope holds the walls **from the inside only**. It used to clamp any
-  camera to the nave's rectangle whether or not it was in the nave, which was
-  harmless while the outside was a grey disc nobody stood on and fatal the
-  moment phase 4 put a viewpoint on the pavement: the Nativity view, set
-  seventy metres clear of the wall, was dragged through it and dropped in the
-  aisle. Walking out through a wall is now possible and is the smaller lie.
+- The envelope held the walls **from the inside only** until phase 5, and that
+  was deliberate: it used to clamp any camera to the nave's rectangle whether
+  or not it was in the nave, which was harmless while the outside was a grey
+  disc nobody stood on and fatal the moment phase 4 put a viewpoint on the
+  pavement — the Nativity view, set seventy metres clear of the wall, was
+  dragged through it and dropped in the aisle. Walking out through a wall was
+  the smaller lie, and it stayed the answer right up until there was ground
+  outside to walk on. The moment there is, it stops being small: you can walk
+  into the building through its flank and the doors are decoration. So the
+  same plan is now held twice — once at the inner faces, which keeps a walker
+  in, and once at the outer, which keeps one out — and the only way across is
+  a doorway.
+- **A door is a window with no glass in it.** The walls of this building have
+  never had a hole cut in one: a wall with windows is a frame around openings,
+  and building it that way keeps the no-boolean rule and gives the silhouette
+  a cut wall would have had. A doorway is the same frame with the panes left
+  out, which is one optional flag in a register, and the jambs, the lintel and
+  the reveal come out of machinery that was already there.
+  Where they go is not a taste question either. A door has to be in the gap
+  between two piers of the front standing in front of it, so the front is
+  asked where its portals are and the wall takes whichever of them fall within
+  it. It falls out of the module that the Glory end gets four — two in the
+  central panel and one in each inner aisle — that each transept front gets
+  two, and that the outer aisles get none, because nothing stands in front of
+  them. The mullion between the two doors of a front is exactly the width of
+  the pier outside it, which nobody arranged.
+- The podium's edge is a **flight of steps all the way round**, and that is
+  what the plaza cost. A 1.35 m skirt was the right drawing while the ground
+  outside was scenery; a walker turns the same edge into a wall you can see
+  over and are stopped by for no reason you can look at. Every ring of the
+  flight is the building's own outline asked for again with a bigger apron, so
+  the steps follow the Latin cross round its arms and its re-entrant corners
+  for free, and the walker's test for which step it is on is the same set of
+  outlines asked in the same order — the drawing and the collision cannot
+  disagree, because they are the same function.
+- Two boundary bugs fell out of having an outside to check the inside against,
+  and one of them was two phases old. The hall is an **L** — the nave's
+  rectangle and the arm laid across it — and a body outside both has to go
+  back into whichever is *nearer*. Taking the arm whenever a body was merely
+  wide of the nave, which is what it did, snapped a walker heading for the
+  aisle wall two and a half metres sideways into the transept the moment it
+  arrived; the mirror of that mistake, out on the plaza, offered a body
+  pressed against the nave wall an exit through the side of an arm it was not
+  level with — an exit costing less than nothing, which it took, and was set
+  down inside the building.
 - The plaster is `DoubleSide`, so **a face wound against its own normals is
   lit from exactly the wrong side** and nothing in the geometry says so: three
   flips the shading normal when a triangle faces away. The first towers were

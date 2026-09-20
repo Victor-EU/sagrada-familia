@@ -201,6 +201,8 @@ export function buildPanel(ctx: ParamContext): Pane {
   floor.addBinding(ctx.plan.floor, 'roundel', { min: 0, max: 6, step: 0.1, label: 'JMJ roundel r' })
   floor.addBinding(ctx.plan.floor, 'podium', { min: 0, max: 6, step: 0.05, label: 'podium m' })
   floor.addBinding(ctx.plan.floor, 'apron', { min: 0, max: 8, step: 0.1, label: 'apron m' })
+  floor.addBinding(ctx.plan.floor, 'steps', { min: 1, max: 12, step: 1, label: 'base risers' })
+  floor.addBinding(ctx.plan.floor, 'going', { min: 0.2, max: 1.5, step: 0.05, label: 'base going m' })
   // Everything but the outline is a uniform, so most of this folder does not
   // need the building rebuilt — but two of them do, and telling them apart in
   // the panel would buy a rebuild that already takes a fifth of a second.
@@ -223,6 +225,7 @@ export function buildPanel(ctx: ParamContext): Pane {
   shell.addBinding(ctx.plan.shell, 'project', { min: 2, max: 16, step: 0.25, label: 'façade out m' })
   shell.addBinding(ctx.plan.shell, 'portalHeight', { min: 6, max: 40, step: 0.5, label: 'portal head m' })
   shell.addBinding(ctx.plan.shell, 'pier', { min: 1, max: 7.5, step: 0.1, label: 'pier m' })
+  shell.addBinding(ctx.plan.shell, 'doorHeight', { min: 3, max: 18, step: 0.25, label: 'door head m' })
   shell.addBinding(ctx.plan.shell, 'relief', { min: 0, max: 6, step: 0.1, label: 'wall set back m' })
   shell.addBinding(ctx.plan.shell, 'pinnacles', { label: 'roof pinnacles' })
   shell.addBinding(ctx.plan.shell, 'pinnacleHeight', { min: 1, max: 20, step: 0.25, label: 'pinnacle m' })

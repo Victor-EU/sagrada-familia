@@ -41,6 +41,17 @@ export interface ShellParams {
   project: number
   /** Where the portals stop and the solid front above them begins. */
   portalHeight: number
+  /**
+   * Height of the doorway in the wall behind a front.
+   *
+   * Not the same number as `portalHeight`, which is where the front's own
+   * solid block starts twenty metres up. This is the opening you walk
+   * through, and nothing published gives it: it is set at two and a third
+   * times the portal's clear width, which is about where the arch of a
+   * doorway that wide would spring, and which puts a 1.65 m figure at a
+   * sixth of its height.
+   */
+  doorHeight: number
   /** Width of the piers between the portals. */
   pier: number
   /** How far the wall between the piers is set back from their faces. */
@@ -60,6 +71,7 @@ export const defaultShell: ShellParams = {
   parapet: 1.7,
   project: MODULE + 1,
   portalHeight: 20,
+  doorHeight: 9.5,
   pier: 3.4,
   relief: 2.2,
   pinnacles: true,
@@ -109,6 +121,35 @@ export interface Skylight {
   y: number
   z: number
   radius: number
+}
+
+/** Width of a front: four modules, which is the published thirty metres. */
+export const FACADE_WIDTH = MODULE * 4
+
+/** Where a front's piers stand: one to a column line, ends included. */
+function pierLines(width: number): number[] {
+  const lines = Math.round(width / MODULE)
+  return Array.from({ length: lines + 1 }, (_, i) => -width / 2 + i * MODULE)
+}
+
+/**
+ * The portals of a front: the gaps its piers leave between them.
+ *
+ * Exported because the wall *behind* a front needs them. A door has to be in
+ * the gap between two piers or it opens onto stone, and the piers are set out
+ * on the module by the front — so the front is asked, rather than the number
+ * being written down twice and drifting apart.
+ */
+export function portals(
+  pier: number,
+  width: number = FACADE_WIDTH,
+): { centre: number; width: number }[] {
+  const lines = pierLines(width)
+  const clear = MODULE - pier
+  if (clear <= 0) return []
+  return lines
+    .slice(0, -1)
+    .map((x) => ({ centre: x + MODULE / 2, width: clear }))
 }
 
 export interface Shell {
@@ -241,13 +282,10 @@ export function buildShell(
     // the building's own grid put relief on it. Below the portal head the
     // gaps between them are the portals; above it they stand proud of the
     // wall and the four bell towers land on them.
-    const lines = Math.round(width / MODULE)
-    for (let i = 0; i <= lines; i++) {
-      panel(-width / 2 + i * MODULE, s.pier, -4, top, s.project)
-    }
+    for (const x of pierLines(width)) panel(x, s.pier, -4, top, s.project)
   }
 
-  const facadeWidth = MODULE * 4
+  const facadeWidth = FACADE_WIDTH
   // The transept fronts close the arms, so they stand on whatever line the
   // arms reach — the nave's own wall only when there are none.
   const frontX = p.transept ? p.transept.outerX : p.wallX

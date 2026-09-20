@@ -2,21 +2,23 @@ import * as THREE from 'three'
 import type { TreeColumnParams } from '../geometry/branch.ts'
 import { columnMetrics, type ColumnOrder } from '../geometry/column.ts'
 import type { VaultCellParams } from '../geometry/vault.ts'
-import { ChurchEnvelope } from '../camera/envelope.ts'
+import { ChurchEnvelope, type Doorway, type Plan2D } from '../camera/envelope.ts'
 import { InstancedField } from '../render/field.ts'
 import { LAYER_GLASS } from '../render/sunrig.ts'
 import { buildApse, type Apse, type ApseParams } from './apse.ts'
-import { buildClerestory, defaultClerestory } from './clerestory.ts'
+import { buildClerestory, defaultClerestory, type RegisterParams } from './clerestory.ts'
 import { MODULE, VAULT_HEIGHT } from './module.ts'
 import {
-  buildPavement,
+  buildBase,
+  buildLid,
   defaultFloor,
   footprint,
   type FloorParams,
+  type FootprintParams,
   type PavingPlan,
 } from './floor.ts'
 import { named, Parts } from './parts.ts'
-import { buildShell, defaultShell, type ShellParams } from './shell.ts'
+import { buildShell, defaultShell, portals, type ShellParams } from './shell.ts'
 import {
   buildTowers,
   defaultTowers,
@@ -429,42 +431,55 @@ export function buildChurch(
 
   const armWallCentre = armOuter + p.walls.offset
 
+  const doors: Doorway[] = []
   if (p.walls.show) {
     for (const [index, strip] of strips.entries()) {
       // 0 at the Glory end, 1 at the crossing.
       const along = strips.length > 1 ? index / (strips.length - 1) : 1
-      buildWalls(parts, p, strip, along, index, index === strips.length - 1)
+      buildWalls(parts, p, strip, along, index, index === strips.length - 1, doors)
     }
-    if (p.walls.glory) buildGloryWall(parts, p, gloryLine + p.walls.offset)
+    if (p.walls.glory) buildGloryWall(parts, p, gloryLine + p.walls.offset, doors)
     // The two short returns that close an arm along the nave axis. Without
     // them the building has a seven-and-a-half metre hole at each of the
     // four re-entrant corners of the cross.
     if (arms) buildArmReturns(parts, p, wallCentre, armWallCentre, crossNear, crossFar)
   }
 
+  // The outside faces of the plan, as one shape. The pavement is cut to it,
+  // the steps are it asked for again with a bigger apron, and the walker is
+  // held off it from the plaza — three things that have to agree exactly, so
+  // they are written once.
+  const outside: FootprintParams = {
+    halfWidth: wallCentre + p.walls.thickness / 2,
+    near: gloryLine + p.walls.offset + p.walls.thickness / 2,
+    mouthZ: crossFar,
+    apseCentreZ: apse.centreZ,
+    apseRadius: apse.outerRadius + p.walls.thickness / 2,
+    arm: arms
+      ? {
+          halfWidth: armWallCentre + p.walls.thickness / 2,
+          near: crossNear,
+          far: crossFar,
+        }
+      : undefined,
+  }
+
   // The pavement is laid last, because it is cut to the building's own
   // outline and the outline is not known until the walls have been placed.
+  const risers = Math.max(1, Math.round(p.floor.steps))
+  const step = {
+    going: p.floor.going,
+    rise: p.floor.podium / risers,
+    risers,
+  }
   if (p.floor.show) {
-    const outline = footprint(
-      {
-        halfWidth: wallCentre + p.walls.thickness / 2,
-        near: gloryLine + p.walls.offset + p.walls.thickness / 2,
-        mouthZ: crossFar,
-        apseCentreZ: apse.centreZ,
-        apseRadius: apse.outerRadius + p.walls.thickness / 2,
-        arm: arms
-          ? {
-              halfWidth: armWallCentre + p.walls.thickness / 2,
-              near: crossNear,
-              far: crossFar,
-            }
-          : undefined,
-      },
-      p.floor.apron,
-    )
-    const { lid, skirt } = buildPavement(outline, p.floor.podium)
+    const lid = buildLid(footprint(outside, p.floor.apron))
     parts.piece(named('pavement', lid, parts.paving), lid)
-    parts.piece(named('podium', skirt, parts.plaster), skirt)
+
+    // The podium's edge is a flight, not a skirt: see `buildBase`.
+    const base = buildBase(outside, p.floor.apron, step)
+    parts.piece(named('base-treads', base.treads, parts.paving), base.treads)
+    parts.piece(named('base-risers', base.risers, parts.plaster), base.risers)
   }
 
   // Outside. The terraces close every vessel at its own crown, the three
@@ -553,6 +568,13 @@ export function buildChurch(
   const field = new InstancedField(parts.specs())
 
   const ceiling = Math.max(p.crossing.crown, p.apse.crown, ...p.bands.map((b) => b.crown))
+  const outerPlan: Plan2D = {
+    halfWidth: outside.halfWidth,
+    near: outside.near,
+    far: outside.mouthZ,
+    apse: { centreZ: outside.apseCentreZ, radius: outside.apseRadius },
+    arm: outside.arm,
+  }
   const envelope = new ChurchEnvelope({
     halfWidth,
     near: gloryLine + p.walls.offset,
@@ -563,6 +585,11 @@ export function buildChurch(
     columns: parts.columns,
     terraces: [apse.terrace],
     arm: armInside ?? undefined,
+    outer: outerPlan,
+    doors,
+    base: p.floor.show
+      ? { apron: p.floor.apron, going: step.going, rise: step.rise, risers: step.risers }
+      : undefined,
   })
 
   // What the whole thing occupies, towers included — the sun rig fits its
@@ -625,6 +652,8 @@ function buildWalls(
   seed: number,
   /** Whether this strip is the one the transept fronts close. */
   transeptEnd: boolean,
+  /** Collects the ways through, for the walker. */
+  doors: Doorway[],
 ): void {
   const span = Math.abs(strip.near - strip.far)
   const centre = (strip.near + strip.far) / 2
@@ -648,15 +677,35 @@ function buildWalls(
     // A different seed per bay, so the glazing does not repeat down the nave
     // the way the stone does.
     outer.seed += seed * 97
-    outer.registers = [
-      {
+    // The transept fronts are the two doors this building is entered by, and
+    // the wall behind each one is the wall this loop is building.
+    const doorway = transeptEnd ? doorsFor(p, 0, span) : null
+    outer.registers = []
+    if (doorway) {
+      outer.registers.push(doorway)
+      // The wall a quarter turn about y sends its own x to world z, and which
+      // way depends on the side. The openings are symmetric about the middle
+      // of the front, so both sides come out the same — but the sign is still
+      // written down, because agreeing by accident is not agreeing.
+      for (const opening of doorway.openings ?? []) {
+        doors.push({
+          x: sign * wallCentre,
+          z: centre - sign * opening.centre,
+          nx: sign,
+          nz: 0,
+          halfWidth: opening.width / 2,
+        })
+      }
+    }
+    outer.registers.push(
+      ...over(doorway, {
         sill: w.lowSill,
         head: Math.min(w.lowHead, outerBand.crown - 3),
         lights: w.lights,
         panesAcross: 4,
         panesUp: 12,
-      },
-    ]
+      }),
+    )
     // A wall that closes a transept end is not an aisle wall with a taller
     // top; it gets a second register, which is what makes the Nativity and
     // Passion fronts read as façades from inside as well as out.
@@ -749,7 +798,7 @@ function buildArmReturns(
  * whatever stands behind it and the five naves are not all the same height.
  * The stepped silhouette is the section of the building, seen end on.
  */
-function buildGloryWall(parts: Parts, p: ChurchParams, z: number): void {
+function buildGloryWall(parts: Parts, p: ChurchParams, z: number, doors: Doorway[]): void {
   const w = p.walls
   for (const [index, band] of p.bands.entries()) {
     const inner = index === 0 ? 0 : p.bands[index - 1]!.outer
@@ -767,15 +816,23 @@ function buildGloryWall(parts: Parts, p: ChurchParams, z: number): void {
       // bright end of the grade.
       panel.along = 0
       panel.seed += index * 41 + (x > 0 ? 7 : 0)
-      panel.registers = [
-        {
+      const doorway = doorsFor(p, x, width)
+      panel.registers = []
+      if (doorway) {
+        panel.registers.push(doorway)
+        for (const opening of doorway.openings ?? []) {
+          doors.push({ x: x + opening.centre, z, nx: 0, nz: 1, halfWidth: opening.width / 2 })
+        }
+      }
+      panel.registers.push(
+        ...over(doorway, {
           sill: w.lowSill,
           head: Math.min(w.lowHead, band.crown - 3),
           lights: Math.max(2, Math.round(width / 5)),
           panesAcross: 4,
           panesUp: 12,
-        },
-      ]
+        }),
+      )
       if (band.crown > 35) {
         panel.registers.push({
           sill: band.crown - 15,
@@ -788,6 +845,58 @@ function buildGloryWall(parts: Parts, p: ChurchParams, z: number): void {
       addWall(parts, panel, x, z, 0)
     }
   }
+}
+
+/**
+ * The doorway register for a panel of wall standing behind a front.
+ *
+ * A window divides the wall it is in and needs to know nothing else. A door
+ * has to line up with the gap between two piers of the façade in front of it,
+ * and the façade sets those out on the module without knowing which panel of
+ * wall is behind which gap. So the front is asked where its portals are, the
+ * ones that fall within this panel are kept, and the register is handed them
+ * outright.
+ *
+ * It falls out of the grid that the Glory end gets four — two in the central
+ * panel and one in each of the inner aisles — and each transept front two,
+ * and that the outer aisles and the two outer portals of a front, which stand
+ * in front of no wall at all, get none.
+ */
+function doorsFor(p: ChurchParams, centre: number, width: number): RegisterParams | null {
+  const openings = portals(p.shell.pier)
+    .filter((gap) => Math.abs(gap.centre - centre) + gap.width / 2 <= width / 2 + 1e-4)
+    .map((gap) => ({ centre: gap.centre - centre, width: gap.width }))
+  if (openings.length === 0) return null
+  return {
+    sill: 0,
+    head: p.shell.doorHeight,
+    lights: openings.length,
+    panesAcross: 1,
+    panesUp: 1,
+    glazed: false,
+    openings,
+  }
+}
+
+/** Stone over a doorway, so the glass above it starts clear of the lintel. */
+const LINTEL = 1.6
+
+/**
+ * A wall's low window register, lifted clear of the doorway under it.
+ *
+ * In a bay with a door, the aisle lights cannot start at 3.2 m: they would be
+ * in the head of the opening. They become the row of lights over the portals
+ * instead, which is what the fronts of this building actually carry — and if
+ * lifting them leaves no wall to put them in, they go.
+ */
+function over(
+  doorway: RegisterParams | null,
+  register: RegisterParams,
+): RegisterParams[] {
+  if (!doorway) return [register]
+  const sill = Math.max(register.sill, doorway.head + LINTEL)
+  if (register.head - sill < 2) return []
+  return [{ ...register, sill }]
 }
 
 function addWall(
