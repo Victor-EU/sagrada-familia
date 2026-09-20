@@ -12,6 +12,7 @@ import {
 } from '../geometry/tower.ts'
 import { buildInscription, textWidth, wrapAroundY } from '../geometry/letters.ts'
 import { mergeOrEmpty } from '../geometry/window.ts'
+import { buildSheeting } from '../geometry/works.ts'
 import { named, type Parts } from './parts.ts'
 import { MODULE } from './module.ts'
 import { MOSAIC_PALETTE, stoneColour, type StoneName } from '../render/materials.ts'
@@ -407,6 +408,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
 
   let peak = 0
   let written = 0
+  let wrapped = 0
   const standing: TowerSite[] = []
 
   for (const site of sites) {
@@ -532,6 +534,42 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
         site.fabric,
         true,
       )
+    }
+
+    // Sheeting, on the front that is not finished.
+    //
+    // The Glory façade is the one nobody has ever seen built, and in every
+    // photograph in `reference/` the towers still going up are wrapped to
+    // their tips in white sheet. Putting it on the Glory pair is the only
+    // honest place for it: the Nativity has been finished since 1930 and the
+    // Passion since 1976, and wrapping either would be inventing a works
+    // programme. On the crown rather than the whole shaft, because that is
+    // where the work is and because a tower sheeted to the ground is a
+    // cylinder with the building's best silhouette hidden inside it.
+    if (site.fabric === 'white' && site.crown === 'pinnacle' && wrapped < 2) {
+      const from = base + shaft * 0.62
+      const rise = shaft * 0.38 + crownHeight * 0.55
+      const radiusAt = (h: number): number =>
+        site.radius * Math.sqrt(Math.max(0.04, 1 - (1 - taper * taper) * (h / shaft)))
+      parts.surface(
+        `sheeting:${site.points}:${shaft.toFixed(1)}:${wrapped}`,
+        () => ({
+          geometry: buildSheeting({
+            height: rise,
+            foot: radiusAt(shaft * 0.62) * 1.22,
+            head: radiusAt(shaft) * 1.5,
+            folds: site.points,
+            depth: 0.1,
+            rows: 7,
+            seed: 91 + wrapped * 17,
+          }),
+          error: 0.05,
+        }),
+        new THREE.Matrix4().makeTranslation(site.x, from, site.z),
+        'sheet',
+        true,
+      )
+      wrapped += 1
     }
 
     const shaftTop = base + shaft

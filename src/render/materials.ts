@@ -153,7 +153,7 @@ export const PASSION_STONE = 0xc4ac86
  * a hard white edge against the sky. 160 156 152 on the December frame, at a
  * twentieth saturated, which is as close to grey as this building gets.
  */
-export const NEW_WHITE = 0xd4cfc8
+export const NEW_WHITE = 0xaeaaa3
 
 /**
  * The six central towers — Jesus, Mary, the four Evangelists, 2016 on.
@@ -165,7 +165,7 @@ export const NEW_WHITE = 0xd4cfc8
  * facing, which is a pattern rather than a colour and belongs in the masonry
  * shader, not here.
  */
-export const PANEL_STONE = 0xd2cbc0
+export const PANEL_STONE = 0xa39d93
 
 /**
  * Venetian glass mosaic, on the pinnacle of every bell tower.
@@ -260,6 +260,17 @@ export type StoneName =
   /** The dark behind a tower's louvres — see HOLLOW. */
   | 'hollow'
   /**
+   * Builder's sheeting, wrapped round a tower under construction.
+   *
+   * Its own fabric and not the white stone beside it, which is what the
+   * first attempt used. A wrap cut from the same stone as the shaft it is
+   * wrapping is invisible: it read as a tower that had gone smooth. Sheet
+   * is brighter than any stone on the building, almost perfectly matt, and
+   * it carries no courses — the masonry table has no entry for it, which is
+   * how a fabric says it is not laid.
+   */
+  | 'sheet'
+  /**
    * Pieces that face both ways: the terrace lids, their parapets, the lantern
    * collars. Their top is a roof standing in full sky and their underside is
    * the ceiling of the aisle below, and one fill cannot be right for both.
@@ -314,6 +325,7 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
   hollow: { color: HOLLOW, roughness: 0.96 },
   shell: { color: FACADE, roughness: 0.88 },
   ceramic: { color: CERAMIC, roughness: 0.28 },
+  sheet: { color: 0xeeebe4, roughness: 0.97 },
 }
 
 /**
@@ -499,57 +511,12 @@ const INDOOR_LIGHT = /* glsl */ `
  * room's fill can be settled by the one answer.
  */
 const SHELTER = /* glsl */ `
-float sfSheltered = 0.0;
-{
-  vec3 sfOut = inverseTransformDirection( geometryNormal, viewMatrix );
-  // A step and a half out along the normal, and then a look around. The
-  // step has to clear the wall it is standing in: the reveals of a window
-  // are splayed, so their normals lean half sideways, and a short step from
-  // one stayed inside the metre of masonry and found the terrace overhead.
-  // The look around is for the same faces — a reveal is lit from both sides
-  // of the wall, and the honest answer for it is a share of each.
-  vec3 sfProbe = vSunWorld + sfOut * 1.5;
-  vec2 sfTaps[5];
-  sfTaps[0] = vec2( 0.0, 0.0 );
-  sfTaps[1] = vec2( 1.5, 0.0 );
-  sfTaps[2] = vec2( - 1.5, 0.0 );
-  sfTaps[3] = vec2( 0.0, 1.5 );
-  sfTaps[4] = vec2( 0.0, - 1.5 );
-  float sfCentre = 0.0;
-  float sfRing = 0.0;
-  for ( int i = 0; i < 5; i ++ ) {
-    vec3 sfAt = sfProbe + vec3( sfTaps[ i ].x, 0.0, sfTaps[ i ].y );
-    vec4 sfClip = uRoofMatrix * vec4( sfAt, 1.0 );
-    vec2 sfUv = sfClip.xy * 0.5 + 0.5;
-    float sfUnder = 0.0;
-    if ( sfUv.x >= 0.0 && sfUv.x <= 1.0 && sfUv.y >= 0.0 && sfUv.y <= 1.0 ) {
-      sfUnder = smoothstep( 0.0, 2.0, texture2D( uRoofHeight, sfUv ).r - sfAt.y );
-    }
-    if ( i == 0 ) sfCentre = sfUnder;
-    else sfRing += sfUnder * 0.25;
-  }
+float sfSheltered = smoothstep(
+  0.34,
+  0.86,
+  sfRoofed( vSunWorld, inverseTransformDirection( geometryNormal, viewMatrix ) )
+);
 
-  /**
-   * The centre tap decides and the ring only leans.
-   *
-   * Averaged equally, the five taps gave the *outer* face of every enclosing
-   * wall in the building a fifth of a vote for being indoors — because one
-   * tap of the ring always steps back across the wall it is standing on and
-   * finds the terrace over it. A fifth would be harmless if the two fills
-   * were the same size, and they are nothing like it: the room's is a
-   * window counted at nearly three and a floor counted at eight, against an
-   * outdoor probe that has been cut hard so the towers keep their
-   * modelling. Twenty per cent of the one swamped the whole of the other,
-   * and the nave's flank came back a sheet of interior gold on a frame
-   * taken from two streets away.
-   *
-   * So the fragment's own answer carries the weight, the ring is there to
-   * soften a splayed reveal — which genuinely is lit from both sides — and
-   * the result is pushed toward its ends, so that a face which is merely
-   * *near* a roof is outdoors rather than a fifth indoors.
-   */
-  sfSheltered = smoothstep( 0.34, 0.86, sfCentre * 0.68 + sfRing * 0.32 );
-}
 // Outdoors the skyline shades this the same as anything else; indoors the
 // room's own fill takes over and the towers are irrelevant. See
 // OUTDOOR_INDIRECT for what the term is.
@@ -582,6 +549,46 @@ float sfSheltered = 0.0;
 const SHELTER_PARS = /* glsl */ `
 uniform mat4 uRoofMatrix;
 uniform sampler2D uRoofHeight;
+
+/**
+ * How much of the sky has been taken away from a point by something standing
+ * over it. 0 is open, 1 is roofed.
+ *
+ * A step and a half out along the surface's own normal, and then a look
+ * around. The step has to clear the wall the fragment is standing in: the
+ * reveals of a window are splayed, so their normals lean half sideways, and
+ * a short step from one stayed inside the metre of masonry and found the
+ * terrace overhead. The look around is for the same faces — a reveal is lit
+ * from both sides of the wall and the honest answer is a share of each.
+ *
+ * The centre tap decides and the ring only leans. Averaged equally, the five
+ * taps gave the *outer* face of every enclosing wall in the building a fifth
+ * of a vote for being roofed, because one tap of the ring always steps back
+ * across the wall it stands on and finds the terrace over it.
+ */
+float sfRoofed( vec3 world, vec3 outward ) {
+  vec3 probe = world + outward * 1.5;
+  vec2 taps[5];
+  taps[0] = vec2( 0.0, 0.0 );
+  taps[1] = vec2( 1.5, 0.0 );
+  taps[2] = vec2( - 1.5, 0.0 );
+  taps[3] = vec2( 0.0, 1.5 );
+  taps[4] = vec2( 0.0, - 1.5 );
+  float centre = 0.0;
+  float ring = 0.0;
+  for ( int i = 0; i < 5; i ++ ) {
+    vec3 at = probe + vec3( taps[ i ].x, 0.0, taps[ i ].y );
+    vec4 clip = uRoofMatrix * vec4( at, 1.0 );
+    vec2 uv = clip.xy * 0.5 + 0.5;
+    float under = 0.0;
+    if ( uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 ) {
+      under = smoothstep( 0.0, 2.0, texture2D( uRoofHeight, uv ).r - at.y );
+    }
+    if ( i == 0 ) centre = under;
+    else ring += under * 0.25;
+  }
+  return centre * 0.68 + ring * 0.32;
+}
 `
 
 export interface ShelterUniforms extends Record<string, THREE.IUniform> {
@@ -915,7 +922,47 @@ const OUTDOOR_INDIRECT = /* glsl */ `
     vec3 sfDir = normalize( vec3( sfTo.x, sfRise * 0.5, sfTo.y ) );
     sfHidden += sfPatch * max( 0.0, dot( sfSkyN, sfDir ) ) * 2.0;
   }
-  iblIrradiance *= uSkyFill * uFillScale * ( 1.0 - clamp( sfHidden, 0.0, 0.88 ) );
+  // And anything standing directly over this point has taken the sky away
+  // from it, which the envelope had no way of knowing.
+  //
+  // The skyline term above handles a tower shading its neighbours, which is
+  // the twenty-to-a-hundred-metre scale. It cannot see a roof: the soffit of
+  // a porch twelve metres under its own canopy was being handed the whole
+  // hemisphere at the open-sky gain, and no amount of turning that gain down
+  // reaches it, because the gain is the same number for the open wall beside
+  // it. Ambient occlusion cannot reach it either — three metres of radius
+  // against twelve metres of overhang.
+  //
+  // What can see it is the roof-height map the interior has used since phase
+  // five to decide what is a room. Thresholded the same way, so a face that
+  // is merely near a roof stays outdoors, and left with seven per cent,
+  // because a soffit over a sunlit pavement is not black.
+  float sfUnderRoof = smoothstep(
+    0.18,
+    0.92,
+    sfRoofed( vSunWorld, inverseTransformDirection( geometryNormal, viewMatrix ) )
+  );
+  float sfOpenSky = ( 1.0 - clamp( sfHidden, 0.0, 0.88 ) ) * ( 1.0 - sfUnderRoof * 0.88 );
+  iblIrradiance *= uSkyFill * uFillScale * sfOpenSky;
+  // And the same to the *reflection* of the sky, which is the half of this
+  // that was missing and the reason the outside had no blacks in it.
+  //
+  // Three splits the environment two ways, a diffuse irradiance and a
+  // specular radiance, and only the first of them was being scaled. Sandstone at roughness 0.84 reflects about four per cent, which
+  // sounds like nothing until you notice it is four per cent of the whole
+  // sky arriving on a surface that cannot see any of it — the underside of a
+  // porch, the back of a portal — with no occlusion term anywhere near it.
+  // Measured on the December porch frame with everything else already turned
+  // down as far as it would go: 0.1 % of the stone below eight per cent
+  // luminance with this line missing, 16.0 % with it, against 15.1 % in the
+  // photograph. A surface that is hidden from the sky is hidden from its
+  // reflection too.
+  //
+  // Only the occlusion, not the fill's own gain: uSkyFill is an *amplifier*
+  // — it stands at 2.1 to make up for an open-hemisphere probe — and putting
+  // it on the specular term would double the sky reflected in every wall on
+  // the building. This line can only ever darken, which is what it is for.
+  radiance *= sfOpenSky;
 }
 `
 
@@ -1292,15 +1339,15 @@ export function stonePatch(
   return {
     uniforms: indoors
       ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale, ...laid }
-      : { ...grain, ...outdoor, ...fillScale, ...laid },
+      : { ...grain, ...outdoor, ...shelter, ...fillScale, ...laid },
     pars: indoors
       ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}\n${MASONRY_PARS}`
-      : `${GRAIN_PARS}\n${OUTDOOR_PARS}\n${MASONRY_PARS}`,
+      : `${GRAIN_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}\n${MASONRY_PARS}`,
     colour: GRAIN_COLOUR,
     surface: MASONRY_SURFACE,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-7' : 'stone-sky-4',
+    key: indoors ? 'stone-room-8' : 'stone-sky-5',
   }
 }
 
@@ -1331,6 +1378,7 @@ export function openQuarry(): Quarry {
     vault: stone('vault'),
     wall: stone('wall'),
     ceramic: stone('ceramic'),
+    sheet: stone('sheet'),
     facade: stone('facade'),
     nativity: stone('nativity'),
     passion: stone('passion'),

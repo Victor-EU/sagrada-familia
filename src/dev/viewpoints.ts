@@ -312,9 +312,17 @@ export const VIEWPOINTS: Viewpoint[] = [
       'ex-passion-porch-dec2025: from the pavement under the Passion front, ' +
       '18 mm, ten past three on 18 December. The sun is 17° up at 214°, on ' +
       'the front and eleven degrees off square, so every column throws its ' +
-      'shadow to the right across the porch. The sky is the colour test.',
+      'shadow to the right across the porch. The sky is the colour test. ' +
+      'Aimed lower than it was: this frame was set when the porch was a ' +
+      'shelf sixteen metres up and it pointed over the top of it, which is ' +
+      'not the photograph — the photograph is mostly porch. Aimed *at* the ' +
+      'comb on the leading edge rather than past it, because the viewer ' +
+      'will not stand somewhere it has been asked to look through: give it ' +
+      'a point behind the canopy and it steps back thirty metres and rises ' +
+      'to the terraces to get a clear line, which is the right instinct and ' +
+      'the wrong frame.',
     position: [-70, 1.6, -36],
-    target: [-40, 45, -30],
+    target: [-58, 15, -31],
     fov: 47,
     shiftCorrection: 0,
     day: 352,

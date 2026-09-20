@@ -189,3 +189,91 @@ export function buildCrane(p: CraneParams): THREE.BufferGeometry {
   crane.rotateY(p.turn)
   return crane
 }
+
+export interface SheetingParams {
+  /** How far up the shaft the wrap runs. */
+  height: number
+  /** Radius of the shaft at the foot of the wrap and at its head. */
+  foot: number
+  head: number
+  /** Folds round the circumference, and how deep they hang. */
+  folds: number
+  depth: number
+  /** Rings up it. */
+  rows: number
+  seed: number
+}
+
+/**
+ * Sheeting, wrapped round the top of a shaft.
+ *
+ * Two of the towers in `reference/ex-apse-flank-west.jpg` are wrapped to
+ * their tips in white sheet, with the scaffold showing through it in places,
+ * and it is one of the loudest things in the frame — a pale, soft, obviously
+ * *temporary* object in the middle of a hundred metres of stone.
+ *
+ * Built as a skin rather than as netting on purpose. A mesh with holes in it
+ * is the honest thing to model and the wrong thing to draw: at the distance
+ * any viewpoint here stands from a tower top, a half-open net is a field of
+ * sub-pixel holes, which is moiré, and the alpha-tested alternative is a
+ * sorting problem for a surface that wraps round itself. What a photograph
+ * of sheeting actually shows is a closed pale surface with vertical folds in
+ * it catching the light down one side of each — so that is what this is: a
+ * slightly oversized shell with a cosine ripple round it and a ragged head
+ * where the sheet is tied off.
+ */
+export function buildSheeting(p: SheetingParams): THREE.BufferGeometry {
+  const random = mulberry(p.seed)
+  const sides = Math.max(12, Math.round(p.folds * 4))
+  const rows = Math.max(3, p.rows)
+  // One wobble per fold, frozen up the height so a fold is a line and not a
+  // spiral, plus a little per-fold slack so the folds are not identical.
+  const slack = Array.from({ length: sides }, () => 0.82 + random() * 0.36)
+  const ragged = Array.from({ length: sides }, () => 1 - random() * 0.09)
+
+  const ring = (r: number): THREE.Vector3[] => {
+    const t = r / rows
+    const base = THREE.MathUtils.lerp(p.foot, p.head, t)
+    return Array.from({ length: sides }, (_, i) => {
+      const a = (i / sides) * Math.PI * 2
+      const fold = 1 + p.depth * (0.5 + 0.5 * Math.cos(a * p.folds)) * slack[i]!
+      // The sheet is pulled in at the very top where it is lashed off.
+      const draw = 1 - 0.12 * Math.pow(t, 3)
+      const radius = base * fold * draw
+      const y = p.height * t * (r === rows ? ragged[i]! : 1)
+      return new THREE.Vector3(radius * Math.cos(a), y, radius * Math.sin(a))
+    })
+  }
+
+  const positions: number[] = []
+  let lower = ring(0)
+  for (let r = 1; r <= rows; r++) {
+    const upper = ring(r)
+    for (let i = 0; i < sides; i++) {
+      const j = (i + 1) % sides
+      const a = lower[i]!
+      const b = lower[j]!
+      const c = upper[j]!
+      const d = upper[i]!
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
+      positions.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z)
+    }
+    lower = upper
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+/** Small deterministic PRNG, so the same sheet is tied the same way. */
+function mulberry(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}

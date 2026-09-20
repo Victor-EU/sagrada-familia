@@ -466,3 +466,142 @@ wrong for the reason section B names.
 - **A pre-existing artifact**, found while looking at the gables and not
   caused by this round: the valleys *between* two gables dither in a
   checkerboard at middle distance. Worth chasing separately.
+
+---
+
+# The relief, the light, and the sheeting
+
+*21 September 2026. Sections A, B and the netting, built.*
+
+## The porch was a shelf and should have been a tent
+
+`reference/ex-passion-front.jpg` settles what the Passion portico is, and it
+is not what was modelled. Six legs **splay**: their feet stand wider apart
+and further out than their heads, so the six lean inward as they rise. The
+canopy is a **roof**, not a deck — it climbs from a low leading edge to a
+ridge against the wall, and that leading edge is an arc that dips at the ends
+rather than a straight line. Under it is the thing that matters, which is a
+**cave**.
+
+What was there was a 1.3 m slab sixteen metres up on six one-metre stilts,
+reaching nine and a half metres. It read from the pavement as scaffolding: a
+shelf bolted to a cliff with nothing under it the light could be dark in.
+
+Rebuilt: a ruled roof from an arced eaves at 18 m to a ridge at 28 m, twelve
+metres of reach, legs heavy at the foot and waisted at mid height, and a comb
+of thirty-two raking prisms on the leading edge instead of thirteen. 3,324
+triangles, against 1,500 before and the Nativity crust's 33,072 — the count
+was never the problem, the shape was.
+
+## Reveals
+
+Every pane in this building sits at the waist of the funnel `pierced` cuts,
+so the clerestory wall's **thickness is the depth of the reveal**. It stood
+at 0.9 m, which put the glass 450 mm behind the face and made every window
+on the outside a coloured rectangle stuck on a flat wall. These walls carry a
+forty-five metre vault; a metre and a half is modest, and it buys 750 mm of
+jamb with a 0.45 m splay on it. The interior frames are unchanged — the same
+funnel, opened wider on both sides.
+
+## The light: three things, and only one of them was the fill
+
+This is the section the whole exterior has been waiting for, and the diagnosis
+in the first half of this note — *lower the sky fill* — was wrong about the
+mechanism.
+
+**A soffit was being handed the whole sky.** `uSkyFill` is an **amplifier**,
+not a nought-to-one factor: it stands at 2.1 to make up for an open-hemisphere
+probe. Turning it down darkens the underside of the porch and the open wall
+beside it by exactly the same proportion, so the dark tail never moves. Swept
+live from 2.1 down to 0.5 with the exposure raised to match, the share of
+stone below eight per cent luminance at the December porch went 0.1 % → 0.1 %
+→ 0.1 %. Six settings, no movement.
+
+**Ambient occlusion cannot reach it either.** Three metres of radius against
+twelve metres of overhang. Swept 3 → 9 → 16 → 22 m with the strength raised
+to 0.85: 0.1 % at every one of them.
+
+**What can see it is the roof-height map.** The interior has used it since
+phase five to decide what is a room — a top-down height texture, five taps
+with the centre weighted, which is how the nave's flank learned not to be
+indoors. The envelope never consulted it. It does now: a point with something
+standing over it loses its sky, thresholded the same way so a face that is
+merely *near* a roof stays outdoors, and left with twelve per cent because a
+soffit over a sunlit pavement is not black. The five-tap probe that the
+shelter test carried inline is now one function that both call.
+
+**And the reflection of the sky was never occluded at all.** Three splits the
+environment into a diffuse irradiance and a specular radiance; only the first
+was being scaled. Sandstone at roughness 0.84 reflects about four per cent,
+which sounds like nothing until you notice it is four per cent of the whole
+sky arriving on a surface that cannot see any of it. Only the occlusion is
+applied to it, never the fill's own gain — `uSkyFill` on a specular term
+would double the sky reflected in every wall on the building.
+
+**Then the fabrics.** `exterior.md` recorded `white` rendering at 194 189 182
+against a photograph's 160 156 152 and `panel` at 204 198 189 against
+157 151 143, and explained the 34 and 47 points away by the test frame being
+a June morning. The December frames never agreed. Both are down to their
+measured values: `white` 0xd4cfc8 → 0xaeaaa3, `panel` 0xd2cbc0 → 0xa39d93.
+
+### Where it landed
+
+Viewpoint `x`, the December porch, stone only:
+
+| | below 4 % | below 8 % | below 15 % | above 60 % | median |
+| --- | --- | --- | --- | --- | --- |
+| **photograph** | 6.7 % | 15.1 % | 31.6 % | 39.7 % | 105 |
+| start of the day | 0.1 % | 0.3 % | 4.1 % | 56.2 % | 160 |
+| after the porch and the roof term | 1.0 % | 3.0 % | 12.0 % | 53.3 % | 159 |
+| after the fabrics | **4.8 %** | **7.9 %** | **12.2 %** | **43.1 %** | **116** |
+
+The bright end and the median are now inside the photograph's range. The dark
+end is half way: 7.9 % against 15.1 %.
+
+## Sheeting
+
+`buildSheeting`: a closed pale shell with a cosine fold round it, drawn in at
+the head where the sheet is lashed off, with a ragged top edge. Built as a
+skin rather than as netting on purpose — a half-open net at this range is a
+field of sub-pixel holes, which is moiré, and the alpha-tested version is a
+sorting problem for a surface that wraps round itself. What a photograph of
+sheeting shows is a closed pale surface with folds in it.
+
+On the two outer **Glory** towers, which is the only honest place for it: the
+Nativity has been finished since 1930 and the Passion since 1976, and
+wrapping either would be inventing a works programme. In its own `sheet`
+fabric and not the white stone beside it — the first attempt used `white` and
+was invisible, because a wrap cut from the same stone as the shaft it wraps
+reads as a tower that has gone smooth.
+
+And a 74 m scaffold tower at the Glory end, from the same lattice generator
+as the crane masts with the jib left off, which is exactly what the one on
+the roof in `ex-terraces-roofscape.jpg` is.
+
+## Two things the work turned up
+
+**The viewer will not stand somewhere it has been asked to look through.**
+Viewpoint `x` was aimed over the top of the old shelf; re-aimed at a point
+behind the new canopy it stepped back thirty metres and rose to the terraces
+to get a clear line — the right instinct and the wrong frame. It is aimed at
+the comb on the leading edge now.
+
+**A plane tree stood seven metres from the camera at that same viewpoint**,
+square in front of the porch. Nothing in the park blocks explained it: it was
+a street tree on the temple block's own kerb, and the guard that keeps those
+kerbs clear of the sightlines was centred on the block's centre. The transept
+fronts are eleven metres behind that, so the two side streets are now cleared
+about the transept and the two end streets about the nave.
+
+## Still open
+
+- **The dark tail.** 7.9 % below eight per cent against a photograph's
+  15.1 %, and 12.2 % below fifteen against 31.6 %. The shade in the
+  photograph is a broad band; here it is still somewhat bimodal.
+- **The flank.** 42.6 % of it above sixty per cent luminance against 21.7 %.
+  That frame is mostly `shell` and `wall`, which have not been re-measured
+  since the fabrics were split.
+- **The porch legs** are slimmer than the bone columns in the photograph, and
+  the comb is coarser than the real fringe.
+- **Cornices and drip mouldings on the flank walls.** The fronts carry string
+  courses already; the flanks do not.

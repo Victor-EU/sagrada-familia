@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { buildCrane, type CraneParams } from '../geometry/works.ts'
+import { buildCrane, buildLattice, type CraneParams } from '../geometry/works.ts'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
@@ -382,7 +382,13 @@ export function buildCity(
             // plaza planted evenly is a plaza you cannot see the building
             // from: the first version put a ten-metre plane tree dead centre
             // of the one view the whole approach is built around.
-            if (Math.abs(pz - cz) < 17) continue
+            //
+            // Widened from seventeen metres once the Passion porch became a
+            // porch. These two blocks flank the transept, whose fronts are
+            // at z = -30 rather than at the block's own centre, and a strip
+            // that stopped at -36 left a plane tree standing square in front
+            // of the one frame matched to `ex-passion-porch-dec2025.jpg`.
+            if (pz - cz < 17 && pz - cz > -26) continue
             if (random() > 0.62) continue
             treeSpots.push(
               new THREE.Vector3(px + (random() - 0.5) * 9, 0, pz + (random() - 0.5) * 9),
@@ -427,12 +433,27 @@ export function buildCity(
   if (params.trees) {
     const half = params.side / 2
     const kerb = params.pitch / 2 - 3.5
+    /**
+     * The transept stands eleven metres behind the block's own centre.
+     *
+     * The guard used to be sixteen metres either side of `cz` for all four
+     * kerbs, and for the two that run in z that is the wrong line: they are
+     * the streets the Passion and Nativity fronts are seen along, and those
+     * fronts are at z = -30, not at the middle of the block. A plane tree
+     * landed seven metres from the camera at the one viewpoint matched to
+     * `ex-passion-porch-dec2025.jpg`, square in front of the porch, and no
+     * amount of looking at the park blocks found it because it was a street
+     * tree on the temple's own kerb.
+     */
+    const transept = -11
     for (let t = -half; t <= half; t += 13) {
-      // Nothing within sixteen metres of either axis: those are the four
-      // lines the fronts are seen along.
-      if (Math.abs(t) > 16) {
+      // The two side streets, seen along the transept.
+      if (Math.abs(t - transept) > 22) {
         treeSpots.push(new THREE.Vector3(cx + kerb, 0, cz + t))
         treeSpots.push(new THREE.Vector3(cx - kerb, 0, cz + t))
+      }
+      // The two end streets, seen along the nave.
+      if (Math.abs(t) > 20) {
         treeSpots.push(new THREE.Vector3(cx + t, 0, cz + kerb))
         treeSpots.push(new THREE.Vector3(cx + t, 0, cz - kerb))
       }
@@ -459,6 +480,14 @@ export function buildCity(
       [-52, -58, { height: 82, jib: 56, counter: 20, mast: 2.4, trolley: 34, drop: 46, turn: 0.62 }],
       [58, 34, { height: 64, jib: 48, counter: 17, mast: 2.1, trolley: 29, drop: 36, turn: 2.05 }],
     ]
+    // A scaffold tower at the Glory end, standing beside the sheeted pair.
+    // Same lattice as a crane mast and no jib, which is exactly what the one
+    // on the roof in `ex-terraces-roofscape.jpg` is.
+    const scaffold = buildLattice({ length: 74, width: 3.4, bay: 5.2, member: 0.3 }).toNonIndexed()
+    scaffold.translate(-26, 0, 52)
+    tintAll(scaffold, steel, 0.5)
+    blocks.push(scaffold)
+
     for (const [x, z, rig] of rigs) {
       // Non-indexed, because the blocks it is merged with are extrusions and
       // mergeGeometries refuses a list where some carry an index and some do

@@ -593,13 +593,17 @@ export function buildShell(
     if (kind === 'passion' && s.porch) {
       porch.push(
         buildPassionPortico({
-          width: width * 0.92,
-          height: s.portalHeight * 0.82,
-          reach: s.porchReach,
+          // The whole front, not the middle of it. The porch on this façade
+          // spans the four towers' feet; a narrower one reads as a canopy
+          // bolted on rather than as the front itself.
+          width: width * 0.98,
+          eaves: s.portalHeight * 0.9,
+          ridge: s.portalHeight * 1.4,
+          reach: s.porchReach * 1.26,
           legs: 6,
-          slab: 1.3,
-          blades: 13,
-          bladeRise: 4.2,
+          slab: 1.6,
+          blades: 32,
+          bladeRise: 4,
         }),
       )
     }

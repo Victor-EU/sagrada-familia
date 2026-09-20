@@ -106,100 +106,186 @@ export function buildLeg(p: LegParams, sides = 7): THREE.BufferGeometry {
 export interface PorticoParams {
   /** Width of the front the portico stands across. */
   width: number
-  /** Height of the underside of the canopy. */
-  height: number
-  /** How far the portico stands out from the wall. */
+  /** Height of the canopy's front edge at the middle of the span. */
+  eaves: number
+  /** Height of the canopy where it meets the wall. */
+  ridge: number
+  /** How far the front edge stands out from the wall. */
   reach: number
   /** Legs across the front. Six, on the real one. */
   legs: number
-  /** Thickness of the canopy slab. */
+  /** Thickness of the canopy. */
   slab: number
-  /** Blades standing on the canopy, and how tall they are. */
+  /** Blades standing on the leading edge, and how tall they are. */
   blades: number
   bladeRise: number
 }
 
 /**
- * The Passion front: legs, canopy, and the raking gable of blades on it.
+ * The Passion front: a tent, not a shelf.
+ *
+ * This was built as a flat slab on six thin stilts and it read from the
+ * pavement as scaffolding — a shelf bolted to a cliff, with nothing under it
+ * that the light could be dark in. `reference/ex-passion-front.jpg` is
+ * unambiguous about what it actually is:
+ *
+ *  - The legs **splay**. Their feet stand wider apart and further out than
+ *    their heads, so the six of them lean inward as they rise and the whole
+ *    thing reads as a tent pitched against the façade. They are heavy at the
+ *    foot, waisted at mid height and flared where they meet the roof, which
+ *    is the bone everybody describes.
+ *  - The canopy is a **roof**, not a deck: it rises from a low leading edge
+ *    to a ridge against the wall, and its leading edge is an arc that dips at
+ *    the ends rather than a straight line. That slope is what gives the
+ *    front a lit surface above a dark one.
+ *  - Under it is the thing that matters, which is **a cave**. Twelve metres
+ *    of overhang with a ten-metre drop from ridge to eaves puts everything
+ *    behind it out of the sky's way. The old version projected far enough to
+ *    cast a shadow and then held nothing in it, because the roof was a metre
+ *    and a bit thick and the wall stood a couple of metres back.
+ *  - The comb of raking prisms along the leading edge, which is the one
+ *    detail of this porch anybody photographs. Thirty-odd of them, not
+ *    thirteen.
  */
 export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
   const pieces: THREE.BufferGeometry[] = []
   const legs = Math.max(2, Math.round(p.legs))
-  const pitch = p.width / (legs + 0.6)
+  const half = p.width / 2
+
+  /** The leading edge, as an arc: highest in the middle, dipping at the ends. */
+  const eavesAt = (u: number): number => p.eaves - (p.eaves - p.ridge) * 0.18 * u * u
 
   for (let i = 0; i < legs; i++) {
-    const x = (i - (legs - 1) / 2) * pitch
-    // The outer legs splay hardest; the inner pair stand nearly upright,
-    // which is what holds the middle of the canopy up.
-    const away = (i - (legs - 1) / 2) / Math.max(1, (legs - 1) / 2)
+    const u = legs === 1 ? 0 : (i / (legs - 1)) * 2 - 1
+    // Head just inside the leading edge; foot wider and further out, so the
+    // leg leans inward as it climbs.
+    const headX = u * half * 0.93
+    const headZ = p.reach * 0.9
+    const footX = u * half * 1.16
+    const footZ = p.reach * 1.02
+    const height = eavesAt(u) - p.slab * 0.4
     const leg = buildLeg({
-      height: p.height,
-      reach: p.reach,
-      foot: 1.15,
-      neck: 0.62,
-      knuckle: 0.95,
-      lean: 0.55,
-      splay: away * 1.5,
+      height,
+      reach: footZ,
+      // Heavy at the foot and flared at the knuckle. A leg a metre across
+      // carrying a roof twelve metres out is a prop; these are piers.
+      foot: 1.95,
+      neck: 1.12,
+      knuckle: 1.5,
+      lean: 1 - headZ / footZ,
+      splay: headX - footX,
     })
-    leg.translate(x, 0, 0)
+    leg.translate(footX, 0, 0)
     pieces.push(leg)
   }
 
-  // The canopy. Deeper than the legs reach, so it overhangs them, and canted
-  // a little so its outer edge is the high one — the front reads as leaning
-  // out over the steps, which is what the photographs show.
-  const deck = new THREE.BoxGeometry(p.width, p.slab, p.reach * 1.35)
-  deck.translate(0, p.height + p.slab / 2, p.reach * 0.5)
-  deck.rotateX(-0.045)
-  pieces.push(deck)
+  pieces.push(canopy(p, eavesAt))
+  pieces.push(comb(p, eavesAt))
+  pieces.push(titulus(p, eavesAt))
+  return mergeOrEmpty(pieces)
+}
 
-  // The charge, cut across the fascia of the canopy.
-  //
-  // The real front carries the titulus over the door in Latin capitals, and
-  // this is the one band of writing on the Passion side that a person
-  // standing on the steps reads without looking up. Sized to the fascia
-  // rather than typed: the canopy is as wide as the front it stands across
-  // and the front is a parameter.
-  const titulus = 'IESUS NAZARENUS REX IUDAEORUM'
-  const cap = (p.width * 0.84) / Math.max(1, textWidth(titulus, 0.2))
-  // Lighter in the stroke than the tower bands: twenty-nine letters across
-  // one fascia is a much smaller cap height, and a heavy cut at that size
-  // closes every counter in the line.
-  const charge = buildInscription({
-    text: titulus,
-    size: cap,
-    tracking: 0.2,
-    weight: 0.12,
-    relief: 0.22,
-  })
-  charge.translate(
-    (-textWidth(titulus, 0.2) * cap) / 2,
-    p.height + p.slab * 0.28,
-    p.reach * 1.17,
-  )
-  pieces.push(charge)
+/**
+ * The charge, cut along the leading edge of the roof.
+ *
+ * Set flat and then dropped onto the arc — the leading edge falls nearly two
+ * metres from the middle of the span to the hips, and a straight line of
+ * letters on it parts company with the stone at both ends. One pass over the
+ * finished geometry, the same trick the tower bands use to follow a star
+ * section, and the line lies on the edge it is cut into.
+ */
+function titulus(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferGeometry {
+  const text = 'IESUS NAZARENUS REX IUDAEORUM'
+  const half = p.width / 2
+  const tracking = 0.2
+  const cap = (p.width * 0.8) / Math.max(1, textWidth(text, tracking))
+  const line = buildInscription({ text, size: cap, tracking, weight: 0.12, relief: 0.24 })
+  line.translate(-(textWidth(text, tracking) * cap) / 2, 0, 0)
+  const pos = line.getAttribute('position') as THREE.BufferAttribute
+  for (let i = 0; i < pos.count; i++) {
+    const u = pos.getX(i) / half
+    // Under the comb, on the face of the slab, standing out of it.
+    pos.setXYZ(i, pos.getX(i), pos.getY(i) + eavesAt(u) - p.slab * 0.66, pos.getZ(i) + p.reach * 1.0)
+  }
+  pos.needsUpdate = true
+  line.computeBoundingSphere()
+  return line
+}
 
-  // The blades: a row of slabs leaning back, their tops describing a shallow
-  // gable, with a course of blocks along the rake carrying the inscription.
+/**
+ * The roof: a ruled surface from the leading edge back to the ridge, given a
+ * thickness and closed round its rim.
+ *
+ * Ruled rather than a box because the leading edge is an arc and the ridge is
+ * straight, and a box cannot be both. The soffit is the half of it that does
+ * the work — it is what every frame taken from the steps is looking at.
+ */
+function canopy(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferGeometry {
+  const cols = 24
+  const rows = 6
+  const half = p.width / 2
+  const positions: number[] = []
+  const at = (i: number, j: number, under: boolean): THREE.Vector3 => {
+    const u = (i / cols) * 2 - 1
+    const v = j / rows
+    // Narrowing a little as it runs back, and rising from eaves to ridge on
+    // a slight curve so the slope is steepest where it leaves the wall.
+    const y =
+      THREE.MathUtils.lerp(eavesAt(u), p.ridge, Math.pow(v, 0.85)) - (under ? p.slab : 0)
+    return new THREE.Vector3(u * half * (1 - 0.06 * v), y, p.reach * (1 - v))
+  }
+  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3): void => {
+    for (const q of [a, b, c, a, c, d]) positions.push(q.x, q.y, q.z)
+  }
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      quad(at(i, j, false), at(i, j + 1, false), at(i + 1, j + 1, false), at(i + 1, j, false))
+      quad(at(i, j, true), at(i + 1, j, true), at(i + 1, j + 1, true), at(i, j + 1, true))
+    }
+    // The leading edge's own face, which is what catches the low sun.
+    quad(at(i, 0, true), at(i + 1, 0, true), at(i + 1, 0, false), at(i, 0, false))
+  }
+  // And the two ends, so the slab is closed where it is cut off.
+  for (const [i, flip] of [[0, true], [cols, false]] as const) {
+    for (let j = 0; j < rows; j++) {
+      const a = at(i, j, false)
+      const b = at(i, j + 1, false)
+      const c = at(i, j + 1, true)
+      const d = at(i, j, true)
+      if (flip) quad(a, b, c, d)
+      else quad(d, c, b, a)
+    }
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+/**
+ * The comb along the leading edge.
+ *
+ * A row of prisms standing on the edge of the roof and raking back over it,
+ * each one throwing a wedge of shadow onto the slope behind. What it buys is
+ * a line of alternating light and dark right where the porch meets the sky,
+ * which is the single most recognisable thing about this front at the range
+ * the pavement viewpoints stand at.
+ */
+function comb(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferGeometry {
+  const pieces: THREE.BufferGeometry[] = []
   const blades = Math.max(2, Math.round(p.blades))
-  const top = p.height + p.slab
+  const half = p.width / 2
   for (let i = 0; i < blades; i++) {
     const t = (i + 0.5) / blades
-    const x = (t - 0.5) * p.width * 0.97
-    // Shallow gable: tallest in the middle.
-    const rise = p.bladeRise * (0.55 + 0.45 * Math.cos((t - 0.5) * Math.PI))
-    const blade = new THREE.BoxGeometry(p.width / blades * 0.42, rise, 0.5)
+    const u = t * 2 - 1
+    // Tallest over the middle of the span, running out toward the hips.
+    const rise = p.bladeRise * (0.62 + 0.38 * Math.cos(u * Math.PI * 0.5))
+    const blade = new THREE.BoxGeometry((p.width / blades) * 0.46, rise, p.slab * 1.5)
     blade.translate(0, rise / 2, 0)
-    blade.rotateX(-0.5)
-    blade.translate(x, top, p.reach * 0.92)
+    blade.rotateX(-0.62)
+    blade.translate(u * half * 0.99, eavesAt(u), p.reach * 0.96)
     pieces.push(blade)
-
-    // The lintel block each blade carries, which is where the letters are.
-    const block = new THREE.BoxGeometry(p.width / blades * 0.62, 0.7, 0.85)
-    block.translate(x, top + rise * 0.92, p.reach * 0.92 - rise * 0.42)
-    pieces.push(block)
   }
-
   return mergeOrEmpty(pieces)
 }
 

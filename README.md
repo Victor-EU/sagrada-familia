@@ -286,6 +286,40 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
 
 ## Notes
 
+- **A sky fill that is an amplifier cannot be turned down to make a shadow.**
+  `uSkyFill` stands at 2.1 to make up for an open-hemisphere probe, so
+  lowering it darkens the underside of a porch and the open wall beside it
+  by exactly the same proportion. Swept from 2.1 to 0.5 with the exposure
+  raised to match, the share of stone below eight per cent luminance at the
+  December porch moved from 0.1 % to 0.1 %. Ambient occlusion could not
+  reach it either — three metres of radius against twelve metres of
+  overhang, and 3, 9, 16 and 22 m all measured the same.
+- **What can see a soffit is the roof-height map.** The interior has used it
+  since phase five to decide what is a room; the envelope never consulted
+  it. A point with something standing over it now loses its sky, on the same
+  threshold, keeping twelve per cent because a soffit over a sunlit pavement
+  is not black. The five-tap probe the shelter test carried inline is now one
+  function both call.
+- **The reflection of the sky was never occluded at all.** Three splits the
+  environment into a diffuse irradiance and a specular radiance and only the
+  first was being scaled. Four per cent of the whole sky, arriving on
+  surfaces that cannot see any of it.
+- **The Passion porch was a shelf and is a tent.** Six legs that splay — feet
+  wider and further out than their heads — under a roof that climbs from an
+  arced leading edge at 18 m to a ridge at 28 m against the wall, reaching
+  twelve metres out, with a comb of thirty-two raking prisms on the edge. It
+  is 3,324 triangles against 1,500 before; the count was never the problem.
+- **A pane sits at the waist of the funnel, so a wall's thickness is the
+  depth of its reveal.** At 0.9 m the glass stood 450 mm behind the face and
+  every window outside read as a coloured rectangle on a flat wall. A metre
+  and a half is modest for a wall carrying a forty-five metre vault.
+- **Sheeting is a skin, not a net.** A half-open net at tower-top range is a
+  field of sub-pixel holes, which is moiré. A photograph of sheeting shows a
+  closed pale surface with folds in it. In its own fabric, too: cut from the
+  white stone beside it, a wrap reads as a tower that has gone smooth.
+- **The viewer will not stand somewhere it has been asked to look through.**
+  Aimed at a point behind the new canopy, it stepped back thirty metres and
+  rose to the terraces for a clear line. Aim at the thing, not past it.
 - **Twenty generators, and not one of them made ornament.** Tree column,
   vault cell, portico leg, hood, crust, tower shaft, louvre, column base,
   cypress, bridge, arch fringe, gable, column, pinnacle, cross, star, fruit,

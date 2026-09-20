@@ -117,7 +117,16 @@ export function defaultClerestory(
     base: 0,
     height,
     gradeHeight: height,
-    thickness: 0.9,
+    // A metre and a half, and the number is doing work at both ends of it.
+    //
+    // A pane sits at the waist of the funnel `pierced` cuts, so the wall's
+    // thickness *is* the depth of the reveal: at 0.9 m the glass stood
+    // 450 mm behind the face and every window on the outside of this
+    // building read as a coloured rectangle stuck on a flat wall. These
+    // walls carry a forty-five metre vault and are buttressed piers with
+    // glass between them; a metre and a half is if anything modest, and it
+    // buys 750 mm of jamb to throw a shadow across at any sun off square.
+    thickness: 1.5,
     side,
     margin: 1.1,
     mullion: 0.55,
@@ -179,7 +188,7 @@ export function buildClerestory(p: ClerestoryParams): Clerestory {
         oculi: f.oculi ?? true,
         seed: p.seed * 977 + index * 23,
       })
-      const stone = pierced(p.span, tall, p.thickness, figures, f.splay ?? 0.18)
+      const stone = pierced(p.span, tall, p.thickness, figures, f.splay ?? 0.45)
       stone.translate(0, register.sill, 0)
       stonePieces.push(stone)
 

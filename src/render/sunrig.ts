@@ -631,7 +631,7 @@ export function patchForSunlight(
   // Three caches compiled programs by this key, so two materials that patch
   // the same base shader differently have to name themselves differently or
   // the second one silently gets the first one's program.
-  const key = `sf-sunlight-6${extra.key ? `-${extra.key}` : ''}`
+  const key = `sf-sunlight-7${extra.key ? `-${extra.key}` : ''}`
   material.customProgramCacheKey = () => key
   material.needsUpdate = true
 }
