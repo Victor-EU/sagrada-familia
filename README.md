@@ -9,7 +9,7 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phases 0 to 4 complete
+## Status: phases 0 to 4 complete, phase 5 under way
 
 Each phase carried its own bar. Phase 0: *you can load a photo, match a camera
 to it, and tune a parameter live.* Phase 1, the nave bay and the go/no-go: it
@@ -84,6 +84,8 @@ front.
 | Solar position for 41.40° N, 2.17° E, with CET/CEST | `src/light/sun.ts` |
 | Analytic sky, and the environment light it casts | `src/light/sky.ts` |
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
+| Volumetric shafts — single scattering through the same two maps | `src/render/shafts.ts` |
+| Roof map: where the air is indoors, from the stepped section | `src/render/roof.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
 | Walls — stone frames, no holes cut; aisle and clerestory | `src/plan/clerestory.ts` |
 | Tower generator — paraboloid shaft, star section, pierced | `src/geometry/tower.ts` |
@@ -213,6 +215,39 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   old figure — the worst case is a low June sun, where the ground shadow
   balloons and 16.3 cm becomes 19.7. Cascades are the real answer and are a
   phase 5 problem.
+- The volumetric medium is **indoors only**, and that is not a shortcut — it
+  is the difference between the effect working and ruining the building. Dust
+  hangs in a room; the street outside is swept. At the one density that makes
+  the nave read, ninety metres of lit outdoor air has an optical depth near
+  one, and the first version returned the Nativity front from the plaza as a
+  white sheet. So the pass asks whether anything stands between a sample and
+  the sky, which is one orthographic render straight down, and gets the
+  building's whole stepped section for the price — thirty over the aisles,
+  forty-five over the nave, sixty over the crossing, seventy-five over the
+  apse — where no box would have been that shape. Measured over the thirteen
+  curated frames, the four exterior ones gain between 0.0 % and 0.9 % of
+  frame brightness and the interior ones between 2 % and 6.7 %.
+- That roof map took two corrections, and both are the same mistake in
+  different clothes: **asking what is overhead is not the same as asking what
+  roofs a room.** A bell tower is overhead for a hundred and seventy metres
+  and roofs nothing, so the first map wrapped every tower in a vertical plume
+  of haze — sixteen per cent of the view from the terraces, on a frame whose
+  entire subject is a clean silhouette. The towers are on their own layer
+  now and the map is taken from just above the tallest vault. Then the map
+  was max-filtered to stop the skylights from punching air-free chimneys down
+  the middle of the best shafts in the building — and a dilation grows the top
+  edge of every *wall* into an eight-metre roof too, which filled the terraces
+  with haze all over again. It is a morphological **closing** now, dilate then
+  erode: it fills what is enclosed and puts every edge back where it was.
+- The volumetric pass is load-bearing in the composer chain, which is not
+  obvious from its name. It needs the scene's depth, and a post chain
+  ping-pongs between two buffers whose depth is scratch — sharing one depth
+  texture between them so the scene's depth always lands somewhere readable
+  earns *feedback loop formed between framebuffer and active texture* on
+  every frame, because compositing into a buffer while sampling the depth
+  attached to it is reading and writing one framebuffer at once. So the scene
+  renders into a target of its own and the shaft pass is what puts it into
+  the chain. Turning the air off skips the march and keeps the blit.
 - `material.envMapIntensity` does nothing in this project and never has. Where a
   material has no `envMap` of its own and the scene has an `environment`, three
   overwrites that uniform with `scene.environmentIntensity` every frame, so the

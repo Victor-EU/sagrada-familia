@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { LAYER_SKYLINE } from './sunrig.ts'
 
 /**
  * A field of repeated pieces, each drawn at whatever detail it has earned.
@@ -37,6 +38,8 @@ export interface FieldLevel {
 
 export interface FieldKindSpec {
   name: string
+  /** Stands above the roofs and roofs nothing — see `LAYER_SKYLINE`. */
+  skyline?: boolean
   /** The same piece at falling detail, most detailed first. */
   levels: FieldLevel[]
   material: THREE.Material
@@ -137,6 +140,7 @@ export class InstancedField implements PassParticipant {
 
       const meshes = spec.levels.map(({ geometry }, level) => {
         const mesh = new THREE.InstancedMesh(geometry, spec.material, spec.placements.length)
+        if (spec.skyline) mesh.layers.set(LAYER_SKYLINE)
         // Named so that a frame can be interrogated rather than guessed at:
         // picking a pixel and asking what it hit is the only reliable way to
         // find out which of a hundred surfaces is the one misbehaving.

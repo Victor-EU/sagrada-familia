@@ -4,6 +4,7 @@ import type { FreeCamera } from '../camera/freecam.ts'
 import type { ChurchParams } from '../plan/church.ts'
 import type { HyperboloidParams, RulingFamily } from '../geometry/hyperboloid.ts'
 import type { PhotoOverlay } from './overlay.ts'
+import type { ShaftSettings } from '../render/shafts.ts'
 import { PresetStore } from './presets.ts'
 import { VIEWPOINTS } from './viewpoints.ts'
 
@@ -34,6 +35,8 @@ export interface RenderFlags {
   occlusion: number
   /** How far it looks for occluders, in metres. */
   occlusionRadius: number
+  /** Lit air between the eye and the stone. 0 density turns the pass off. */
+  shafts: ShaftSettings
 }
 
 /**
@@ -302,6 +305,19 @@ export function buildPanel(ctx: ParamContext): Pane {
   rnd.addBinding(ctx.render, 'occlusion', { min: 0, max: 2, step: 0.01, label: 'occlusion' })
   rnd.addBinding(ctx.render, 'occlusionRadius', { min: 0.2, max: 8, step: 0.1, label: 'occlusion m' })
   rnd.on('change', () => ctx.applyRender())
+
+  // The air is the subject in every photograph of this interior, so it gets
+  // its own folder rather than a slider buried among the others.
+  const air = pane.addFolder({ title: 'Air' })
+  air.addBinding(ctx.render.shafts, 'density', {
+    min: 0, max: 0.08, step: 0.0005, label: 'scatter / m',
+  })
+  air.addBinding(ctx.render.shafts, 'anisotropy', {
+    min: 0, max: 0.95, step: 0.01, label: 'forward g',
+  })
+  air.addBinding(ctx.render.shafts, 'range', { min: 10, max: 300, step: 5, label: 'reach m' })
+  air.addBinding(ctx.render.shafts, 'steps', { min: 8, max: 64, step: 1, label: 'samples / ray' })
+  air.on('change', () => ctx.applyRender())
 
   buildPresets(pane, ctx, store)
   return pane

@@ -28,6 +28,19 @@ import { transmittanceMaterial } from '../geometry/glass.ts'
  */
 export const LAYER_GLASS = 1
 
+/**
+ * Things that stand above the roofs and roof nothing: the eighteen towers.
+ *
+ * Every camera in the project sees them — this is not a visibility switch.
+ * It exists so that the one render that asks *what is over this point of the
+ * plan* can be told that a bell tower is not an answer. Without it the
+ * volumetric medium finds a room inside every tower's footprint from its foot
+ * to its tip, and the towers come back wrapped in vertical plumes of haze:
+ * measured on the view from the terraces, sixteen per cent of the frame's
+ * brightness, on a frame whose whole subject is a clean silhouette.
+ */
+export const LAYER_SKYLINE = 2
+
 export interface SunUniforms {
   uSunMatrix: { value: THREE.Matrix4 }
   uSunDepth: { value: THREE.Texture | null }
@@ -186,7 +199,10 @@ export class SunRig {
     const previousBackground = scene.background
     scene.background = null
 
+    // Everything opaque, towers included — they cast the longest shadows in
+    // the model and leaving them out would leave them out of their own.
     this.camera.layers.set(0)
+    this.camera.layers.enable(LAYER_SKYLINE)
     scene.overrideMaterial = this.depthMaterial
     renderer.setRenderTarget(this.depthTarget)
     renderer.setClearColor(0x000000, 1)

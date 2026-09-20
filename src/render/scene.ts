@@ -3,10 +3,11 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { groundMaterial, pavingMaterial, plasterMaterial } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
-import { LAYER_GLASS, SunRig, patchForSunlight } from './sunrig.ts'
+import { LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
+import { RoofMap } from './roof.ts'
+import { ShaftPass, type ShaftSettings } from './shafts.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
 import { EYE_HEIGHT } from '../camera/envelope.ts'
@@ -41,8 +42,11 @@ export interface Stage {
   passes: PassParticipant[]
   /** Re-light for a new sun position. */
   setSun(direction: THREE.Vector3): void
-  /** Tell the rig the geometry changed, and what it now occupies. */
-  setModelBounds(box: THREE.Box3): void
+  /**
+   * Tell the rig the geometry changed, what it now occupies, and how high the
+   * highest thing that roofs a room stands.
+   */
+  setModelBounds(box: THREE.Box3, ceiling: number): void
   /** Drop the plaza to the foot of the podium. */
   setGroundLevel(y: number): void
   /** Force the sun passes to re-run on the next frame. */
@@ -52,6 +56,8 @@ export interface Stage {
   setExposure(value: number): void
   /** Strength and scale of the ambient occlusion term. */
   setOcclusion(options: { intensity: number; radius: number }): void
+  /** How much lit air there is between the eye and the stone. */
+  setShafts(options: ShaftSettings): void
   dispose(): void
 }
 
@@ -85,6 +91,39 @@ export interface Stage {
 class HalfResGTAO extends GTAOPass {
   override setSize(width: number, height: number): void {
     super.setSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)))
+  }
+}
+
+/**
+ * The scene, drawn into a buffer of our own instead of the composer's.
+ *
+ * Three's stock render pass draws into whichever of the two ping-pong buffers
+ * happens to be the read buffer that frame, and those buffers' depth is
+ * scratch — it is cleared and reused by everything downstream, and it cannot
+ * be sampled by a pass that is writing to the same buffer without WebGL
+ * calling it a feedback loop. The volumetric pass needs the scene's depth,
+ * so the scene is given somewhere private to stand and the pass that reads it
+ * is the one that puts it into the chain.
+ */
+class ScenePass extends Pass {
+  constructor(
+    private readonly scene: THREE.Scene,
+    private readonly camera: THREE.Camera,
+    private readonly target: THREE.WebGLRenderTarget,
+  ) {
+    super()
+    // It writes nowhere the chain can see, so there is nothing to swap.
+    this.needsSwap = false
+  }
+
+  override setSize(width: number, height: number): void {
+    this.target.setSize(Math.max(1, width), Math.max(1, height))
+  }
+
+  override render(renderer: THREE.WebGLRenderer): void {
+    renderer.setRenderTarget(this.target)
+    renderer.clear(true, true, true)
+    renderer.render(this.scene, this.camera)
   }
 }
 
@@ -123,6 +162,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // Glass is kept off the default layer so the sun rig can isolate it; the
   // viewer has to be told to look at it.
   camera.layers.enable(LAYER_GLASS)
+  // The towers are kept off the default layer so the roof map can ignore
+  // them; the viewer, obviously, cannot.
+  camera.layers.enable(LAYER_SKYLINE)
 
   const sky = new Sky(renderer)
   // Three thousand, not two.
@@ -179,6 +221,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const passes: PassParticipant[] = []
   const drawingBuffer = new THREE.Vector2()
   let dirty = true
+  let roofDirty = true
 
   function setSun(direction: THREE.Vector3): void {
     sunDirection.copy(direction).normalize()
@@ -208,8 +251,34 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // It costs a second pass over the geometry for depth and normals. At two
   // million triangles that is affordable, and nothing else available buys as
   // much form per millisecond.
+  // The composer's own buffer, given a depth texture, because the volumetric
+  // pass needs to know where the stone is and a second geometry pass to find
+  // out would cost more than the effect.
+  //
+  // Both ping-pong buffers are made to share the one depth texture on
+  // purpose. The render pass draws into whichever of the two is the read
+  // buffer at that moment, and which one that is alternates with the number
+  // of swapping passes in the chain — so a depth texture attached to only one
+  // of them holds the scene on even frames and last frame's on odd ones.
+  const sceneDepth = new THREE.DepthTexture(1, 1)
+  sceneDepth.type = THREE.UnsignedIntType
+  sceneDepth.minFilter = THREE.NearestFilter
+  sceneDepth.magFilter = THREE.NearestFilter
+  const sceneTarget = new THREE.WebGLRenderTarget(1, 1, {
+    type: THREE.HalfFloatType,
+    depthTexture: sceneDepth,
+  })
+  sceneTarget.texture.name = 'Stage.scene'
+
+  // Where the air is indoors — see roof.ts. Only the geometry moves it, so
+  // it is re-read on a rebuild and not on a new hour.
+  const roof = new RoofMap()
+
   const composer = new EffectComposer(renderer)
-  composer.addPass(new RenderPass(scene, camera))
+  composer.addPass(new ScenePass(scene, camera, sceneTarget))
+  // The pass that reads that buffer is the one that puts it into the chain.
+  const shafts = new ShaftPass(camera, sun.uniforms, roof, sceneTarget)
+  composer.addPass(shafts)
   composer.addPass(new LayerGate(camera, LAYER_GLASS, false))
   const occlusion = new HalfResGTAO(scene, camera, 1, 1)
   // Radius is in metres, because the scene is. The default is a quarter of
@@ -243,9 +312,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     sunDirection,
     passes,
     setSun,
-    setModelBounds(box) {
+    setModelBounds(box, ceiling) {
       sun.setBounds(box)
+      roof.setBounds(box, ceiling)
       dirty = true
+      roofDirty = true
     },
     invalidateSun() {
       dirty = true
@@ -254,11 +325,17 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // The building does not move, so the two sun passes only run when the
       // sun or the geometry has actually changed. Everything else is a plain
       // forward render.
-      if (dirty) {
+      if (dirty || roofDirty) {
         for (const participant of passes) participant.prepareForSun(SUN_DETAIL_LEVEL)
-        const radiance = sun.uniforms.uSunRadiance.value
-        sun.render(renderer, scene, camera, sunDirection, radiance)
-        dirty = false
+        if (roofDirty) {
+          roof.render(renderer, scene)
+          roofDirty = false
+        }
+        if (dirty) {
+          const radiance = sun.uniforms.uSunRadiance.value
+          sun.render(renderer, scene, camera, sunDirection, radiance)
+          dirty = false
+        }
       }
       // The level-of-detail switch is angular, so it needs to know how many
       // device pixels the frame is tall — not how many CSS ones.
@@ -287,9 +364,16 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       occlusion.blendIntensity = intensity
       occlusion.updateGtaoMaterial({ radius })
     },
+    setShafts(options) {
+      // Never disabled: this pass is what puts the scene into the chain.
+      Object.assign(shafts.settings, options)
+    },
     dispose() {
       sky.dispose()
       sun.dispose()
+      shafts.dispose()
+      roof.dispose()
+      sceneTarget.dispose()
       composer.dispose()
       renderer.dispose()
     },

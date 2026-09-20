@@ -2,6 +2,7 @@ import './style.css'
 import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
 import { rulingMaterial } from './render/materials.ts'
+import { defaultShafts } from './render/shafts.ts'
 import { columnMetrics } from './geometry/column.ts'
 import { buildChurch, defaultChurch, type Church, type ChurchParams } from './plan/church.ts'
 import { tunePaving } from './plan/floor.ts'
@@ -73,6 +74,9 @@ const render: RenderFlags = {
   // Two and a half metres is the scale of the crevices between them.
   occlusion: 0.6,
   occlusionRadius: 3,
+  // The air. Every photograph of this interior is a photograph of air, and
+  // until now the model had none — see render/shafts.ts.
+  shafts: { ...defaultShafts },
 }
 
 /**
@@ -140,7 +144,8 @@ function rebuildChurch(): void {
   // Instanced pieces are invisible to Box3.setFromObject, which reads a
   // geometry's own bounds and not where its copies stand, so the plan reports
   // what it occupies rather than the scene graph being asked.
-  stage.setModelBounds(built.bounds)
+  // The roof over a room is the vault, not the tower standing on it.
+  stage.setModelBounds(built.bounds, built.ceiling + plan.shell.parapet + 3)
   cam.envelope = built.envelope
 }
 
@@ -176,6 +181,7 @@ function applyRender(): void {
   stage.bounce.intensity = render.bounce
   stage.sun.offset = render.sunOffset
   stage.setOcclusion({ intensity: render.occlusion, radius: render.occlusionRadius })
+  stage.setShafts(render.shafts)
   stage.invalidateSun()
 }
 
@@ -346,6 +352,9 @@ function frame(): void {
         `${towerRange(built)}  ` +
         `peak ${(built?.peak ?? 0).toFixed(1)} m  ` +
         `${plan.shell.parapet} m parapet`,
+      `air   ${render.shafts.density.toFixed(3)} scatter/m  ` +
+        `g ${render.shafts.anisotropy.toFixed(2)}  ${render.shafts.range} m reach  ` +
+        `${Math.round(render.shafts.steps)} samples/ray`,
       `sun   ${dayLabel(YEAR, sun.dayOfYear)} ${wallClock(sun.hour)} ` +
         `${isSummerTime(barcelonaTime(YEAR, sun.dayOfYear, sun.hour)) ? 'CEST' : 'CET'}  ` +
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,

@@ -231,12 +231,22 @@ export class Parts {
     }
   }
 
-  /** One surface of the caller's own making, placed by a matrix. */
-  surface(key: string, make: (detail: number) => VaultSurface, matrix: THREE.Matrix4): void {
+  /**
+   * One surface of the caller's own making, placed by a matrix.
+   *
+   * `skyline` marks a piece that stands above the roofs and roofs nothing —
+   * see `LAYER_SKYLINE`. It changes nothing about how the piece is drawn.
+   */
+  surface(
+    key: string,
+    make: (detail: number) => VaultSurface,
+    matrix: THREE.Matrix4,
+    skyline = false,
+  ): void {
     let kind = this.kinds.get(key)
     if (!kind) {
       const levels = DETAIL_LEVELS.map(make)
-      this.add(key, levels, matrix)
+      this.add(key, levels, matrix, undefined, skyline)
       return
     }
     kind.placements.push(matrix)
@@ -258,10 +268,11 @@ export class Parts {
     levels: FieldLevel[],
     matrix: THREE.Matrix4,
     tolerancePx?: number,
+    skyline?: boolean,
   ): void {
     let kind = this.kinds.get(key)
     if (!kind) {
-      kind = { name: key, levels, material: this.plaster, placements: [], tolerancePx }
+      kind = { name: key, levels, material: this.plaster, placements: [], tolerancePx, skyline }
       this.kinds.set(key, kind)
     }
     kind.placements.push(matrix)

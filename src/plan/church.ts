@@ -327,6 +327,12 @@ export interface Church {
   towers: TowerSite[]
   /** The top of the tallest thing in the model. */
   peak: number
+  /**
+   * The highest vault — the top of the tallest *room*, as against the tallest
+   * tower. What roofs air and what merely stands in it are different
+   * questions, and the volumetric medium needs the first one.
+   */
+  ceiling: number
 }
 
 export function buildChurch(
@@ -594,6 +600,7 @@ export function buildChurch(
     arm: armInside,
     towers: towers.sites,
     peak,
+    ceiling,
   }
 }
 

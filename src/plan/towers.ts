@@ -309,6 +309,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
           detail,
         }),
       new THREE.Matrix4().makeTranslation(site.x, base, site.z),
+      true,
     )
 
     const shaftTop = base + shaft
@@ -324,6 +325,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
             detail,
           }),
         new THREE.Matrix4().makeTranslation(site.x, shaftTop, site.z),
+        true,
       )
     } else if (site.crown === 'cross') {
       const group = new THREE.Group()
