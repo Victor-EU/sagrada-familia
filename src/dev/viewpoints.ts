@@ -251,5 +251,9 @@ export function applyViewpoint(
   cam.camera.fov = view.fov
   cam.shiftCorrection = view.shiftCorrection
   cam.lookAt(new THREE.Vector3(...view.target))
+  // The camera did not walk here. Without this it arrives carrying however
+  // much of a walker it was before, and a viewpoint standing on the terraces
+  // is dragged down into the aisle under them.
+  cam.teleport()
   cam.refresh()
 }

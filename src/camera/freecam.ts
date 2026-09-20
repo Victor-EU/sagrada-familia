@@ -268,6 +268,24 @@ export class FreeCamera {
     )
   }
 
+  /**
+   * Say that the camera has been *put* somewhere rather than having travelled
+   * there.
+   *
+   * Groundedness is a continuous quantity that decays over about a second, and
+   * the settle it drives pulls toward the floor with a strength proportional
+   * to it. So a jump straight from standing in the nave to a viewpoint thirty
+   * metres up on the terraces arrives still ninety per cent a walker, and is
+   * hauled twenty metres back down before the decay catches up — the camera
+   * ends up in the aisle under the terrace it was asked to stand on. Every
+   * teleport has to clear it.
+   */
+  teleport(): void {
+    this.velocity.set(0, 0, 0)
+    this.groundedness = 0
+    this.flyLatch = false
+  }
+
   /** Turn by a delta, in radians, with the pitch kept inside its limits. */
   turn(dYaw: number, dPitch: number): void {
     this.yaw += dYaw
@@ -306,9 +324,7 @@ export class FreeCamera {
     this.camera.fov = state.fov
     this.shiftCorrection = state.shiftCorrection
     this.camera.updateProjectionMatrix()
-    this.velocity.set(0, 0, 0)
-    this.groundedness = 0
-    this.flyLatch = false
+    this.teleport()
     this.applyOrientation()
   }
 }

@@ -273,6 +273,17 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   attached to it is reading and writing one framebuffer at once. So the scene
   renders into a target of its own and the shaft pass is what puts it into
   the chain. Turning the air off skips the march and keeps the blit.
+- Jumping to a curated viewpoint used to carry the walker across the
+  teleport. Groundedness is a continuous quantity that decays over about a
+  second, and the settle it drives pulls toward the floor in proportion to
+  it — so a jump from standing in the nave to the viewpoint thirty metres up
+  on the terraces arrived still nine tenths a walker and was hauled twenty
+  metres back down, landing in the aisle *under* the terrace it was asked to
+  stand on. The regression harness never saw it because the harness turns
+  grounding off to take its frames. All thirteen viewpoints now land at zero
+  drift with grounding on, which is the state the app actually runs in; the
+  one exception is the apse view, which settles half a metre onto the
+  presbytery platform, and that is the envelope doing its job.
 - `material.envMapIntensity` does nothing in this project and never has. Where a
   material has no `envMap` of its own and the scene has an `environment`, three
   overwrites that uniform with `scene.environmentIntensity` every frame, so the
