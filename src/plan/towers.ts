@@ -11,6 +11,7 @@ import {
 } from '../geometry/tower.ts'
 import { named, type Parts } from './parts.ts'
 import { MODULE } from './module.ts'
+import { MOSAIC_PALETTE, stoneColour, type StoneName } from '../render/materials.ts'
 
 /**
  * The eighteen towers, placed by the plan rather than by hand.
@@ -70,6 +71,17 @@ export interface TowerSite {
   points: ColumnOrder
   crown: TowerCrown
   /**
+   * What this tower is cut from, which is a question about its date.
+   *
+   * The eighteen were not built at once and they do not look as though they
+   * were: the Nativity's four are ninety-year-old Montjuïc stone gone nearly
+   * black, the Passion's four are the pale matched stone of the nineteen
+   * sixties, and the six over the crossing are grey prefabricated panel
+   * hoisted into place after 2016. Given one stone the group reads as a
+   * single manufactured object — see the fabrics in render/materials.ts.
+   */
+  fabric: StoneName
+  /**
    * What is left of the foot radius at the top of this tower's shaft.
    *
    * Per tower, because the eighteen are not one family. A bell tower is a
@@ -98,12 +110,13 @@ export interface TowerParams {
   twistDeg: number
   /** What is left of the foot radius at the top of the shaft. */
   taper: number
-  /** Rows of apertures up a shaft, and how much of a cell each one opens. */
-  bands: number
+  /** Metres from one row of apertures to the next, up a bell tower. */
+  pitch: number
+  /** How much of a row's height, and of a channel's width, each one opens. */
   tall: number
   wide: number
-  /** Bays the aperture pattern drifts round between bottom row and top. */
-  helix: number
+  /** How far the stone hood over an aperture stands proud, metres. */
+  lintel: number
   /** Stone shown at an aperture's edge, metres. */
   reveal: number
   /** Pinnacle height as a fraction of what stands above the foot. */
@@ -123,14 +136,31 @@ export const defaultTowers: TowerParams = {
    * central towers do; see `TowerSite.taper`.
    */
   taper: 0.4,
-  bands: 11,
-  // Taller and narrower than they were. The openings on these towers are
-  // lozenges standing on end, not square punches; at 0.52 × 0.5 they read as
-  // a chequer, and the helix — which is the whole point of the pattern — was
-  // lost in it.
-  tall: 0.66,
-  wide: 0.42,
-  helix: 1,
+  /**
+   * Counted off the reference crops rather than chosen.
+   *
+   * On the Passion towers there are something over twenty rows above the
+   * inscription and on the Nativity's, which are older and more finely cut,
+   * nearer forty; both come out near two metres from one row to the next.
+   * Stated as a length, the taller towers get more rows instead of larger
+   * ones, which is what the building does and what a count can never do.
+   */
+  pitch: 1.5,
+  // Wider than tall, which is the other half of what makes a ladder. The
+  // old figures — two thirds of a row tall and a fifth of the shaft's
+  // circumference wide — drew lozenges standing on end, and a column of
+  // lozenges reads as a stripe.
+  tall: 0.5,
+  wide: 0.5,
+  /**
+   * The hood over an aperture, and the single most load-bearing number on
+   * the exterior.
+   *
+   * At zero the towers are cones with flat marks on them. At 0.8 m every
+   * opening has a lit slab over it and a black slot under it, which is the
+   * pattern that makes a silhouette read as this building.
+   */
+  lintel: 0.38,
   /**
    * How deep the stone is at an opening's edge.
    *
@@ -215,6 +245,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     outerTop: number,
     innerTop: number,
     roof: number,
+    fabric: StoneName,
     place: (offset: number) => { x: number; z: number },
   ): void => {
     for (const [i, offset] of spread.entries()) {
@@ -229,6 +260,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
         points: 12,
         crown: 'pinnacle',
         taper: BELL_TAPER,
+        fabric,
       })
     }
   }
@@ -240,6 +272,8 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     98.4,
     107,
     p.armCrown,
+    // Gaudí's own front, finished in 1930 and black with it.
+    'nativity',
     (offset) => ({ x: p.wallX + p.facadeStand, z: p.crossingZ + offset }),
   )
   facade(
@@ -247,6 +281,8 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     107,
     112,
     p.armCrown,
+    // Begun 1954, topped out 1976: pale matched stone, half a century younger.
+    'passion',
     (offset) => ({ x: -(p.wallX + p.facadeStand), z: p.crossingZ + offset }),
   )
   // The Glory end, and the four tallest of the twelve.
@@ -255,6 +291,9 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     112,
     117,
     p.naveCrown,
+    // Not standing yet in any photograph. The newest stone is the honest
+    // guess for a front that will be cut this decade.
+    'white',
     (offset) => ({ x: offset, z: p.gloryZ + p.facadeStand }),
   )
 
@@ -268,6 +307,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     points: 12,
     crown: 'cross',
     taper: 0.46,
+    fabric: 'panel',
   })
   sites.push({
     name: 'Virgin Mary',
@@ -281,6 +321,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
     points: 8,
     crown: 'star',
     taper: 0.36,
+    fabric: 'panel',
   })
   for (const x of [MODULE * 2, -MODULE * 2]) {
     for (const z of [p.crossNear, p.crossFar]) {
@@ -294,6 +335,7 @@ export function towerSites(p: TowerPlan): TowerSite[] {
         points: 10,
         crown: 'finial',
         taper: 0.3,
+        fabric: 'panel',
       })
     }
   }
@@ -308,13 +350,41 @@ export interface Towers {
 }
 
 export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): Towers {
-  const openings: TowerOpenings = {
-    from: 0.1,
-    to: 0.93,
-    bands: Math.max(1, Math.round(p.bands)),
+  /**
+   * A bell tower: a solid lower third with long windows in it, a raised
+   * inscription ring, and then the ladder of hooded apertures.
+   */
+  const belfry: TowerOpenings = {
+    from: 0.32,
+    to: 0.95,
+    pitch: p.pitch,
     tall: p.tall,
     wide: p.wide,
-    helix: p.helix,
+    lintel: p.lintel,
+    sanctus: 0.28,
+    lancets: 3,
+  }
+
+  /**
+   * A central tower is a different object and was being built as the same
+   * one.
+   *
+   * Jesus, Mary and the four Evangelists are not bell towers: they have no
+   * bells, no sound holes and no inscription. They are panelled shafts with
+   * tall narrow lights in them, four times the pitch and half the width,
+   * and they are faceted rather than curved. Given the belfry's apertures
+   * they came back as enormous bell towers, which is a hundred and seventy
+   * metres of the wrong building in the middle of every frame.
+   */
+  const lantern: TowerOpenings = {
+    from: 0.3,
+    to: 0.92,
+    pitch: p.pitch * 4.5,
+    tall: 0.8,
+    wide: 0.2,
+    lintel: 0,
+    sanctus: 0,
+    lancets: 0,
   }
 
   let peak = 0
@@ -343,8 +413,22 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
     const taper = site.taper ?? p.taper
     const tip = site.radius * taper
 
+    // Panel, not masonry: the six over the crossing are flat-faced, untwisted
+    // and lit with tall lights rather than pierced with sound holes.
+    const panelled = site.fabric === 'panel'
+
     // Everything that decides the mesh goes in the key, so two towers of the
     // same height and girth are one kind however far apart they stand.
+    //
+    // And everything that decides its *material*, which is the half that was
+    // missing and cost a whole front its colour. A kind carries one stone,
+    // and the first caller to register a key sets it — so the Passion's
+    // outer pair, which stands at 107 m, silently joined the kind the
+    // Nativity's inner pair had already opened at the same height, girth and
+    // taper, and came back cut from ninety-year-old blackened Montjuïc
+    // stone in the middle of the 1960s front. Two of the twelve bell towers
+    // were the wrong colour and the geometry was identical, which is exactly
+    // the kind of mistake a shared key is for making invisible.
     const key = [
       'tower',
       site.points,
@@ -352,6 +436,8 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
       site.radius.toFixed(2),
       taper.toFixed(2),
       site.crown === 'pinnacle' || site.crown === 'finial' ? 'open' : 'lantern',
+      site.fabric,
+      panelled ? 'panel' : 'belfry',
     ].join(':')
 
     /** One description of this tower, so the shaft and its louvres agree. */
@@ -367,16 +453,18 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
       // which is most of what anybody sees of a tower — was a smooth cone.
       // The photographs keep an edge on every rib right up to the pinnacle.
       starTop: p.star * 0.5,
-      twistDeg: p.twistDeg,
+      // A panel tower is craned up in straight lengths and does not twist.
+      twistDeg: panelled ? 0 : p.twistDeg,
       skirt,
-      openings,
+      openings: panelled ? lantern : belfry,
+      faceted: panelled,
       reveal: p.reveal,
       cap: site.crown === 'cross' || site.crown === 'star' ? site.radius * 0.3 : 0,
       detail,
     })
     const stand = new THREE.Matrix4().makeTranslation(site.x, base, site.z)
 
-    parts.surface(key, (detail) => buildTowerShaft(shape(detail)), stand, 'facade', true)
+    parts.surface(key, (detail) => buildTowerShaft(shape(detail)), stand, site.fabric, true)
     // And what stands behind the openings, in the dark stone — see
     // `buildTowerLouvres`. Without it an aperture shows the sunlit inside of
     // the far wall and the tower reads as mottled rather than pierced.
@@ -390,8 +478,16 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
 
     const shaftTop = base + shaft
     if (site.crown === 'pinnacle' || site.crown === 'finial') {
+      // The twelve bell towers are crowned in Venetian glass mosaic and the
+      // four Evangelists are not — theirs is panel like the shaft under it.
+      // That one difference is most of the colour on the whole building, and
+      // it is why the crowns are what people photograph from the terraces.
+      const glass = site.crown === 'pinnacle'
+      const mosaic = glass
+        ? { base: stoneColour(site.fabric), tesserae: MOSAIC_PALETTE }
+        : undefined
       parts.surface(
-        `${key}:pinnacle`,
+        `${key}:pinnacle:${site.fabric}${glass ? ':glass' : ''}`,
         (detail) =>
           buildPinnacle({
             height: crownHeight,
@@ -399,21 +495,25 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
             points: site.points,
             star: p.star * 0.22,
             detail,
+            mosaic,
           }),
         new THREE.Matrix4().makeTranslation(site.x, shaftTop, site.z),
-        'facade',
+        glass ? 'mosaic' : site.fabric,
         true,
       )
     } else if (site.crown === 'cross') {
+      // White enamelled ceramic and glass, two hundred tonnes of it. What
+      // that buys at a hundred and seventy metres is a crown that catches
+      // the sun as a *highlight* where the stone around it catches a tone.
       const group = new THREE.Group()
       group.position.set(site.x, shaftTop, site.z)
       const limbs = buildCross(CROSS_HEIGHT, CROSS_WIDTH)
-      for (const limb of limbs) group.add(named('cross', limb, parts.stone('facade')))
+      for (const limb of limbs) group.add(named('cross', limb, parts.stone('enamel')))
       parts.piece(group, ...limbs)
     } else {
       const star = buildStar(STAR_SPAN, 12)
       star.translate(site.x, shaftTop + STAR_SPAN / 2, site.z)
-      parts.piece(named('star', star, parts.stone('facade')), star)
+      parts.piece(named('star', star, parts.stone('enamel')), star)
     }
   }
 

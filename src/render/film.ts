@@ -64,6 +64,40 @@ export interface FilmLook {
    * put it back; the punchy look uses 1.4.
    */
   punch: number
+  /**
+   * The silver.
+   *
+   * A photograph is not a smooth field of colour and a render is: every
+   * gradient in a frame from this app is mathematically clean, and the eye
+   * reads a clean gradient as *computed*. Film has grain, and grain is not a
+   * defect in this context — it is most of what says the image was captured
+   * rather than generated. Held small, and strongest in the midtones, which
+   * is where the emulsion actually is: a blown highlight has no unexposed
+   * silver left to be lumpy and a black has none exposed.
+   */
+  grain: number
+  /**
+   * Fall-off at the corners.
+   *
+   * Every lens has it and every photograph of this building shows it,
+   * strongest on the wide ones that are used for it. It is also doing a job
+   * here beyond truth: a plaza frame is bright sky in three corners, and a
+   * quarter-stop off those corners is what stops the building competing with
+   * its own background.
+   */
+  vignette: number
+  /**
+   * Halation: the red bleed round anything very bright.
+   *
+   * Light that gets through the emulsion, reflects off the back of the film
+   * base and comes back up through it — red first, because the anti-halation
+   * backing is worst at the long end. What it looks like is a warm fringe on
+   * every hard edge between stone and sky, and it is the single most
+   * photographic thing on a frame of a pale tower against a blue sky. The
+   * bloom already spills the highlights; this is what gives the spill the
+   * colour it has on film rather than the white one it has in a renderer.
+   */
+  halation: number
 }
 
 export const CLASSIC_CHROME: FilmLook = {
@@ -72,6 +106,13 @@ export const CLASSIC_CHROME: FilmLook = {
   chrome: 1,
   split: 0.5,
   punch: 1.45,
+  // Two per cent of the midtone. Under one it is not there; over three it is
+  // a stylistic effect rather than a film, and this building does not need
+  // one. Measured on the author's own Classic Chrome frames, the standard
+  // deviation of a flat patch of sky runs near 1.5 % of its own level.
+  grain: 0.02,
+  vignette: 0.22,
+  halation: 0.35,
 }
 
 const VERTEX = /* glsl */ `
@@ -91,9 +132,34 @@ uniform float uSaturation;
 uniform float uChrome;
 uniform float uSplit;
 uniform float uPunch;
+uniform float uGrain;
+uniform float uVignette;
+uniform float uHalation;
+uniform vec2 uTexel;
+uniform float uFrame;
 varying vec2 vUv;
 
 const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );
+
+/**
+ * The colour of halation.
+ *
+ * Red first and by a long way: the anti-halation backing on a colour film
+ * absorbs blue and green well and red badly, so what comes back up through
+ * the emulsion is the long end of the spectrum. On Fujifilm stocks it reads
+ * as a warm orange rather than a pure red, which is what this is.
+ */
+const vec3 HALATION = vec3( 1.0, 0.30, 0.09 );
+
+/** How far the bleed reaches, in pixels. About what a 35 mm frame shows. */
+const float HALO_RADIUS = 5.0;
+
+/** White noise on the pixel grid, reseeded each frame. */
+float sfGrainHash( vec2 p, float seed ) {
+  vec3 q = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 ) + seed * 0.0173 );
+  q += dot( q, q.yzx + 33.33 );
+  return fract( ( q.x + q.y ) * q.z );
+}
 
 // Rec. 2020 <> Rec. 709, row-major in the standard and transposed here.
 const mat3 LINEAR_REC2020_TO_LINEAR_SRGB = mat3(
@@ -165,6 +231,40 @@ void main() {
   vec4 texel = texture2D( tDiffuse, vUv );
   vec3 color = texel.rgb * uExposure;
 
+  // Halation, and it happens to the *light* rather than to the picture made
+  // of it — so it goes in here, upstream of the curve, where a fringe can
+  // still be brighter than white and be rolled off like anything else.
+  //
+  // Only across an edge. Taken as an absolute quantity it would be a warm
+  // cast over every bright area in the frame, which is a lift and not a
+  // halo; taken as the *excess* of the neighbourhood over this fragment it
+  // is nothing in the middle of the sky and everything along the line where
+  // a sunlit tower stops and the sky starts. Which is where a photograph has
+  // it, and is the one place a render never does.
+  if ( uHalation > 0.0 ) {
+    float centre = dot( color, LUMA );
+    float over = 0.0;
+    for ( int i = 0; i < 8; i ++ ) {
+      float a = ( float( i ) + 0.5 ) * 0.78539816;
+      vec3 near = texture2D(
+        tDiffuse, vUv + vec2( cos( a ), sin( a ) ) * uTexel * HALO_RADIUS
+      ).rgb * uExposure;
+      float lum = dot( near, LUMA );
+      // Bright in itself, and brighter than here.
+      over += max( 0.0, lum - centre ) * smoothstep( 0.35, 1.2, lum );
+    }
+    color += HALATION * over * 0.125 * uHalation;
+  }
+
+  // The lens loses light at the corners before the film ever sees it, so the
+  // corners are *exposed* less rather than darkened afterwards — which is
+  // why this is here and not at the end. They roll off through the shoulder
+  // like anything else a stop down, instead of being multiplied flat.
+  {
+    float r = length( ( vUv - 0.5 ) * 2.0 );
+    color *= 1.0 - uVignette * smoothstep( 0.35, 1.45, r );
+  }
+
   // AgX.
   color = LINEAR_SRGB_TO_LINEAR_REC2020 * color;
   color = AGX_INSET * color;
@@ -198,6 +298,16 @@ void main() {
     + glare * uSplit * vec3( 0.02, 0.00, - 0.03 );
   color *= tint;
 
+  // The silver, last, because it is the emulsion and not the scene.
+  // Multiplicative, so it cannot lift a black off zero, and weighted to the
+  // midtones, because a blown highlight has no unexposed grain left to be
+  // lumpy with and a black has none exposed.
+  if ( uGrain > 0.0 ) {
+    float level = clamp( dot( color, LUMA ), 0.0, 1.0 );
+    float where = 4.0 * level * ( 1.0 - level );
+    color *= 1.0 + ( sfGrainHash( gl_FragCoord.xy, uFrame ) - 0.5 ) * uGrain * where;
+  }
+
   gl_FragColor = sRGB( vec4( clamp( color, 0.0, 1.0 ), texel.a ) );
 }
 `
@@ -209,6 +319,7 @@ export class FilmPass extends Pass {
 
   private readonly material: THREE.ShaderMaterial
   private readonly quad: FullScreenQuad
+  private frame = 0
 
   constructor() {
     super()
@@ -222,6 +333,11 @@ export class FilmPass extends Pass {
         uChrome: { value: 1 },
         uSplit: { value: 0 },
         uPunch: { value: 1 },
+        uGrain: { value: 0 },
+        uVignette: { value: 0 },
+        uHalation: { value: 0 },
+        uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) },
+        uFrame: { value: 0 },
       },
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
@@ -244,6 +360,21 @@ export class FilmPass extends Pass {
     u.uChrome!.value = this.look.chrome
     u.uSplit!.value = this.look.split
     u.uPunch!.value = this.look.punch
+    u.uGrain!.value = this.look.grain
+    u.uVignette!.value = this.look.vignette
+    u.uHalation!.value = this.look.halation
+    // The halo reaches a fixed number of *pixels*, so it has to be told how
+    // big one is — and the app changes that on its own while it holds the
+    // frame rate, so it is read from the buffer rather than stored.
+    const size = readBuffer.texture.image as { width: number; height: number }
+    ;(u.uTexel!.value as THREE.Vector2).set(
+      1 / Math.max(1, size.width ?? 1),
+      1 / Math.max(1, size.height ?? 1),
+    )
+    // Grain that does not move is a mark on the lens. One frame, one field
+    // of silver; the counter wraps well before a float loses the integers.
+    this.frame = (this.frame + 1) % 4096
+    u.uFrame!.value = this.frame
 
     if (this.renderToScreen) {
       renderer.setRenderTarget(null)

@@ -78,8 +78,102 @@ export const WALL = 0xe3d3b8
  * honey is what the interior's coloured light makes of the stone, and the
  * plaza has no coloured light. The saturation is the number that moved: a
  * quarter to a sixth.
+ *
+ * It is the *generic* envelope now rather than the whole of it — what a piece
+ * is cut from when nothing about it says which age of the building it belongs
+ * to. The terraces, the podium, the roof pinnacles. The five things that do
+ * say are below.
  */
-export const FACADE = 0xd8cab4
+export const FACADE = 0xc2b49c
+
+/**
+ * The five fabrics, and why one stone was the single worst thing about the
+ * exterior.
+ *
+ * Nothing in the model distinguished them and the eye distinguishes nothing
+ * else. A visitor standing on the plaza is looking at a building begun in
+ * 1882 and still going, and its ages are legible from across the street:
+ * the Nativity front is nearly black, the Passion front is pale honey, the
+ * portico in front of it is white, and the six towers over the crossing are
+ * grey factory-cut panel. Four fabrics, side by side, in the same frame, at
+ * the same hour. Given one albedo the whole thing reads as a single object
+ * that was manufactured at once — which is exactly what a maquette is.
+ *
+ * Every figure below is measured off the reference frames, sampled over a
+ * patch of the named surface and quoted as it comes out of the film. The
+ * albedo that produces it was found by sweeping the live material against the
+ * December porch frame, so the number is what the curve and the sky make of
+ * it rather than what it looks like in a colour picker.
+ */
+
+/**
+ * The Nativity front and its four towers — 1894 to 1930.
+ *
+ * The oldest stone on the building and the darkest thing in any skyline it
+ * appears in: ninety years of Barcelona traffic on porous Montjuïc sandstone,
+ * with the mortar still pale behind it, which is why that front reads as a
+ * dark cliff with a light net over it rather than as a dark wall. Measured on
+ * the plaza frame: 77 66 64 on the sunlit flank, 98 88 76 where the light
+ * grazes. Nothing else on the building is within forty points of that.
+ */
+export const NATIVITY_STONE = 0x4a4139
+
+/**
+ * The Passion front and its four towers — 1954 to 1976.
+ *
+ * Half a century younger and cut when the quarry was already closed, so it is
+ * matched rather than original, and it has weathered into the colour most
+ * people think the whole building is. Measured on the author's own December
+ * frames at 159 139 122, a fifth saturated; in April sun, 119 107 95.
+ */
+export const PASSION_STONE = 0xc4ac86
+
+/**
+ * The new white stone: the Passion portico, the Glory front, the blades.
+ *
+ * Subirachs' portico is deliberately not the colour of the wall behind it —
+ * it is pale, near-neutral, and it is the one thing on that front that throws
+ * a hard white edge against the sky. 160 156 152 on the December frame, at a
+ * twentieth saturated, which is as close to grey as this building gets.
+ */
+export const NEW_WHITE = 0xd4cfc8
+
+/**
+ * The six central towers — Jesus, Mary, the four Evangelists, 2016 on.
+ *
+ * Not laid stone at all. They are prefabricated panels hoisted into place, so
+ * the surface is flat, the seams are long straight lines rather than courses,
+ * and the colour is a cooler grey than anything quarried. 157 151 143 off the
+ * flank frame. The tower of the Virgin is the same panel under a diamond
+ * facing, which is a pattern rather than a colour and belongs in the masonry
+ * shader, not here.
+ */
+export const PANEL_STONE = 0xd2cbc0
+
+/**
+ * Venetian glass mosaic, on the pinnacle of every bell tower.
+ *
+ * The only colour on a sandstone building, and the reason the crowns are what
+ * everybody photographs from the terraces. Four tesserae, taken off the
+ * plaza frame: a red that is nearer terracotta than scarlet, a gold, a warm
+ * white, and the green that turns up in the wheat and the fruit. They are
+ * carried on the geometry rather than in the material — see `buildPinnacle`,
+ * which bands them up the profile, because a mitre is striped and a single
+ * colour would be a hat.
+ */
+export const MOSAIC_PALETTE: readonly number[] = [0xb4402e, 0xd8a13c, 0xe8e2d6, 0x7f9a6a]
+
+/**
+ * White glazed ceramic: the cross on the tower of Jesus Christ, and the star
+ * on the tower of the Virgin.
+ *
+ * Both are clad rather than carved — enamelled ceramic and glass, the cross
+ * in white, the star in a pale gold — and what that buys in a frame is a
+ * *specular* crown: at a hundred and seventy metres the cross catches the sun
+ * as a highlight where every stone around it catches it as a tone. A matt
+ * white cross is a cross-shaped hole in the sky. This one is not matt.
+ */
+export const ENAMEL = 0xf0ece2
 
 /**
  * The pavement.
@@ -129,6 +223,23 @@ export type StoneName =
   | 'vault'
   | 'wall'
   | 'facade'
+  /**
+   * The four ages of the envelope, and the two things that are not stone.
+   *
+   * A piece takes the fabric of the part of the building it belongs to: the
+   * front it stands on, or the decade it was hoisted into place. See the
+   * constants above for what each is and what it was measured against. They
+   * are all outdoor stones — none of them has a face inside the building —
+   * so they take the sky's fill and never the room's.
+   */
+  | 'nativity'
+  | 'passion'
+  | 'white'
+  | 'panel'
+  /** Venetian glass on a bell tower's pinnacle; colour rides on the mesh. */
+  | 'mosaic'
+  /** Enamelled ceramic: the cross, and the star. Glossy, and meant to be. */
+  | 'enamel'
   /** The dark behind a tower's louvres — see HOLLOW. */
   | 'hollow'
   /**
@@ -171,9 +282,41 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
   vault: { color: VAULT, roughness: 0.88 },
   wall: { color: WALL, roughness: 0.86 },
   facade: { color: FACADE, roughness: 0.88 },
+  // Old stone is rougher than new: a century of city air etches it, and the
+  // Nativity front has no sheen anywhere on it. Panel is the smoothest thing
+  // on the building because it was cut by a machine and never weathered.
+  nativity: { color: NATIVITY_STONE, roughness: 0.93 },
+  passion: { color: PASSION_STONE, roughness: 0.86 },
+  white: { color: NEW_WHITE, roughness: 0.78 },
+  panel: { color: PANEL_STONE, roughness: 0.72 },
+  // Glass and enamel. Both carry their colour on the mesh rather than here —
+  // mosaic because a mitre is banded, enamel because it is white and the
+  // roughness is the whole of what makes it read.
+  mosaic: { color: 0xffffff, roughness: 0.3 },
+  enamel: { color: ENAMEL, roughness: 0.18 },
   hollow: { color: HOLLOW, roughness: 0.96 },
   shell: { color: FACADE, roughness: 0.88 },
   ceramic: { color: CERAMIC, roughness: 0.28 },
+}
+
+/**
+ * Stones whose colour is written on the geometry rather than on the material.
+ *
+ * One of them so far: the mosaic on a pinnacle, which is banded up its own
+ * profile. Anything cut from one of these *must* carry a `color` attribute —
+ * three multiplies by it, and geometry without one comes back black.
+ */
+const PAINTED: readonly StoneName[] = ['mosaic']
+
+/**
+ * The albedo a named stone is cut at.
+ *
+ * So that a piece which grows out of another can match it without the number
+ * being written down twice: a pinnacle's lowest band is the stone of the
+ * shaft it stands on, and that has to stay true when the shaft's stone moves.
+ */
+export function stoneColour(name: StoneName): number {
+  return RECIPE[name].color
 }
 
 function stone(name: StoneName): THREE.MeshStandardMaterial {
@@ -182,6 +325,7 @@ function stone(name: StoneName): THREE.MeshStandardMaterial {
     color: r.color,
     roughness: r.roughness,
     metalness: 0,
+    vertexColors: PAINTED.includes(name),
     // Vault webbing is thin and seen from both sides.
     side: THREE.DoubleSide,
   })
@@ -344,19 +488,48 @@ float sfSheltered = 0.0;
   sfTaps[2] = vec2( - 1.5, 0.0 );
   sfTaps[3] = vec2( 0.0, 1.5 );
   sfTaps[4] = vec2( 0.0, - 1.5 );
+  float sfCentre = 0.0;
+  float sfRing = 0.0;
   for ( int i = 0; i < 5; i ++ ) {
     vec3 sfAt = sfProbe + vec3( sfTaps[ i ].x, 0.0, sfTaps[ i ].y );
     vec4 sfClip = uRoofMatrix * vec4( sfAt, 1.0 );
     vec2 sfUv = sfClip.xy * 0.5 + 0.5;
+    float sfUnder = 0.0;
     if ( sfUv.x >= 0.0 && sfUv.x <= 1.0 && sfUv.y >= 0.0 && sfUv.y <= 1.0 ) {
-      sfSheltered += smoothstep( 0.0, 2.0, texture2D( uRoofHeight, sfUv ).r - sfAt.y );
+      sfUnder = smoothstep( 0.0, 2.0, texture2D( uRoofHeight, sfUv ).r - sfAt.y );
     }
+    if ( i == 0 ) sfCentre = sfUnder;
+    else sfRing += sfUnder * 0.25;
   }
-  sfSheltered *= 0.2;
+
+  /**
+   * The centre tap decides and the ring only leans.
+   *
+   * Averaged equally, the five taps gave the *outer* face of every enclosing
+   * wall in the building a fifth of a vote for being indoors — because one
+   * tap of the ring always steps back across the wall it is standing on and
+   * finds the terrace over it. A fifth would be harmless if the two fills
+   * were the same size, and they are nothing like it: the room's is a
+   * window counted at nearly three and a floor counted at eight, against an
+   * outdoor probe that has been cut hard so the towers keep their
+   * modelling. Twenty per cent of the one swamped the whole of the other,
+   * and the nave's flank came back a sheet of interior gold on a frame
+   * taken from two streets away.
+   *
+   * So the fragment's own answer carries the weight, the ring is there to
+   * soften a splayed reveal — which genuinely is lit from both sides — and
+   * the result is pushed toward its ends, so that a face which is merely
+   * *near* a roof is outdoors rather than a fifth indoors.
+   */
+  sfSheltered = smoothstep( 0.34, 0.86, sfCentre * 0.68 + sfRing * 0.32 );
 }
-iblIrradiance *= mix( uSkyFill, 1.0, sfSheltered );
+iblIrradiance *= mix( uSkyFill, 1.0, sfSheltered ) * uFillScale;
 `
 
+// `uFillScale` is declared by OUTDOOR_PARS, which every indoor stone also
+// gets — GLSL calls a second declaration a redefinition and refuses to
+// compile the shader, and three's fallback for that is a material that
+// silently draws with somebody else's program.
 const SHELTER_PARS = /* glsl */ `
 uniform mat4 uRoofMatrix;
 uniform sampler2D uRoofHeight;
@@ -638,11 +811,12 @@ export function grainUniforms(): GrainUniforms {
  * untouched, the hemisphere is untouched, and the room never sees it.
  */
 const OUTDOOR_INDIRECT = /* glsl */ `
-iblIrradiance *= uSkyFill;
+iblIrradiance *= uSkyFill * uFillScale;
 `
 
 const OUTDOOR_PARS = /* glsl */ `
 uniform float uSkyFill;
+uniform float uFillScale;
 `
 
 export interface OutdoorUniforms extends Record<string, THREE.IUniform> {
@@ -651,6 +825,27 @@ export interface OutdoorUniforms extends Record<string, THREE.IUniform> {
 
 export function outdoorUniforms(): OutdoorUniforms {
   return { uSkyFill: { value: 3.2 } }
+}
+
+/**
+ * How much of the sky a stone of this kind can actually see.
+ *
+ * The envelope's fill is set for a surface standing in the open with half a
+ * hemisphere of blue over it, and one stone in the building is nowhere near
+ * that: the panel behind a bell tower's aperture sits a metre down a slot cut
+ * in a metre of masonry, and what it can see of the sky is a letterbox. Given
+ * the open figure it came back as a *lit* grey rectangle — so every opening
+ * on the building read as a slightly different shade of tower rather than as
+ * a hole, and the silhouette that ought to be a lattice went back to being a
+ * mottled cone.
+ *
+ * Per stone rather than per fragment, which is the cheap half of the honest
+ * answer: a real cavity term measures how much sky each point can see and is
+ * what step five is for. This says only that one kind of surface is at the
+ * bottom of a hole, which is true of every fragment of it by construction.
+ */
+const FILL_SCALE: Partial<Record<StoneName, number>> = {
+  hollow: 0.16,
 }
 
 /**
@@ -672,17 +867,18 @@ export function stonePatch(
   shelter: ShelterUniforms,
 ): SurfacePatch {
   const indoors = INDOORS.includes(name)
+  const fillScale = { uFillScale: { value: FILL_SCALE[name] ?? 1 } }
   return {
     uniforms: indoors
-      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter }
-      : { ...grain, ...outdoor },
+      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale }
+      : { ...grain, ...outdoor, ...fillScale },
     pars: indoors
       ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}`
       : `${GRAIN_PARS}\n${OUTDOOR_PARS}`,
     colour: GRAIN_COLOUR,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-3' : 'stone-sky-1',
+    key: indoors ? 'stone-room-5' : 'stone-sky-2',
   }
 }
 
@@ -714,6 +910,12 @@ export function openQuarry(): Quarry {
     wall: stone('wall'),
     ceramic: stone('ceramic'),
     facade: stone('facade'),
+    nativity: stone('nativity'),
+    passion: stone('passion'),
+    white: stone('white'),
+    panel: stone('panel'),
+    mosaic: stone('mosaic'),
+    enamel: stone('enamel'),
     hollow: stone('hollow'),
     shell: stone('shell'),
   }

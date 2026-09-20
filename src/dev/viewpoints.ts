@@ -252,6 +252,59 @@ export const VIEWPOINTS: Viewpoint[] = [
   // December afternoon — see reference/SOURCES.md. Each carries the minute
   // it was taken, which is what makes them worth more than the Commons set:
   // the sun in the model is where the sun was.
+  /**
+   * Three frames at the lens the photographs are actually taken with.
+   *
+   * Every exterior view in this harness until now was either an elevation
+   * study from three hundred metres or a drone shot from sixty up, and
+   * neither is a picture anybody has of this building. What people have is a
+   * wide lens, held at eye height on a pavement, pointed up — which is the
+   * hardest framing for a model to survive, because it fills the bottom of
+   * the frame with the surface nearest the camera and the top with sky, and
+   * gives the stone nowhere to hide.
+   */
+  {
+    key: 'u',
+    name: 'Under the Passion front',
+    note:
+      'Twenty-four millimetres from the foot of the steps, the framing of ' +
+      'the author’s own December frame. The portico fills the bottom and ' +
+      'the four towers converge out of the top.',
+    position: [-58, 1.6, -30],
+    target: [-42, 52, -30],
+    fov: 66,
+    shiftCorrection: 0,
+    day: 352,
+    hour: 15.17,
+  },
+  {
+    key: 'm',
+    name: 'Across the pond',
+    note:
+      'Plaça de Gaudí at eye height, over the water — the one view of this ' +
+      'building that exists in more copies than any other. Morning, which ' +
+      'is the hour the Nativity front was oriented for.',
+    position: [138, 1.7, -19],
+    target: [0, 66, -28],
+    fov: 62,
+    shiftCorrection: 0,
+    day: 172,
+    hour: 9.6,
+  },
+  {
+    key: 'f',
+    name: 'The flank from the street, December',
+    note:
+      'From a corner of the grid two blocks off, with the city in front of ' +
+      'it and low winter sun across the fronts. The frame that says how big ' +
+      'it is, because there is something six storeys high in it to say so.',
+    position: [-175, 1.7, 78],
+    target: [-18, 62, -12],
+    fov: 46,
+    shiftCorrection: 0,
+    day: 352,
+    hour: 15.5,
+  },
   {
     key: 'x',
     name: 'Passion porch, December',

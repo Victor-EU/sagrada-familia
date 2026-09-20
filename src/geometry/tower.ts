@@ -41,19 +41,71 @@ import { starProfile, type ColumnOrder } from './column.ts'
  * translation and nothing else.
  */
 
-/** How the shaft is pierced. */
+/**
+ * How the shaft is pierced — and this is the part of these towers that
+ * everybody can draw and the model was getting wrong.
+ *
+ * Counted off the reference crops, a bell tower carries somewhere between
+ * twenty and forty rows of apertures, and three things about them decide
+ * whether a silhouette reads as Sagrada Família or as a spire with holes in:
+ *
+ *  1. **The rows are level.** Not a helix. The first version drifted the
+ *     pattern round by a whole bay from bottom to top, which is a spiral —
+ *     and a spiral of big openings at that slenderness reads as a drill bit.
+ *     What the photographs show is a ladder.
+ *  2. **They live in the channels between the ribs.** The twelve-pointed
+ *     star has twelve ridges and twelve valleys, the ribs run unbroken from
+ *     the foot to the belfry, and every aperture is cut in a valley. That is
+ *     what makes the tower read as *fluted and pierced* rather than as a
+ *     perforated cone: the verticals survive.
+ *  3. **Each one has a stone hood over it**, sloping out and down, standing
+ *     the better part of a metre proud of the shaft. This is the whole of
+ *     the effect. The hood catches sun on its top and throws a hard shadow
+ *     into the slot beneath, so a row of them is a row of bright dashes over
+ *     a row of black ones, repeated up the tower. Without it an aperture is
+ *     a flat mark the colour of whatever stands behind it, which is what the
+ *     model had, and at a hundred metres a hundred flat marks average out to
+ *     a slightly mottled cone.
+ *
+ * The pitch is a length rather than a count, because the real one is: the
+ * rows are a fixed distance apart and a taller tower simply has more of
+ * them. Given a count instead, the 98.4 m towers and the 117 m towers came
+ * out with identically spaced rows at different sizes, which is the one
+ * thing that says a building was made in a modelling package.
+ */
 export interface TowerOpenings {
-  /** Where the apertures begin and end, as fractions of the shaft. */
+  /** Where the ladder of apertures begins and ends, as fractions of the shaft. */
   from: number
   to: number
-  /** Rows of apertures over that range. */
-  bands: number
+  /** Metres from one row of apertures to the next. */
+  pitch: number
   /** How much of a row's height is open. */
   tall: number
-  /** How much of a bay's width is open — a bay being one star point. */
+  /** How much of a channel's width is open — a channel being one star valley. */
   wide: number
-  /** Bays the pattern drifts round between the first row and the last. */
-  helix: number
+  /**
+   * How far the stone hood over an aperture stands proud of the shaft,
+   * metres. Zero leaves a bare slot, which is what the central towers have.
+   */
+  lintel: number
+  /**
+   * Where the raised inscription band sits, as a fraction of the shaft.
+   *
+   * *Sanctus, Sanctus, Sanctus* runs round every bell tower in raised
+   * letters on a raised ring, and in a frame from the plaza the letters are
+   * illegible and the ring is not: it is the one horizontal on an object
+   * that is otherwise all verticals, and it is what tells the eye where the
+   * belfry starts. Zero for none.
+   */
+  sanctus: number
+  /**
+   * Tall lancets in the solid shaft below the ladder, per channel.
+   *
+   * Below the inscription the shaft is not pierced with slots — it is solid
+   * stone with a few long narrow windows in it, and that solid base is a
+   * third of what anybody sees of a bell tower from the street.
+   */
+  lancets: number
 }
 
 export interface TowerParams {
@@ -77,6 +129,18 @@ export interface TowerParams {
   reveal: number
   /** Rise of the cone that closes the top. 0 leaves it open. */
   cap: number
+  /**
+   * Flat normals, one per cell, instead of the surface's own.
+   *
+   * For the six towers over the crossing, which are not laid stone at all.
+   * They are prefabricated panels craned into place, and what that looks
+   * like is a *faceted* shaft — long flat planes meeting at visible seams,
+   * with the light stepping from one to the next instead of running round a
+   * curve. Shaded off the true paraboloid they came back as smooth cones
+   * with a highlight sliding down them, which is the most plastic thing in
+   * any exterior frame: a hundred-metre object with no facets at all.
+   */
+  faceted: boolean
   detail: number
 }
 
@@ -98,9 +162,18 @@ export function towerRadial(points: number, detail: number): number {
   return points * Math.max(2, Math.round(8 * detail))
 }
 
-/** Rows up a tower, keyed to its apertures rather than to its height. */
+/**
+ * Mesh rows up a tower, keyed to its apertures rather than to its height.
+ *
+ * Four to a row of apertures, which is the least that can say what a row of
+ * apertures is: one course of stone below, two of opening, one above. It was
+ * eight, from when a tower carried eleven rows; at the pitch the photographs
+ * actually show there are two or three times as many rows, and eight mesh
+ * rows apiece is twenty-eight thousand cells a tower to resolve nothing that
+ * four does not.
+ */
 export function towerRows(bands: number, detail: number): number {
-  return Math.max(1, bands) * Math.max(2, Math.round(8 * detail))
+  return Math.max(1, bands) * Math.max(2, Math.round(4 * detail))
 }
 
 /** One ring of the section: where it is, how wide, how much star, how turned. */
@@ -111,25 +184,46 @@ interface Ring {
   turn: number
 }
 
+/** How tall the raised inscription ring is, metres. */
+const SANCTUS_HEIGHT = 2.2
+/** How far it stands proud of the shaft, as a fraction of the local radius. */
+const SANCTUS_RELIEF = 0.035
+
 /** Rings and aperture mask — shared by the shaft and by what lines it. */
 function towerFabric(p: TowerParams): {
   rings: Ring[]
   cols: number
   mask: Mask | null
 } {
-  const bands = p.openings?.bands ?? 4
+  const o = p.openings
   const cols = towerRadial(p.points, p.detail)
-  const shaftRows = towerRows(bands, p.detail)
+
+  // Rows come out of the building rather than out of a typed-in count. The
+  // apertures are a fixed distance apart on the real towers, so a taller one
+  // has more of them and not bigger ones — and `bands` fell out of the file
+  // as a parameter the moment that was said out loud.
+  const ladder = o ? Math.max(0.05, o.to - o.from) : 1
+  const bands = o
+    ? Math.max(1, Math.round((p.height * ladder) / Math.max(0.5, o.pitch)))
+    : 1
+  const shaftRows = Math.max(4, Math.round(towerRows(bands, p.detail) / ladder))
   const skirtRows = p.skirt > 0 ? Math.max(1, Math.round((shaftRows * p.skirt) / p.height)) : 0
 
   const k = Math.max(0.05, p.taper)
+  const band = o && o.sanctus > 0 ? o.sanctus * p.height : -1
   const rings: Ring[] = []
   for (let i = -skirtRows; i <= shaftRows; i++) {
     const t = i / shaftRows
+    const y = t * p.height
+    // r² linear in height: the paraboloid, and the only curve the towers need.
+    let radius = p.footRadius * Math.sqrt(Math.max(0.04, 1 - (1 - k * k) * t))
+    // The inscription ring. A step in the radius grid, so the normals the
+    // surface reads off it come back with a crease at each edge of the band
+    // without anything here having to say which way the crease faces.
+    if (band > 0 && Math.abs(y - band) < SANCTUS_HEIGHT / 2) radius *= 1 + SANCTUS_RELIEF
     rings.push({
-      y: t * p.height,
-      // r² linear in height: the paraboloid, and the only curve the towers need.
-      radius: p.footRadius * Math.sqrt(Math.max(0.04, 1 - (1 - k * k) * t)),
+      y,
+      radius,
       // The star fades out as the tower climbs, which is what the photographs
       // show: a star low down where the ribs are, a circle by the belfry.
       star: p.starFoot + (p.starTop - p.starFoot) * Math.pow(Math.min(Math.max(t, 0), 1), 0.7),
@@ -141,16 +235,24 @@ function towerFabric(p: TowerParams): {
   // land on grid lines at every level of detail instead of crawling by a
   // fraction of a cell each time the tessellation changes.
   const first = skirtRows
-  const mask = p.openings
-    ? apertureMask(p.openings, cols, p.points, first, first + shaftRows)
-    : null
+  const mask = o ? apertureMask(o, cols, p.points, first, first + shaftRows, bands) : null
 
   return { rings, cols, mask }
 }
 
 export function buildTowerShaft(p: TowerParams): TowerSurface {
   const { rings, cols, mask } = towerFabric(p)
-  return buildRings(rings, p.points, cols, mask, p.reveal, p.cap)
+  return buildRings(
+    rings,
+    p.points,
+    cols,
+    mask,
+    p.reveal,
+    p.cap,
+    'stone',
+    p.openings?.lintel ?? 0,
+    p.faceted,
+  )
 }
 
 /**
@@ -178,7 +280,7 @@ export function buildTowerShaft(p: TowerParams): TowerSurface {
  */
 export function buildTowerLouvres(p: TowerParams): TowerSurface {
   const { rings, cols, mask } = towerFabric(p)
-  return buildRings(rings, p.points, cols, mask, p.reveal, 0, 'louvre')
+  return buildRings(rings, p.points, cols, mask, p.reveal, 0, 'louvre', 0, p.faceted)
 }
 
 type Mask = (row: number, col: number) => boolean
@@ -189,27 +291,60 @@ function apertureMask(
   points: number,
   rowFirst: number,
   rowLast: number,
+  bands: number,
 ): Mask {
   const span = rowLast - rowFirst
   const from = rowFirst + Math.round(span * o.from)
   const to = rowFirst + Math.round(span * o.to)
-  const perBand = Math.max(1, Math.floor((to - from) / Math.max(1, o.bands)))
-  const openRows = Math.min(perBand, Math.max(1, Math.round(perBand * o.tall)))
-  const pad = Math.floor((perBand - openRows) / 2)
+  const perBand = Math.max(1, Math.floor((to - from) / Math.max(1, bands)))
+  const openRows = Math.min(perBand - 1, Math.max(1, Math.round(perBand * o.tall)))
+  const pad = Math.max(0, Math.floor((perBand - openRows) / 2))
 
-  const bay = Math.max(2, Math.round(cols / points))
-  const openCols = Math.min(bay, Math.max(1, Math.round(bay * o.wide)))
-  const margin = Math.floor((bay - openCols) / 2)
+  /**
+   * Cells to a channel, and where the channel's middle is.
+   *
+   * The twelve-pointed star has a ridge at every multiple of 2π/12 and a
+   * valley exactly half way between — checked rather than assumed: sampled
+   * at ninety-six angles the profile peaks at cells 0, 8, 16 … and bottoms
+   * at 4, 12, 20 … So a channel's centre line is at (k + ½)·bay, and an
+   * aperture is what is open within a given width of it.
+   *
+   * Measured from the valley rather than counted from a bay's first cell,
+   * which is what the old version did: with an odd number of open cells the
+   * opening sat half a cell off its own channel, and at low detail — where a
+   * bay is four cells and an opening is one — it climbed onto the rib.
+   */
+  const bay = cols / points
+  const half = (bay * Math.min(1, Math.max(0.02, o.wide))) / 2
+
+  /** How far this cell's middle is from the nearest channel centre, in cells. */
+  const offChannel = (col: number): number => {
+    const t = (col + 0.5) / bay - 0.5
+    return Math.abs(t - Math.round(t)) * bay
+  }
+
+  // The lancets: the long windows in the solid stone below the ladder. They
+  // are much narrower than a belfry slot and much taller, which is the whole
+  // difference between a window and a sound hole.
+  const lancetTo = from - Math.max(1, Math.round(perBand * 0.5))
+  const lancetFrom = rowFirst + Math.round(span * 0.12)
+  const lancetPitch =
+    o.lancets > 0 ? Math.max(2, Math.floor((lancetTo - lancetFrom) / o.lancets)) : 0
+  const lancetOpen = Math.max(1, Math.round(lancetPitch * 0.62))
+  const lancetHalf = half * 0.42
 
   return (row, col) => {
-    if (row < from || row >= from + perBand * o.bands) return false
-    const up = (row - from) % perBand
-    if (up < pad || up >= pad + openRows) return false
-    // The drift is what makes the pattern spiral instead of stacking.
-    const band = Math.floor((row - from) / perBand)
-    const shift = Math.round((o.helix * bay * band) / Math.max(1, o.bands - 1))
-    const across = (((col - margin - shift) % bay) + bay) % bay
-    return across < openCols
+    if (row >= from && row < from + perBand * bands) {
+      const up = (row - from) % perBand
+      if (up < pad || up >= pad + openRows) return false
+      return offChannel(col) <= half
+    }
+    if (lancetPitch > 0 && row >= lancetFrom && row < lancetFrom + lancetPitch * o.lancets) {
+      const up = (row - lancetFrom) % lancetPitch
+      if (up >= lancetOpen) return false
+      return offChannel(col) <= lancetHalf
+    }
+    return false
   }
 }
 
@@ -232,11 +367,16 @@ function buildRings(
   cap: number,
   /**
    * 'stone' is the shaft: everything the mask leaves standing, plus a jamb
-   * turned inward at every edge of an opening. 'louvre' is the complement —
-   * only what closes the openings, a reveal's depth in. Two passes over one
-   * fabric, so they are in register by construction.
+   * turned inward at every edge of an opening and a hood standing over it.
+   * 'louvre' is the complement — only what closes the openings, a reveal's
+   * depth in. Two passes over one fabric, so they are in register by
+   * construction.
    */
   what: 'stone' | 'louvre' = 'stone',
+  /** How far the hood over an aperture projects. 0 leaves a bare slot. */
+  lintel = 0,
+  /** One normal per cell rather than the surface's own — see TowerParams. */
+  faceted = false,
 ): TowerSurface {
   const star = starProfile(points)
   const rows = rings.length - 1
@@ -287,6 +427,12 @@ function buildRings(
     const a = new THREE.Vector3(dR * cos - rHere * sin, 0, dR * sin + rHere * cos)
     const b = new THREE.Vector3(dRdY * cos, 1, dRdY * sin)
     return b.cross(a).normalize()
+  }
+
+  /** Straight out from the axis at this cell edge, horizontally. */
+  const outward = (col: number): THREE.Vector3 => {
+    const alpha = ((col % cols) + cols) % cols * dAlpha
+    return new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha))
   }
 
   const push = (p: THREE.Vector3, n: THREE.Vector3): void => {
@@ -362,23 +508,77 @@ function buildRings(
           const face = new THREE.Vector3(0, -dir, 0)
           quad([outerA, outerB, innerB, innerA], [face, face, face, face])
         }
+
+        /**
+         * The hood, and it is the reason any of this reads.
+         *
+         * A slot cut flush in a shaft is a flat mark the colour of whatever
+         * stands behind it, and a hundred of them up a tower average out to
+         * a faint mottling — which is what the first version of these towers
+         * came back as. The real ones are roofed: a stone slab over every
+         * aperture, sloping out and down and standing the better part of a
+         * metre proud, so the top of it takes the sun and the underside
+         * throws a hard shadow across the opening beneath. Bright dash over
+         * dark dash, twelve to a row and twenty rows up the shaft, is the
+         * pattern people recognise.
+         *
+         * It is emitted here rather than with the louvres because it is
+         * *stone* and the louvre is the dark behind the hole; putting it in
+         * the other pass would have crowned every opening in the building
+         * with a slab of unlit masonry tube.
+         */
+        if (lintel > 0 && !open(row + 1, col)) {
+          const head = row + 1
+          const a = point(head, col)
+          const b = point(head, col + 1)
+          const drop = lintel * 0.55
+          const thick = lintel * 0.34
+          const a2 = a.clone().addScaledVector(outward(col), lintel)
+          const b2 = b.clone().addScaledVector(outward(col + 1), lintel)
+          a2.y = a.y - drop
+          b2.y = b.y - drop
+
+          const top = new THREE.Vector3()
+            .subVectors(b, a)
+            .cross(new THREE.Vector3().subVectors(a2, a))
+            .normalize()
+          if (top.y < 0) top.negate()
+          quad([a, b, b2, a2], [top, top, top, top])
+
+          const a3 = a2.clone()
+          const b3 = b2.clone()
+          a3.y -= thick
+          b3.y -= thick
+          const out = outward(col).add(outward(col + 1)).normalize()
+          quad([a2, b2, b3, a3], [out, out, out, out])
+        }
         continue
       }
 
-      quad(
-        [
-          point(row, col),
-          point(row, col + 1),
-          point(row + 1, col + 1),
-          point(row + 1, col),
-        ],
-        [
+      const corners: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] = [
+        point(row, col),
+        point(row, col + 1),
+        point(row + 1, col + 1),
+        point(row + 1, col),
+      ]
+      if (faceted) {
+        // One plane, one normal. Derived from the cell's own corners and then
+        // turned to agree with the surface it approximates, so a facet can
+        // never end up lit from inside the tower.
+        const flat = new THREE.Vector3()
+          .subVectors(corners[1], corners[0])
+          .cross(new THREE.Vector3().subVectors(corners[3], corners[0]))
+          .normalize()
+        if (flat.dot(normal(row, col)) < 0) flat.negate()
+        quad(corners, [flat, flat, flat, flat])
+      } else {
+        quad(corners, [
           normal(row, col),
           normal(row, col + 1),
           normal(row + 1, col + 1),
           normal(row + 1, col),
-        ],
-      )
+        ])
+      }
     }
   }
 
@@ -438,6 +638,58 @@ export interface PinnacleParams {
   points: ColumnOrder
   star: number
   detail: number
+  /**
+   * The mosaic, if this pinnacle is one of the twelve that carry it.
+   *
+   * `base` is the stone of the shaft it stands on, which is what the lowest
+   * band still is, and `tesserae` are the glass colours banded above it. Given
+   * this the surface comes back with a `color` attribute and must be cut from
+   * a stone that reads one — see PAINTED in render/materials.ts.
+   */
+  mosaic?: { base: number; tesserae: readonly number[] } | undefined
+}
+
+/**
+ * Band a pinnacle up its own height.
+ *
+ * The crowns of the bell towers are the one coloured thing on this building
+ * and they are *striped*: a stone foot, then rings of Venetian glass — red,
+ * gold, white, a little green — picked out by the swellings and necks of the
+ * profile, with the finial white. One colour over the whole of it is a hat.
+ *
+ * Written straight onto the vertices from their own y, which is exact here
+ * because a pinnacle is generated in its own frame standing on zero. Linear,
+ * because three multiplies `diffuseColor` by this without converting.
+ */
+function bandMosaic(
+  geometry: THREE.BufferGeometry,
+  height: number,
+  base: number,
+  tesserae: readonly number[],
+): void {
+  // Stone for the lowest seventh — the pinnacle grows out of the shaft and
+  // the join is not a colour change.
+  const FOOT = 0.14
+  // What the bands run through. Not a plain cycle of the palette: white is
+  // the commonest tessera on these crowns and the sequence has to say so.
+  const order = [0, 1, 2, 0, 1, 2, 0, 3, 2]
+  const position = geometry.getAttribute('position')
+  const colour = new Float32Array(position.count * 3)
+  const c = new THREE.Color()
+  for (let i = 0; i < position.count; i++) {
+    const t = THREE.MathUtils.clamp(position.getY(i) / Math.max(height, 1e-4), 0, 1)
+    if (t < FOOT) {
+      c.setHex(base)
+    } else {
+      const band = Math.min(order.length - 1, Math.floor(((t - FOOT) / (1 - FOOT)) * order.length))
+      c.setHex(tesserae[order[band]! % tesserae.length] ?? 0xffffff)
+    }
+    c.convertSRGBToLinear()
+    colour[i * 3] = c.r
+    colour[i * 3 + 1] = c.g
+    colour[i * 3 + 2] = c.b
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3))
 }
 
 export function buildPinnacle(p: PinnacleParams): TowerSurface {
@@ -462,7 +714,9 @@ export function buildPinnacle(p: PinnacleParams): TowerSurface {
   const [lastY, lastR] = PINNACLE_PROFILE[PINNACLE_PROFILE.length - 1]!
   rings.push({ y: lastY * p.height, radius: lastR * p.radius, star: 0, turn: 0 })
 
-  return buildRings(rings, p.points, cols, null, 0, p.radius * 0.12)
+  const built = buildRings(rings, p.points, cols, null, 0, p.radius * 0.12, 'stone', 0, false)
+  if (p.mosaic) bandMosaic(built.geometry, p.height, p.mosaic.base, p.mosaic.tesserae)
+  return built
 }
 
 /**

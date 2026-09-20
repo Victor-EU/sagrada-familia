@@ -7,6 +7,7 @@ import { buildCrust, buildHood, buildPassionPortico } from '../geometry/portico.
 import { buildFruit, buildGable } from '../geometry/roofwork.ts'
 import { mergeOrEmpty } from '../geometry/window.ts'
 import { named, type Parts } from './parts.ts'
+import type { StoneName } from '../render/materials.ts'
 
 /**
  * The outside of the building: what closes it, and what it stands up as.
@@ -196,6 +197,28 @@ export interface Shell {
 
 /** Which of the three fronts this is; they are not interchangeable. */
 type FrontKind = 'nativity' | 'passion' | 'glory'
+
+/**
+ * What each front is cut from.
+ *
+ * Three fronts, three dates, three colours, and they stand in the same frame
+ * from anywhere on the plaza: Gaudí's Nativity finished in 1930 and gone
+ * nearly black, Subirachs' Passion of the nineteen sixties in pale matched
+ * stone, and a Glory end nobody has seen yet, which gets the newest stone
+ * there is. Given one albedo for all three the building reads as having been
+ * made at once — see the fabrics in render/materials.ts.
+ *
+ * The porch is not always its wall's stone. The Passion portico is
+ * deliberately *not* the colour of the front behind it — it is the white
+ * stone that throws the one hard edge on that façade — and the Nativity's
+ * hoods and encrustation are the same blackened fabric as the wall they grow
+ * out of.
+ */
+const FRONT_STONE: Record<FrontKind, { wall: StoneName; porch: StoneName }> = {
+  nativity: { wall: 'nativity', porch: 'nativity' },
+  passion: { wall: 'passion', porch: 'white' },
+  glory: { wall: 'white', porch: 'white' },
+}
 
 export function buildShell(
   parts: Parts,
@@ -565,7 +588,7 @@ export function buildShell(
     if (porch.length > 0) {
       const merged = mergeOrEmpty(porch)
       merged.applyMatrix4(stand(s.project))
-      parts.piece(named('porch', merged, parts.stone('facade')), merged)
+      parts.piece(named('porch', merged, parts.stone(FRONT_STONE[kind].porch)), merged)
     }
 
     // A box comes back indexed and an extrusion does not, and a merge of the
@@ -581,7 +604,7 @@ export function buildShell(
     const merged = mergeGeometries(flattened, false)
     for (const slab of flattened) slab.dispose()
     if (!merged) throw new Error('shell: façade slabs could not be merged')
-    parts.piece(named('facade', merged, parts.stone('facade')), merged)
+    parts.piece(named('facade', merged, parts.stone(FRONT_STONE[kind].wall)), merged)
   }
 
   const facadeWidth = FACADE_WIDTH
