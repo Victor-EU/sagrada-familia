@@ -21,9 +21,11 @@ import { WASH_PARS, type WashUniforms } from './washrig.ts'
  * stone.
  *
  * Albedos are lighter than the stone looks in a photograph, on purpose. These
- * are multiplied by a warm sun and a blue sky and then pushed through ACES,
- * which darkens the midtones; matching the photograph here would come out of
- * the filmic curve two stops under.
+ * are multiplied by a warm sun and a blue sky and then pushed through a film
+ * curve — AgX now, ACES when they were set, and the two agree on where
+ * mid-grey lands — which darkens the midtones; matching the photograph here
+ * would come out of the curve two stops under. What the film then does to
+ * the colour is its own business: see render/film.ts.
  */
 
 /**
@@ -66,6 +68,18 @@ export const CERAMIC = 0xd9d2b0
 
 /** Clerestory and enclosing walls: sandstone, a shade lighter for the dressing. */
 export const WALL = 0xe3d3b8
+
+/**
+ * The same sandstone, outdoors.
+ *
+ * Paler and greyer than the interior figure, because it is not the same
+ * surface: the envelope has weathered for up to a hundred and forty years in
+ * city air, and the fronts photograph as a pale warm grey, not honey — the
+ * honey is what the interior's coloured light makes of the stone, and the
+ * plaza has no coloured light. The saturation is the number that moved: a
+ * quarter to a sixth.
+ */
+export const FACADE = 0xd8cab4
 
 /**
  * The pavement.
@@ -156,9 +170,9 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
   porphyry: { color: PORPHYRY, roughness: 0.5 },
   vault: { color: VAULT, roughness: 0.88 },
   wall: { color: WALL, roughness: 0.86 },
-  facade: { color: SANDSTONE, roughness: 0.88 },
+  facade: { color: FACADE, roughness: 0.88 },
   hollow: { color: HOLLOW, roughness: 0.96 },
-  shell: { color: SANDSTONE, roughness: 0.88 },
+  shell: { color: FACADE, roughness: 0.88 },
   ceramic: { color: CERAMIC, roughness: 0.28 },
 }
 
@@ -292,9 +306,66 @@ const INDOOR_LIGHT = /* glsl */ `
   vec3 room = mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * fromRoom;
   vec3 window = luminance * glass * fromGlass;
 
-  reflectedLight.indirectDiffuse = ( room + window + washed * luminance ) * uRoomGain;
+  // And only where the surface actually stands in the room — see SHELTER.
+  // The face of a wall that looks out over the plaza, or the top of a
+  // terrace, takes the sky like everything else outside.
+  vec3 fill = ( room + window + washed * luminance ) * uRoomGain;
+  reflectedLight.indirectDiffuse = mix( ambient, fill, sfSheltered );
 }
 `
+
+/**
+ * Whether this fragment is under a roof.
+ *
+ * A stone does not know which side of the wall it is on, and the enclosing
+ * walls and the terrace lids are one piece with a face on each side: the
+ * clerestory wall's outer face was being lit with the gold of the room it
+ * was standing outside of, and came back a stripe of honey along a pale
+ * front. The roof map already answers the question for the air — see
+ * render/roof.ts — so the stone asks it too, a step out along its own normal,
+ * which puts the inner face of a wall under the vault and the outer face
+ * under the sky. It is asked once, early, so both the probe's share and the
+ * room's fill can be settled by the one answer.
+ */
+const SHELTER = /* glsl */ `
+float sfSheltered = 0.0;
+{
+  vec3 sfOut = inverseTransformDirection( geometryNormal, viewMatrix );
+  // A step and a half out along the normal, and then a look around. The
+  // step has to clear the wall it is standing in: the reveals of a window
+  // are splayed, so their normals lean half sideways, and a short step from
+  // one stayed inside the metre of masonry and found the terrace overhead.
+  // The look around is for the same faces — a reveal is lit from both sides
+  // of the wall, and the honest answer for it is a share of each.
+  vec3 sfProbe = vSunWorld + sfOut * 1.5;
+  vec2 sfTaps[5];
+  sfTaps[0] = vec2( 0.0, 0.0 );
+  sfTaps[1] = vec2( 1.5, 0.0 );
+  sfTaps[2] = vec2( - 1.5, 0.0 );
+  sfTaps[3] = vec2( 0.0, 1.5 );
+  sfTaps[4] = vec2( 0.0, - 1.5 );
+  for ( int i = 0; i < 5; i ++ ) {
+    vec3 sfAt = sfProbe + vec3( sfTaps[ i ].x, 0.0, sfTaps[ i ].y );
+    vec4 sfClip = uRoofMatrix * vec4( sfAt, 1.0 );
+    vec2 sfUv = sfClip.xy * 0.5 + 0.5;
+    if ( sfUv.x >= 0.0 && sfUv.x <= 1.0 && sfUv.y >= 0.0 && sfUv.y <= 1.0 ) {
+      sfSheltered += smoothstep( 0.0, 2.0, texture2D( uRoofHeight, sfUv ).r - sfAt.y );
+    }
+  }
+  sfSheltered *= 0.2;
+}
+iblIrradiance *= mix( uSkyFill, 1.0, sfSheltered );
+`
+
+const SHELTER_PARS = /* glsl */ `
+uniform mat4 uRoofMatrix;
+uniform sampler2D uRoofHeight;
+`
+
+export interface ShelterUniforms extends Record<string, THREE.IUniform> {
+  uRoofMatrix: { value: THREE.Matrix4 }
+  uRoofHeight: { value: THREE.Texture }
+}
 
 const INDOOR_PARS = /* glsl */ `
 uniform vec3 uRoomBounce;
@@ -367,8 +438,8 @@ export function roomUniforms(): RoomUniforms {
      * At 0.9 the whole room went one shade of amber and the Nativity side
      * stopped being the cool half of the building, which is half of what the
      * glazing is for. At 0.68, where this sat, the failure was quieter and
-     * worse: rotating two thirds of the fill onto amber and then asking ACES
-     * to tone-map it turned every pale stone in the building the colour of
+     * worse: rotating two thirds of the fill onto amber and then asking the
+     * tone curve to map it turned every pale stone in the building the colour of
      * milky tea. Montjuïc sandstone is 0xdcc3a0 and the columns were coming
      * out near 0x6a4a3b — the model was saying honey and the screen was
      * saying chocolate.
@@ -544,31 +615,75 @@ export function grainUniforms(): GrainUniforms {
 }
 
 /**
+ * The fill outdoors is the sky, and there is more of it than the room gets.
+ *
+ * The one probe lights both, and its intensity was set low for the room —
+ * past about a third the nave goes pale and blue, because the probe is sky
+ * and a nave is not lit by sky. But a tower's shaded flank *is*: it faces
+ * half a hemisphere of clear blue, and at the room's setting it was being
+ * lit mostly by the hemisphere stand-in, which is warm, so the shade came
+ * back as brown. In every photograph of this building the shade is cool —
+ * it is the one thing that says the stone is standing under a sky — and
+ * measured on the plaza frame the shaded front sat at hue 32° and a third
+ * saturated, which is the colour of a cardboard box.
+ *
+ * So the envelope scales the probe's irradiance and nothing else: the sun is
+ * untouched, the hemisphere is untouched, and the room never sees it.
+ */
+const OUTDOOR_INDIRECT = /* glsl */ `
+iblIrradiance *= uSkyFill;
+`
+
+const OUTDOOR_PARS = /* glsl */ `
+uniform float uSkyFill;
+`
+
+export interface OutdoorUniforms extends Record<string, THREE.IUniform> {
+  uSkyFill: { value: number }
+}
+
+export function outdoorUniforms(): OutdoorUniforms {
+  return { uSkyFill: { value: 3.2 } }
+}
+
+/**
  * How one stone is patched.
  *
- * Every stone gets the grain; only the ones standing indoors get the ambient
- * rotation. The two are composed here rather than by patching twice, because
- * `patchForSunlight` takes one patch and three's program cache keys off the
- * one string — two materials whose patches differ but whose keys agree
- * silently share a program, and the second one gets the first one's shader.
+ * Every stone gets the grain; the ones standing indoors get the ambient
+ * rotation and the ones standing outside get the sky. The three are composed
+ * here rather than by patching twice, because `patchForSunlight` takes one
+ * patch and three's program cache keys off the one string — two materials
+ * whose patches differ but whose keys agree silently share a program, and
+ * the second one gets the first one's shader.
  */
 export function stonePatch(
   name: StoneName,
   grain: GrainUniforms,
   room: RoomUniforms,
   wash: WashUniforms,
+  outdoor: OutdoorUniforms,
+  shelter: ShelterUniforms,
 ): SurfacePatch {
   const indoors = INDOORS.includes(name)
   return {
-    uniforms: indoors ? { ...grain, ...room, ...wash } : { ...grain },
-    pars: indoors ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}` : GRAIN_PARS,
+    uniforms: indoors
+      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter }
+      : { ...grain, ...outdoor },
+    pars: indoors
+      ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}`
+      : `${GRAIN_PARS}\n${OUTDOOR_PARS}`,
     colour: GRAIN_COLOUR,
+    indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-2' : 'stone-1',
+    key: indoors ? 'stone-room-3' : 'stone-sky-1',
   }
 }
 
-/** Stones that stand inside the building and never see the sky. */
+/**
+ * Stones that stand inside the building — or that have a face there. The
+ * walls and the terraces face both ways, and SHELTER sorts that out per
+ * fragment.
+ */
 export const INDOORS: readonly StoneName[] = [
   'sandstone',
   'granite',

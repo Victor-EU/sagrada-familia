@@ -107,7 +107,9 @@ the building anyone is standing in.
 | The ambient indoors is the room; outdoors it is the sky | `src/render/materials.ts` |
 | Stone grain — two octaves on world position, laid in courses | `src/render/materials.ts` |
 | Bloom above the white point, so only the glazing spills | `src/render/scene.ts` |
-| Studio ambient, ACES tonemap | `src/render/scene.ts` |
+| The film: AgX, then a Classic Chrome grade — muted, deep, hard shadows | `src/render/film.ts` |
+| A stone asks the roof map which side of the wall it is on | `src/render/materials.ts` |
+| The envelope takes the sky; the eye closes a stop on the plaza | `src/render/materials.ts`, `src/camera/viewer.ts` |
 | Double-twist column, all four orders, from the published rule | `src/geometry/column.ts` |
 | Branching node — ellipsoid knots, orders stepping down by level | `src/geometry/branch.ts` |
 | Vault — skylight funnels and column bosses, plus the hypar family | `src/geometry/vault.ts` |

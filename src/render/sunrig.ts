@@ -535,6 +535,11 @@ export interface SurfacePatch {
   pars?: string
   /** Statements run where `diffuseColor` is still open to change. */
   colour?: string
+  /**
+   * Statements run once the probe's irradiance has been read and before it
+   * is spent — `iblIrradiance` is live here and the hemisphere's is not.
+   */
+  indirect?: string
   /** Statements run once `reflectedLight` is complete and before it is summed. */
   light?: string
   /** What makes this patch a different program from the plain one. */
@@ -581,6 +586,10 @@ export function patchForSunlight(
       // surface that wants to decide its own albedo per fragment says so
       // here and nothing downstream has to know.
       .replace('#include <color_fragment>', `#include <color_fragment>\n${extra.colour ?? ''}`)
+      .replace(
+        '#include <lights_fragment_maps>',
+        `#include <lights_fragment_maps>\n${extra.indirect ?? ''}`,
+      )
       .replace('#include <lights_fragment_end>', `${SUN_APPLY}\n#include <lights_fragment_end>`)
       // Everything that lights this fragment has arrived by here, direct and
       // indirect both, and nothing has yet been added up.

@@ -38,9 +38,12 @@ void main() {
   float up = direction.y;
   float cosAngle = dot( direction, uSunDirection );
 
-  // Pale at the horizon, saturated overhead. The fifth power is eyeballed to
-  // put the transition where a wide-angle interior shot actually sees it.
-  float band = pow( 1.0 - clamp( up, 0.0, 1.0 ), 5.0 );
+  // Pale at the horizon, saturated overhead. Two powers: the fifth puts the
+  // haze band where a wide-angle interior shot sees it, and the gentler one
+  // carries a slow deepening through the middle of the sky, which is what
+  // makes a frame of towers against sky read as a sky rather than a fill.
+  float above = 1.0 - clamp( up, 0.0, 1.0 );
+  float band = 0.55 * pow( above, 5.0 ) + 0.45 * pow( above, 1.6 );
   vec3 sky = mix( uZenith, uHorizon, band );
 
   // Forward scattering: a broad halo the whole sky near the sun shares, and
@@ -64,9 +67,17 @@ const PALETTE = {
   // palette allowed, and the pallor at the horizon was carrying the whole sky
   // toward grey — which is most of why the exterior read as a maquette under
   // a studio dome rather than a building standing in a city.
+  //
+  // Deeper again for the film. These are chosen for what comes out of
+  // render/film.ts, not for what goes in: AgX greys a saturated blue on its
+  // way through and the Classic Chrome mix darkens it, so the zenith here is
+  // about half the radiance the old palette carried and lands on screen at
+  // the cobalt a midday photograph of the fronts has — measured, 44 87 170
+  // against the photograph's 28 78 160. The envelope's fill is scaled back
+  // up separately, so the sky being darker does not make the shade darker.
   day: {
-    zenith: new THREE.Vector3(0.055, 0.20, 0.66),
-    horizon: new THREE.Vector3(0.52, 0.66, 0.90),
+    zenith: new THREE.Vector3(0.013, 0.082, 0.40),
+    horizon: new THREE.Vector3(0.44, 0.60, 0.90),
     ground: new THREE.Vector3(0.22, 0.20, 0.17),
     // Daylight is not white. A touch of amber here is what makes stone read
     // as stone, and it is what the sunlit faces in every photograph have.

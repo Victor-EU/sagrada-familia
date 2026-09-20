@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js'
 import {
@@ -10,18 +9,22 @@ import {
   grainUniforms,
   groundMaterial,
   openQuarry,
+  outdoorUniforms,
   pavingMaterial,
   roomUniforms,
   stonePatch,
   type GrainUniforms,
+  type OutdoorUniforms,
   type Quarry,
   type RoomUniforms,
+  type ShelterUniforms,
   type StoneName,
 } from './materials.ts'
 import { glassMaterial, type GlassMaterial } from '../geometry/glass.ts'
 import { WashRig } from './washrig.ts'
 import { LAYER_CITY, LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
 import { RoofMap } from './roof.ts'
+import { FilmPass, type FilmLook } from './film.ts'
 import { ShaftPass, type ShaftSettings } from './shafts.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
@@ -51,6 +54,8 @@ export interface Stage {
   room: RoomUniforms
   /** Depth of the block-to-block variation in the stone. */
   grain: GrainUniforms
+  /** How much of the sky the envelope is lit by. */
+  outdoor: OutdoorUniforms
   /** The plaza the church stands in, at the foot of the podium. */
   ground: THREE.Mesh
   /** The Eixample around it, which is where the height comes from. */
@@ -90,11 +95,14 @@ export interface Stage {
   /**
    * The spill off things brighter than white.
    *
-   * `threshold` is in the scene's own linear units, so a value above 1 means
-   * "brighter than the tone mapper's white point" — ordinary sunlit stone is
-   * left alone and only the glazing and the sun spill.
+   * `threshold` is in multiples of white on the screen, at whatever the eye
+   * is currently open to — so a value above 1 means "brighter than the
+   * film's white point", ordinary sunlit stone is left alone, and only the
+   * glazing and the sun spill.
    */
   setBloom(options: { strength: number; radius: number; threshold: number }): void
+  /** The film the frame is finally seen through — see render/film.ts. */
+  setLook(look: FilmLook): void
   /**
    * Device pixels per CSS pixel. Followed by a `resize`, because every
    * buffer in the chain is sized from it. The frame loop moves this to keep
@@ -196,8 +204,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     powerPreference: 'high-performance',
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1
+  // No tone mapping in the renderer: nothing draws to the screen except the
+  // film pass at the end of the chain, and the curve is its business.
+  renderer.toneMapping = THREE.NoToneMapping
 
   const scene = new THREE.Scene()
 
@@ -233,9 +242,22 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const stones = openQuarry()
   const room = roomUniforms()
   const grain = grainUniforms()
+  const outdoor = outdoorUniforms()
   const wash = new WashRig()
+  // Where the air is indoors — see roof.ts. Only the geometry moves it, so
+  // it is re-read on a rebuild and not on a new hour. The stones read it too,
+  // to learn which side of the wall they are on.
+  const roof = new RoofMap()
+  const shelter: ShelterUniforms = {
+    uRoofMatrix: { value: roof.matrix },
+    uRoofHeight: { value: roof.texture },
+  }
   for (const [name, material] of Object.entries(stones)) {
-    patchForSunlight(material, sun.uniforms, stonePatch(name as StoneName, grain, room, wash.uniforms))
+    patchForSunlight(
+      material,
+      sun.uniforms,
+      stonePatch(name as StoneName, grain, room, wash.uniforms, outdoor, shelter),
+    )
   }
   // Out past the city rather than stopping short of it. At 320 m the disc's
   // own edge was a hard line across the middle distance in every exterior
@@ -386,10 +408,6 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   })
   sceneTarget.texture.name = 'Stage.scene'
 
-  // Where the air is indoors — see roof.ts. Only the geometry moves it, so
-  // it is re-read on a rebuild and not on a new hour.
-  const roof = new RoofMap()
-
   const composer = new EffectComposer(renderer)
   composer.addPass(new ScenePass(scene, camera, sceneTarget))
   // The pass that reads that buffer is the one that puts it into the chain.
@@ -428,7 +446,18 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // bloom usually is.
   const bloom = new UnrealBloomPass(drawingBuffer.clone(), 0.62, 0.72, 1.05)
   composer.addPass(bloom)
-  composer.addPass(new OutputPass())
+  const film = new FilmPass()
+  composer.addPass(film)
+  // The bloom threshold is kept in the film's units — multiples of white on
+  // the screen — and turned into the buffer's own units by whatever the eye
+  // is currently open to. Kept in the buffer's units it was one number for
+  // two exposures a stop apart, and outdoors, where the pupil is closed
+  // down, sunlit stone that was well under white on screen was still over
+  // the buffer's threshold and haloed every tower against the sky.
+  let bloomWhite = 1.75
+  const holdBloom = (): void => {
+    bloom.threshold = bloomWhite / Math.max(film.exposure, 1e-3)
+  }
 
   return {
     renderer,
@@ -442,6 +471,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     pavingUniforms: pavingU,
     room,
     grain,
+    outdoor,
     ground,
     city,
     figure,
@@ -508,7 +538,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       composer.setSize(width, height)
     },
     setExposure(value) {
-      renderer.toneMappingExposure = value
+      film.exposure = value
+      holdBloom()
+    },
+    setLook(look) {
+      Object.assign(film.look, look)
     },
     setPixelRatio(ratio) {
       renderer.setPixelRatio(ratio)
@@ -534,7 +568,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setBloom({ strength, radius, threshold }) {
       bloom.strength = strength
       bloom.radius = radius
-      bloom.threshold = threshold
+      bloomWhite = threshold
+      holdBloom()
     },
     setShafts(options) {
       // Never disabled: this pass is what puts the scene into the chain.
@@ -545,6 +580,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       sun.dispose()
       shafts.dispose()
       bloom.dispose()
+      film.dispose()
       roof.dispose()
       sceneTarget.dispose()
       composer.dispose()

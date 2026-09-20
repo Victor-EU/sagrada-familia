@@ -80,7 +80,15 @@ const INHABIT_SHIFT = 0.5
  * does and what nobody has to be told about.
  */
 const INSIDE_STOP = 1.25
-const OUTSIDE_STOP = 1
+/**
+ * Well under the room. A photograph of this building is exposed for the
+ * sunlit stone, and the sunlit stone at the old figure was over the film's
+ * knee everywhere — the towers came back as white cut-outs with a halo, on
+ * a sky one shade paler than the photographs. The sky's own brightness was
+ * raised to meet this, so the sky is where it was and the stone is a stop
+ * under it, which is where a photograph puts it.
+ */
+const OUTSIDE_STOP = 0.72
 /** Seconds for the pupil to catch up. */
 const ADAPT = 0.9
 

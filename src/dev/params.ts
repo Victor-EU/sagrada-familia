@@ -5,6 +5,7 @@ import type { ChurchParams } from '../plan/church.ts'
 import type { HyperboloidParams, RulingFamily } from '../geometry/hyperboloid.ts'
 import type { PhotoOverlay } from './overlay.ts'
 import type { ShaftSettings } from '../render/shafts.ts'
+import type { FilmLook } from '../render/film.ts'
 import { PresetStore } from './presets.ts'
 import { VIEWPOINTS } from './viewpoints.ts'
 
@@ -29,6 +30,8 @@ export interface RenderFlags {
   glassGain: number
   /** Strength of the interreflection stand-in. */
   bounce: number
+  /** How much more of the sky the envelope takes than the room does — see materials.ts. */
+  skyFill: number
   /** Slope-scaled depth bias for the sun's occlusion pass, in metres. */
   sunOffset: number
   /** The second shadow map, the one that follows the camera. */
@@ -40,6 +43,8 @@ export interface RenderFlags {
   bloom: { strength: number; radius: number; threshold: number }
   /** Lit air between the eye and the stone. 0 density turns the pass off. */
   shafts: ShaftSettings
+  /** The film stock — see render/film.ts. */
+  look: FilmLook
 }
 
 /**
@@ -311,6 +316,7 @@ export function buildPanel(ctx: ParamContext): Pane {
   rnd.addBinding(ctx.render, 'environment', { min: 0, max: 2, step: 0.01, label: 'ambient' })
   rnd.addBinding(ctx.render, 'glassGain', { min: 1, max: 12, step: 0.05, label: 'glass glow' })
   rnd.addBinding(ctx.render, 'bounce', { min: 0, max: 2, step: 0.01, label: 'bounce fill' })
+  rnd.addBinding(ctx.render, 'skyFill', { min: 0, max: 6, step: 0.05, label: 'sky fill outdoors' })
   rnd.addBinding(ctx.render, 'sunOffset', { min: 0, max: 0.4, step: 0.005, label: 'shadow bias m' })
   rnd.addBinding(ctx.render, 'sunNear', { label: 'near shadow map' })
   rnd.addBinding(ctx.render, 'occlusion', { min: 0, max: 2, step: 0.01, label: 'occlusion' })
@@ -329,6 +335,14 @@ export function buildPanel(ctx: ParamContext): Pane {
   air.addBinding(ctx.render.shafts, 'range', { min: 10, max: 300, step: 5, label: 'reach m' })
   air.addBinding(ctx.render.shafts, 'steps', { min: 8, max: 64, step: 1, label: 'samples / ray' })
   air.on('change', () => ctx.applyRender())
+
+  const film = pane.addFolder({ title: 'Film' })
+  film.addBinding(ctx.render.look, 'contrast', { min: 1, max: 2, step: 0.01 })
+  film.addBinding(ctx.render.look, 'saturation', { min: 0, max: 1.5, step: 0.01 })
+  film.addBinding(ctx.render.look, 'chrome', { min: 0, max: 1, step: 0.01, label: 'classic chrome' })
+  film.addBinding(ctx.render.look, 'split', { min: 0, max: 2, step: 0.01, label: 'split tone' })
+  film.addBinding(ctx.render.look, 'punch', { min: 0.5, max: 2, step: 0.01, label: 'agx punch' })
+  film.on('change', () => ctx.applyRender())
 
   buildPresets(pane, ctx, store)
   return pane

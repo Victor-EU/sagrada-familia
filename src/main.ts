@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { createStage } from './render/scene.ts'
 import { rulingMaterial } from './render/materials.ts'
 import { defaultShafts } from './render/shafts.ts'
+import { CLASSIC_CHROME } from './render/film.ts'
 import { columnMetrics } from './geometry/column.ts'
 import { buildChurch, defaultChurch, type Church, type ChurchParams } from './plan/church.ts'
 import { tunePaving } from './plan/floor.ts'
@@ -110,7 +111,7 @@ const render: RenderFlags = {
   exposure: 0.8,
   // Low, and it stays low — the probe is Barcelona sky, so more of it is more
   // blue, and past about 0.5 the whole room goes pale and flat as everything
-  // piles up at the top of the ACES curve where it desaturates toward white.
+  // piles up at the top of the film's curve where it desaturates toward white.
   // The room is not short of light. It is short of light the right colour,
   // which is what the ambient rotation in materials.ts supplies.
   //
@@ -140,6 +141,8 @@ const render: RenderFlags = {
   // faces of a tower came back the same value. Interiors get theirs back
   // through uRoomGain — see render/materials.ts.
   bounce: 0.16,
+  // The envelope's share of the sky — see OUTDOOR_INDIRECT in materials.ts.
+  skyFill: 3.2,
   sunOffset: 0.06,
   sunNear: true,
   // Stone under a nearly uniform probe has little shading of its own, so this
@@ -155,6 +158,8 @@ const render: RenderFlags = {
   // The air. Every photograph of this interior is a photograph of air, and
   // until now the model had none — see render/shafts.ts.
   shafts: { ...defaultShafts },
+  // The photograph the frame ends up as — see render/film.ts.
+  look: { ...CLASSIC_CHROME },
 }
 
 /**
@@ -284,11 +289,13 @@ function applyRender(): void {
   stage.scene.environmentIntensity = render.environment
   stage.glass.uniforms.uGlow.value = render.glassGain
   stage.bounce.intensity = render.bounce
+  stage.outdoor.uSkyFill.value = render.skyFill
   stage.sun.offset = render.sunOffset
   stage.setSunNear(render.sunNear)
   stage.setOcclusion({ intensity: render.occlusion, radius: render.occlusionRadius })
   stage.setBloom(render.bloom)
   stage.setShafts(render.shafts)
+  stage.setLook(render.look)
   stage.invalidateSun()
 }
 

@@ -247,7 +247,7 @@ void main() {
   // crimson and gold around it.
   //
   // Lit flat, the window is one brightness, and whatever it is it is wrong.
-  // High enough to blaze and ACES desaturates the entire wall to a pale
+  // High enough to blaze and the tone curve desaturates the entire wall to a pale
   // wash — which is what this did, and why an interior glazed in Vila-Grau's
   // reds came out the colour of weak tea. Low enough to keep the colour and
   // no window in the building is ever the brightest thing in it.
