@@ -9,7 +9,7 @@ builders use. Photographs are the acceptance test, not the source.
 Design doc: the reasoning, the surface families, the light model and the scope
 phases live there. This README covers running the code.
 
-## Status: phases 0 to 4 complete, phase 5 under way
+## Status: phases 0 to 5 complete
 
 Each phase carried its own bar. Phase 0: *you can load a photo, match a camera
 to it, and tune a parameter live.* Phase 1, the nave bay and the go/no-go: it
@@ -62,7 +62,7 @@ across**, so four of them side by side is the thirty metres of the transept
 front.
 
 Phase 5's bar is *someone can send a link to a specific moment of light*, and
-it is met: the address bar is the save format, because nothing about this
+it was met first: the address bar is the save format, because nothing about this
 building's light is authored and a moment is therefore only a camera, a day and
 an hour. Before that it built the **air**, which had been the one high-value
 item on the beauty list since phase 0 and the last one unbuilt — light that
@@ -72,7 +72,12 @@ both sides and whose ground outside is a disc you cannot stand on is a building
 you can only enter by flying over the parapet, which is the one thing a visitor
 to a cathedral never does. There are eight doorways now, set out by the fronts
 in front of them, and the podium's edge is a flight of steps rather than 1.35 m
-of sheer plaster: you arrive on the plaza, you climb, and you walk in.
+of sheer plaster: you arrive on the plaza, you climb, and you walk in. Last,
+the **shadows**. One orthographic map has to cover a 172 m tower and the
+quarter-kilometre of ground its shadow falls on, which left every shadow
+indoors at a tenth of a metre to the texel; there are two now, and the second
+follows the camera at 2.9 cm — four to seven times finer over the only part of
+the building anyone is standing in.
 
 | Built | Where |
 | --- | --- |
@@ -97,6 +102,7 @@ of sheer plaster: you arrive on the plaza, you climb, and you walk in.
 | Solar position for 41.40° N, 2.17° E, with CET/CEST | `src/light/sun.ts` |
 | Analytic sky, and the environment light it casts | `src/light/sky.ts` |
 | Coloured transmittance — sunlight that remembers the glass | `src/render/sunrig.ts` |
+| Two shadow maps: one on the model, one that follows the camera | `src/render/sunrig.ts` |
 | Volumetric shafts — single scattering through the same two maps | `src/render/shafts.ts` |
 | Roof map: where the air is indoors, from the stepped section | `src/render/roof.ts` |
 | Vila-Grau glazing: jittered panes, graded by height and side | `src/geometry/glass.ts` |
@@ -285,16 +291,46 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   two channels and base 32 now. It also frames itself rather than borrowing
   the window's aspect ratio, because a regression frame that changes shape
   when you drag a window is not a regression frame.
-- The sun rig fits **one** orthographic shadow map to the whole model plus the
+- The sun rig fits an orthographic shadow map to the whole model plus the
   ground its shadow lands on, so the texel size is set by the largest thing
   built. The towers took the fit from a 108 m radius to 180 m, which at 2048
   coarsened every shadow in the interior from 10.5 cm to 17.6 cm to pay for
-  eighteen objects nobody is standing next to. The map is 3072 now: measured
-  across all thirteen curated suns that is 11.7 cm on the seven the interior
-  was tuned against, against 10.5 before, and never worse than a fifth off the
-  old figure — the worst case is a low June sun, where the ground shadow
-  balloons and 16.3 cm becomes 19.7. Cascades are the real answer and are a
-  phase 5 problem.
+  eighteen objects nobody is standing next to. Going to 3072 bought most of
+  that back — 10.3 to 20.0 cm over the fourteen curated suns, against 10.5
+  before the towers — and it was still the wrong shape of answer, because a
+  branch's shadow on a vault is a 5 cm feature and no single map that also has
+  to hold a 172 m tower's shadow was ever going to carry one.
+- So there are **two maps now**, and the second one follows the camera: the
+  same sun, fitted to a sixty-metre box around wherever you are standing,
+  2.9 cm to the texel — four to seven times finer, constant, over the only
+  part of the building anyone is looking at closely. A receiver inside it uses
+  it and one outside falls back to the wide map, cross-faded over the last few
+  per cent of its width so the join is not a line across the floor. It carries
+  its own, smaller depth bias, scaled by the ratio of the texel sizes: keeping
+  the wide map's would lift every near shadow off the thing casting it.
+  Measured, near map against wide: 12.5 % of the frame changes on the
+  terraces and 8.4 % standing in a shaft, for 28 % and 12 % more gradient
+  energy in those frames; the three distant exterior frames change by nothing
+  at all, which is correct — at 96 m the building is not in the near map and
+  should not be.
+  Only the **occlusion** pass is doubled. The glass keeps one transmittance
+  map at the wide fit, because a pane's colour is a low-frequency thing — a
+  tint boundary is soft in the world and soft in the photographs — and a
+  second one would cost seventy-five megabytes to sharpen an edge nobody can
+  see. The volumetric pass reads the wide map too, for the same reason and one
+  more: an air sample's visibility is soft, and thirty-two extra texture
+  fetches a ray is a cost this environment cannot measure honestly.
+- A shadow map that follows the camera **crawls** unless you stop it. Slide one
+  continuously under a building that is not moving and every shadow edge in
+  the picture boils, because each frame quantises the same world point into a
+  different texel. The fix is to snap the map's centre to its own texel grid
+  in the sun's frame, which takes two passes at placing the camera — one to
+  establish the frame, one to round the centre in it. Checked rather than
+  asserted: re-fitting the near map from three centres up to 15.8 m apart, in
+  a frame where it decides a third of the pixels, changed **0.000 %** of them.
+  It re-renders only once the camera has left the middle of the map, which
+  walking does about every twenty seconds; dragging the hour slider was
+  already re-running all of the sun passes on every frame.
 - The volumetric medium is **indoors only**, and that is not a shortcut — it
   is the difference between the effect working and ruining the building. Dust
   hangs in a room; the street outside is swept. At the one density that makes

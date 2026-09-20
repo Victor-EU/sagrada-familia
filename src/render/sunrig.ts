@@ -51,6 +51,12 @@ export interface SunUniforms {
   uSunRadiance: { value: THREE.Color }
   uSunTexel: { value: THREE.Vector2 }
   uSunOffset: { value: number }
+  /** The second map: the same sun, fitted to where the camera is standing. */
+  uSunNearMatrix: { value: THREE.Matrix4 }
+  uSunNearDepth: { value: THREE.Texture | null }
+  uSunNearTexel: { value: THREE.Vector2 }
+  uSunNearOffset: { value: number }
+  uSunNearOn: { value: number }
 }
 
 export class SunRig {
@@ -70,7 +76,43 @@ export class SunRig {
   /** Depth-bias distance in metres, scaled by slope at the receiver. */
   offset = 0.06
 
-  constructor(resolution = 2048) {
+  /**
+   * The near map, and why there is one.
+   *
+   * One orthographic map has to cover the model *and* the ground its shadow
+   * falls on, so its texel is set by the largest thing built. The eighteen
+   * towers took the fit from a 108 m radius to 180 m, and at 3072 that is
+   * 11.7 cm to the texel — every shadow in the interior coarsened to pay for
+   * objects a hundred and fifty metres away that nobody is standing next to.
+   * A branch's shadow on a vault is a 5 cm feature. It was never going to
+   * survive.
+   *
+   * So there is a second map at the same sun, fitted to a sixty-metre box
+   * around wherever the camera is standing: 2.9 cm to the texel, four times
+   * finer, over the only part of the building anyone is looking at closely.
+   * A receiver that falls inside it uses it, one that does not falls back to
+   * the wide map, and the two are cross-faded over the last couple of metres
+   * so the join is not a line.
+   *
+   * It follows the camera, which means it re-renders — but only when the
+   * camera has left the middle of it, which walking does about every twenty
+   * seconds, and the sun pass was already being run on every frame of a drag
+   * of the hour slider. Its centre is snapped to its own texel grid in the
+   * sun's frame, because a shadow map that slides continuously under a static
+   * building makes every edge in the picture crawl.
+   */
+  nearEnabled = true
+  /** Half-width of the near map, metres. */
+  readonly nearExtent = 30
+  private readonly nearCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100)
+  private readonly nearTarget: THREE.WebGLRenderTarget
+  private readonly nearCentre = new THREE.Vector3()
+  private nearValid = false
+
+  constructor(
+    private readonly resolution = 2048,
+    private readonly nearResolution = 2048,
+  ) {
     const depthTexture = new THREE.DepthTexture(resolution, resolution)
     depthTexture.type = THREE.UnsignedIntType
     depthTexture.minFilter = THREE.NearestFilter
@@ -101,6 +143,16 @@ export class SunRig {
     })
     this.colorTarget.texture.colorSpace = THREE.NoColorSpace
 
+    const nearDepth = new THREE.DepthTexture(nearResolution, nearResolution)
+    nearDepth.type = THREE.UnsignedIntType
+    nearDepth.minFilter = THREE.NearestFilter
+    nearDepth.magFilter = THREE.NearestFilter
+    this.nearTarget = new THREE.WebGLRenderTarget(nearResolution, nearResolution, {
+      depthTexture: nearDepth,
+      format: THREE.RedFormat,
+      type: THREE.UnsignedByteType,
+    })
+
     this.depthMaterial = new THREE.MeshBasicMaterial({
       colorWrite: false,
       side: THREE.DoubleSide,
@@ -117,6 +169,11 @@ export class SunRig {
       uSunRadiance: { value: new THREE.Color(0, 0, 0) },
       uSunTexel: { value: new THREE.Vector2(1 / resolution, 1 / resolution) },
       uSunOffset: { value: this.offset },
+      uSunNearMatrix: { value: new THREE.Matrix4() },
+      uSunNearDepth: { value: nearDepth },
+      uSunNearTexel: { value: new THREE.Vector2(1 / nearResolution, 1 / nearResolution) },
+      uSunNearOffset: { value: this.offset },
+      uSunNearOn: { value: 0 },
     }
   }
 
@@ -231,6 +288,100 @@ export class SunRig {
       .transformDirection(view.matrixWorldInverse)
     this.uniforms.uSunRadiance.value.copy(radiance)
     this.uniforms.uSunOffset.value = this.offset
+    // The sun has moved, so whatever the near map holds is of another hour.
+    this.nearValid = false
+  }
+
+  /** Whether the near map still covers a camera standing here. */
+  nearStale(eye: THREE.Vector3): boolean {
+    if (!this.nearEnabled) return this.uniforms.uSunNearOn.value > 0
+    if (!this.nearValid) return true
+    // Re-fit once the camera has left the middle of the map, not once it has
+    // left the map: a shadow falling into the frame from off to one side is
+    // cast by something the map still has to contain.
+    return eye.distanceTo(this.nearCentre) > this.nearExtent * 0.4
+  }
+
+  /**
+   * Re-run the occlusion pass into the near map, around this point.
+   *
+   * Depth only. The glass keeps one map at the wide fit, because a pane's
+   * colour is a low-frequency thing — a tint boundary is soft in the world
+   * and soft in the photographs — and because doubling the transmittance
+   * target would cost seventy-five megabytes to sharpen an edge nobody can
+   * see.
+   */
+  renderNear(renderer: THREE.WebGLRenderer, scene: THREE.Scene, eye: THREE.Vector3): void {
+    if (!this.nearEnabled) {
+      this.uniforms.uSunNearOn.value = 0
+      this.nearValid = false
+      return
+    }
+
+    const dir = this.uniforms.uSunDirWorld.value
+    const e = this.nearExtent
+    const r = this.radius
+    const texel = (2 * e) / this.nearResolution
+
+    const camera = this.nearCamera
+    camera.left = -e
+    camera.right = e
+    camera.top = e
+    camera.bottom = -e
+    camera.near = 0.1
+    // The same depth range as the wide map, so nothing that casts into this
+    // box is behind the near plane or past the far one.
+    camera.far = 4 * r
+    camera.up.set(0, 1, 0)
+
+    // Two passes at the placement. The first only establishes the sun's own
+    // frame; the second puts the centre on a whole number of texels in it,
+    // which is what stops every edge in the picture crawling as the map
+    // slides along under a building that is not moving.
+    camera.position.copy(eye).addScaledVector(dir, 2 * r)
+    camera.lookAt(eye)
+    camera.updateMatrixWorld(true)
+
+    const local = eye.clone().applyMatrix4(camera.matrixWorldInverse)
+    local.x = Math.round(local.x / texel) * texel
+    local.y = Math.round(local.y / texel) * texel
+    const centre = local.applyMatrix4(camera.matrixWorld)
+    camera.position.copy(centre).addScaledVector(dir, 2 * r)
+    camera.lookAt(centre)
+    camera.updateMatrixWorld(true)
+    camera.updateProjectionMatrix()
+
+    const previousTarget = renderer.getRenderTarget()
+    const previousClear = renderer.getClearColor(new THREE.Color())
+    const previousAlpha = renderer.getClearAlpha()
+    const previousOverride = scene.overrideMaterial
+    const previousBackground = scene.background
+    scene.background = null
+
+    camera.layers.set(0)
+    camera.layers.enable(LAYER_SKYLINE)
+    scene.overrideMaterial = this.depthMaterial
+    renderer.setRenderTarget(this.nearTarget)
+    renderer.setClearColor(0x000000, 1)
+    renderer.render(scene, camera)
+
+    scene.overrideMaterial = previousOverride
+    scene.background = previousBackground
+    renderer.setRenderTarget(previousTarget)
+    renderer.setClearColor(previousClear, previousAlpha)
+
+    this.uniforms.uSunNearMatrix.value.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    )
+    // Acne is a function of how much world a texel covers, so the finer map
+    // carries a proportionally smaller bias — keeping the wide map's would
+    // detach every shadow in the near field from the thing casting it.
+    const wideTexel = (2 * r) / this.resolution
+    this.uniforms.uSunNearOffset.value = Math.max(0.004, this.offset * (texel / wideTexel))
+    this.uniforms.uSunNearOn.value = 1
+    this.nearCentre.copy(eye)
+    this.nearValid = true
   }
 
   /**
@@ -244,13 +395,26 @@ export class SunRig {
   }
 
   /** Debug handles for the in-browser checks. */
-  get targets(): { depth: THREE.WebGLRenderTarget; color: THREE.WebGLRenderTarget } {
-    return { depth: this.depthTarget, color: this.colorTarget }
+  get targets(): {
+    depth: THREE.WebGLRenderTarget
+    color: THREE.WebGLRenderTarget
+    near: THREE.WebGLRenderTarget
+  } {
+    return { depth: this.depthTarget, color: this.colorTarget, near: this.nearTarget }
+  }
+
+  /** Metres of world to a texel, wide map and near map. */
+  get texelSize(): { wide: number; near: number } {
+    return {
+      wide: (2 * this.radius) / this.resolution,
+      near: (2 * this.nearExtent) / this.nearResolution,
+    }
   }
 
   dispose(): void {
     this.depthTarget.dispose()
     this.colorTarget.dispose()
+    this.nearTarget.dispose()
     this.depthMaterial.dispose()
     this.transmitMaterial.dispose()
   }
@@ -266,7 +430,24 @@ uniform vec3 uSunDirWorld;
 uniform vec3 uSunRadiance;
 uniform vec2 uSunTexel;
 uniform float uSunOffset;
+uniform mat4 uSunNearMatrix;
+uniform sampler2D uSunNearDepth;
+uniform vec2 uSunNearTexel;
+uniform float uSunNearOffset;
+uniform float uSunNearOn;
 varying vec3 vSunWorld;
+
+/** Nine taps of a shadow map, as the fraction of them the sun reaches. */
+float sfLit( const in sampler2D map, const in vec3 coord, const in vec2 texel ) {
+  float lit = 0.0;
+  for ( int j = -1; j <= 1; j ++ ) {
+    for ( int i = -1; i <= 1; i ++ ) {
+      vec2 tap = coord.xy + vec2( float( i ), float( j ) ) * texel;
+      lit += step( coord.z, texture2D( map, tap ).x );
+    }
+  }
+  return lit / 9.0;
+}
 
 /** Radiance arriving from the sun, already tinted by whatever it came through. */
 vec3 sfSunlight( const in vec3 shadingNormal ) {
@@ -277,26 +458,37 @@ vec3 sfSunlight( const in vec3 shadingNormal ) {
   // stepping toward the sun in world space is exactly a depth bias, and
   // scaling it by grazing angle is what keeps the twisted columns clean.
   float slope = 1.0 - facing;
-  vec3 samplePoint = vSunWorld + uSunDirWorld * ( uSunOffset * ( 1.0 + 6.0 * slope * slope ) );
+  float grazing = uSunOffset * ( 1.0 + 6.0 * slope * slope );
 
-  vec4 clip = uSunMatrix * vec4( samplePoint, 1.0 );
+  vec4 clip = uSunMatrix * vec4( vSunWorld + uSunDirWorld * grazing, 1.0 );
   vec3 coord = clip.xyz / clip.w * 0.5 + 0.5;
   bool outside = coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0;
   if ( outside ) return uSunRadiance * facing;
 
-  float lit = 0.0;
-  for ( int j = -1; j <= 1; j ++ ) {
-    for ( int i = -1; i <= 1; i ++ ) {
-      vec2 tap = coord.xy + vec2( float( i ), float( j ) ) * uSunTexel;
-      lit += step( coord.z, texture2D( uSunDepth, tap ).x );
+  // The near map where there is one. It is four times finer, so it carries a
+  // bias of its own — the wide map's would lift every near shadow off the
+  // thing casting it — and the two are cross-faded over the last few per cent
+  // of its width, because a step from one shadow resolution to another is a
+  // line across the floor and reads as a seam in the building.
+  float lit = -1.0;
+  if ( uSunNearOn > 0.5 ) {
+    vec4 nearClip = uSunNearMatrix *
+      vec4( vSunWorld + uSunDirWorld * ( uSunNearOffset * ( 1.0 + 6.0 * slope * slope ) ), 1.0 );
+    vec3 nearCoord = nearClip.xyz / nearClip.w * 0.5 + 0.5;
+    float edge = min( min( nearCoord.x, 1.0 - nearCoord.x ), min( nearCoord.y, 1.0 - nearCoord.y ) );
+    float blend = nearCoord.z <= 1.0 ? smoothstep( 0.005, 0.045, edge ) : 0.0;
+    if ( blend > 0.0 ) {
+      float close = sfLit( uSunNearDepth, nearCoord, uSunNearTexel );
+      lit = blend >= 1.0 ? close : mix( sfLit( uSunDepth, coord, uSunTexel ), close, blend );
     }
   }
+  if ( lit < 0.0 ) lit = sfLit( uSunDepth, coord, uSunTexel );
   if ( lit <= 0.0 ) return vec3( 0.0 );
 
   // Only glass that stands between this point and the sun may colour it.
   float paneDepth = texture2D( uSunGlassDepth, coord.xy ).x;
   vec3 tint = paneDepth < coord.z ? texture2D( uSunTransmit, coord.xy ).rgb : vec3( 1.0 );
-  return uSunRadiance * tint * facing * ( lit / 9.0 );
+  return uSunRadiance * tint * facing * lit;
 }
 `
 
@@ -376,7 +568,7 @@ export function patchForSunlight(
   // Three caches compiled programs by this key, so two materials that patch
   // the same base shader differently have to name themselves differently or
   // the second one silently gets the first one's program.
-  const key = `sf-sunlight-3${extra.key ? `-${extra.key}` : ''}`
+  const key = `sf-sunlight-4${extra.key ? `-${extra.key}` : ''}`
   material.customProgramCacheKey = () => key
   material.needsUpdate = true
 }

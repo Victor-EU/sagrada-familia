@@ -79,6 +79,7 @@ const render: RenderFlags = {
   glassGain: 3.4,
   bounce: 0.5,
   sunOffset: 0.06,
+  sunNear: true,
   // White plaster under a uniform probe has almost no shading of its own, so
   // this is not a subtle effect here — it is most of the form in the vaults.
   // Two and a half metres is the scale of the crevices between them.
@@ -190,6 +191,7 @@ function applyRender(): void {
   stage.glass.uniforms.uGlow.value = render.glassGain
   stage.bounce.intensity = render.bounce
   stage.sun.offset = render.sunOffset
+  stage.setSunNear(render.sunNear)
   stage.setOcclusion({ intensity: render.occlusion, radius: render.occlusionRadius })
   stage.setShafts(render.shafts)
   stage.invalidateSun()
@@ -394,6 +396,7 @@ function frame(): void {
         `${towerRange(built)}  ` +
         `peak ${(built?.peak ?? 0).toFixed(1)} m  ` +
         `${plan.shell.parapet} m parapet`,
+      `shadow ${shadowTexels()}`,
       `air   ${render.shafts.density.toFixed(3)} scatter/m  ` +
         `g ${render.shafts.anisotropy.toFixed(2)}  ${render.shafts.range} m reach  ` +
         `${Math.round(render.shafts.steps)} samples/ray`,
@@ -402,6 +405,22 @@ function frame(): void {
         `alt ${deg(solar.altitude)}°  az ${deg(solar.azimuth)}°`,
     ].join('\n')
   }
+}
+
+/**
+ * How much world one shadow texel covers, in each of the two maps.
+ *
+ * On the readout because it is the number that decides whether a branch's
+ * shadow on a vault is a branch or a smudge, and because it moves: the wide
+ * map is fitted to the model *and* the ground its shadow falls on, so a low
+ * sun coarsens every shadow in the building and nothing else says so.
+ */
+function shadowTexels(): string {
+  const { wide, near } = stage.sun.texelSize
+  const cm = (m: number): string => `${(m * 100).toFixed(1)} cm`
+  return render.sunNear
+    ? `${cm(near)} near  ${cm(wide)} wide  ${(wide / near).toFixed(1)}× finer where you stand`
+    : `${cm(wide)}  one map`
 }
 
 /** The shortest and tallest of the eighteen, which is how they are published. */

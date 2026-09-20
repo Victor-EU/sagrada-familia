@@ -31,6 +31,8 @@ export interface RenderFlags {
   bounce: number
   /** Slope-scaled depth bias for the sun's occlusion pass, in metres. */
   sunOffset: number
+  /** The second shadow map, the one that follows the camera. */
+  sunNear: boolean
   /** Strength of the ambient occlusion term. 0 turns the pass off. */
   occlusion: number
   /** How far it looks for occluders, in metres. */
@@ -309,6 +311,7 @@ export function buildPanel(ctx: ParamContext): Pane {
   rnd.addBinding(ctx.render, 'glassGain', { min: 1, max: 12, step: 0.05, label: 'glass glow' })
   rnd.addBinding(ctx.render, 'bounce', { min: 0, max: 2, step: 0.01, label: 'bounce fill' })
   rnd.addBinding(ctx.render, 'sunOffset', { min: 0, max: 0.4, step: 0.005, label: 'shadow bias m' })
+  rnd.addBinding(ctx.render, 'sunNear', { label: 'near shadow map' })
   rnd.addBinding(ctx.render, 'occlusion', { min: 0, max: 2, step: 0.01, label: 'occlusion' })
   rnd.addBinding(ctx.render, 'occlusionRadius', { min: 0.2, max: 8, step: 0.1, label: 'occlusion m' })
   rnd.on('change', () => ctx.applyRender())

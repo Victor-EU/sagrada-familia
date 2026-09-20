@@ -56,6 +56,8 @@ export interface Stage {
   setExposure(value: number): void
   /** Strength and scale of the ambient occlusion term. */
   setOcclusion(options: { intensity: number; radius: number }): void
+  /** Whether the second, camera-following shadow map is in use. */
+  setSunNear(on: boolean): void
   /** How much lit air there is between the eye and the stone. */
   setShafts(options: ShaftSettings): void
   dispose(): void
@@ -337,6 +339,15 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
           dirty = false
         }
       }
+      // The near shadow map follows the camera, so it is the one sun pass
+      // that can be made stale by walking. Re-run under the same coarse level
+      // of detail the other two use, and only once the camera has left the
+      // middle of it — about every twenty seconds of walking, against every
+      // frame of a drag of the hour slider, which the rig already carried.
+      if (sun.nearStale(camera.position)) {
+        for (const participant of passes) participant.prepareForSun(SUN_DETAIL_LEVEL)
+        sun.renderNear(renderer, scene, camera.position)
+      }
       // The level-of-detail switch is angular, so it needs to know how many
       // device pixels the frame is tall — not how many CSS ones.
       renderer.getDrawingBufferSize(drawingBuffer)
@@ -363,6 +374,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       occlusion.enabled = intensity > 0
       occlusion.blendIntensity = intensity
       occlusion.updateGtaoMaterial({ radius })
+    },
+    setSunNear(on) {
+      sun.nearEnabled = on
     },
     setShafts(options) {
       // Never disabled: this pass is what puts the scene into the chain.
