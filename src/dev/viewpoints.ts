@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { FreeCamera } from '../camera/freecam.ts'
+import type { Viewer } from '../camera/viewer.ts'
 
 /**
  * Curated views.
@@ -258,7 +258,7 @@ export interface SunSetting {
 /** Move the camera and the clock to a viewpoint. */
 export function applyViewpoint(
   view: Viewpoint,
-  cam: FreeCamera,
+  viewer: Viewer,
   sun: SunSetting,
   onSunChange: () => void,
 ): void {
@@ -266,13 +266,17 @@ export function applyViewpoint(
   sun.hour = view.hour
   onSunChange()
 
-  cam.camera.position.fromArray(view.position)
-  cam.camera.fov = view.fov
-  cam.shiftCorrection = view.shiftCorrection
-  cam.lookAt(new THREE.Vector3(...view.target))
-  // The camera did not walk here. Without this it arrives carrying however
-  // much of a walker it was before, and a viewpoint standing on the terraces
-  // is dragged down into the aisle under them.
-  cam.teleport()
-  cam.refresh()
+  // Through setState rather than by writing the pose, because arriving
+  // somewhere is not only a position: the viewer has to work out whether the
+  // frame it has been handed is one it stands in or one it looks at, and put
+  // itself into the matching relation. See camera/viewer.ts.
+  const position = new THREE.Vector3(...view.position)
+  const direction = new THREE.Vector3(...view.target).sub(position).normalize()
+  viewer.setState({
+    position: view.position,
+    yaw: Math.atan2(-direction.x, -direction.z),
+    pitch: Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1)),
+    fov: view.fov,
+    shiftCorrection: view.shiftCorrection,
+  })
 }

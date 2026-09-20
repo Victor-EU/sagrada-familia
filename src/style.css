@@ -26,7 +26,15 @@ html, body {
   top: 0;
   overflow: hidden;
   background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
 }
+#stage.dragging { cursor: grabbing; }
+/* Inside, the cursor points at things — a place on the floor to walk to —
+   rather than taking hold of the building. */
+body.walking #stage { cursor: default; }
+body.walking #stage.dragging { cursor: grabbing; }
 
 /* When an aspect lock is active, main.ts sets width/height/inset explicitly. */
 #stage.locked { box-shadow: 0 0 0 1px #2c2c33, 0 12px 48px rgba(0, 0, 0, 0.6); }
@@ -46,22 +54,6 @@ html, body {
   transition: opacity 90ms linear;
 }
 #overlay.difference { mix-blend-mode: difference; }
-
-#reticle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 11px;
-  height: 11px;
-  margin: -6px 0 0 -6px;
-  pointer-events: none;
-  opacity: 0.45;
-  background:
-    linear-gradient(currentColor, currentColor) center/100% 1px no-repeat,
-    linear-gradient(currentColor, currentColor) center/1px 100% no-repeat;
-  display: none;
-}
-#reticle.on { display: block; }
 
 /* The working readouts. Hidden unless the model is opened in dev — see
    `dev` in main.ts — because a wall of numbers is the wrong first thing to
@@ -99,41 +91,6 @@ body.dev #hud, body.dev #hint { display: block; }
 }
 #toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* The walking thumb. It is drawn where the thumb lands rather than in a
-   fixed corner, because a fixed one is always in the wrong place for the
-   hand that happens to be holding the phone. */
-.stick {
-  position: absolute;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 120ms linear;
-}
-.stick.on { opacity: 1; }
-.stick::before {
-  content: "";
-  position: absolute;
-  left: -56px;
-  top: -56px;
-  width: 112px;
-  height: 112px;
-  border: 1px solid var(--ink);
-  border-radius: 50%;
-  opacity: 0.3;
-}
-.knob {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--ink);
-  opacity: 0.45;
-  transform: translate(-15px, -15px);
-}
-
 /* A phone. The readout is a working instrument and the phone is not where
    the work happens, so it goes; the controls line stays, because on a device
    with no keys it is the only place the gestures are written down. */
@@ -165,9 +122,10 @@ body.dev #hud, body.dev #hint { display: block; }
 
 
 /* ---------------------------------------------------------------------------
-   The visit.
+   The interface.
 
-   Everything below is drawn over the render and takes no space away from it.
+   Four things, drawn over the render, taking no pixel away from it: the way
+   in, the way out, a line saying what the cursor does here, and the hour.
    The colours are the building's own — warm sandstone ink on a near-black
    scrim — so the interface reads as part of the same object rather than as a
    browser sitting in front of one.
@@ -177,187 +135,115 @@ body.dev #hud, body.dev #hint { display: block; }
   --warm: #f4e6d2;
   --warm-dim: #bda98f;
   --gold: #e0b878;
+  --scrim: rgba(10, 8, 6, 0.55);
 }
 
-.chrome {
-  position: fixed;
+.ui {
+  position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 10;
   font: 13px/1.6 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
 }
-.chrome button { pointer-events: auto; }
+.ui button { pointer-events: auto; }
 
-/* The title card. */
-.intro {
+/* The name of the thing, which says itself once and then stops. */
+.title {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background:
-    radial-gradient(120% 90% at 50% 45%, rgba(10, 8, 6, 0.42), rgba(8, 6, 5, 0.9));
-  backdrop-filter: blur(3px);
-  opacity: 1;
-  transition: opacity 900ms ease, visibility 900ms;
+  left: 30px;
+  top: 26px;
+  max-width: 24rem;
+  transition: opacity 1400ms ease;
 }
-.intro.gone { opacity: 0; visibility: hidden; }
-
-.intro-inner { max-width: 33rem; text-align: center; }
-.intro .kicker {
-  margin: 0 0 18px;
-  color: var(--warm-dim);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-size: 10.5px;
-}
-.intro h1 {
-  margin: 0 0 22px;
+.title.gone { opacity: 0; }
+.title h1 {
+  margin: 0;
   font-family: "Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
   font-weight: 400;
-  font-size: clamp(2.6rem, 8vw, 4.6rem);
-  line-height: 1;
+  font-size: clamp(1.5rem, 3.4vw, 2.3rem);
+  line-height: 1.05;
   letter-spacing: 0.005em;
   color: var(--warm);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.75);
 }
-.intro .blurb {
-  margin: 0 auto 30px;
-  max-width: 27rem;
-  color: #cdbca6;
-  line-height: 1.75;
-}
-.intro .sub { margin: 16px 0 0; color: #8d8073; font-size: 12px; }
-.intro kbd {
-  font: inherit;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid #4a423a;
-  color: var(--warm-dim);
-}
-
-.begin {
-  pointer-events: auto;
-  appearance: none;
-  border: 1px solid rgba(224, 184, 120, 0.55);
-  background: rgba(224, 184, 120, 0.09);
-  color: var(--warm);
-  font: inherit;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.title p {
+  margin: 8px 0 0;
+  color: #b8a894;
   font-size: 11.5px;
-  padding: 13px 30px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
-}
-.begin:hover {
-  background: rgba(224, 184, 120, 0.18);
-  border-color: var(--gold);
-  transform: translateY(-1px);
+  line-height: 1.6;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
 }
 
-/* The caption. Bottom left, over a scrim that only exists where the text is. */
-.caption {
+/* The way in. Pinned to an actual door and followed round the building — see
+   Controls.update, which is why this is positioned from script. */
+.way {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 90px 32px 74px;
-  max-width: 34rem;
-  background: linear-gradient(to top, rgba(8, 6, 5, 0.82), rgba(8, 6, 5, 0));
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 600ms ease, transform 600ms ease;
-}
-.chrome.running .caption { opacity: 1; transform: none; }
-.caption.moving { opacity: 0.15; }
-
-.cap-index {
-  margin: 0 0 8px;
-  color: var(--gold);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  font-size: 10px;
-}
-.cap-title {
-  margin: 0 0 10px;
-  font-family: "Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
-  font-weight: 400;
-  font-size: clamp(1.5rem, 3.2vw, 2.1rem);
-  line-height: 1.15;
-  color: var(--warm);
-}
-.cap-text {
-  margin: 0;
-  color: #c2b3a0;
-  max-width: 30rem;
-  text-wrap: pretty;
-}
-
-/* The rail: previous, the nine stops, next. */
-.rail {
-  position: absolute;
-  right: 28px;
-  bottom: 28px;
+  appearance: none;
   display: flex;
   align-items: center;
-  gap: 14px;
-  opacity: 0;
-  transition: opacity 500ms ease;
-}
-.chrome.running .rail, .chrome.free .rail { opacity: 1; }
-
-.rail > button {
-  appearance: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1px solid rgba(244, 230, 210, 0.22);
-  background: rgba(10, 8, 6, 0.5);
-  color: var(--warm);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
-}
-.rail > button:hover:not(:disabled) {
-  border-color: var(--gold);
-  background: rgba(224, 184, 120, 0.16);
-}
-.rail > button:disabled { opacity: 0.28; cursor: default; }
-
-.dots { display: flex; align-items: center; gap: 7px; }
-.dots .dot {
-  appearance: none;
-  width: 7px;
-  height: 7px;
+  gap: 9px;
   padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(244, 230, 210, 0.4);
-  background: transparent;
+  border: 0;
+  background: none;
+  color: var(--warm);
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: all 220ms ease;
+  transform: translate(-14px, -50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 500ms ease, visibility 500ms;
 }
-.dots .dot.past { background: rgba(244, 230, 210, 0.42); }
-.dots .dot.on {
-  background: var(--gold);
-  border-color: var(--gold);
-  width: 20px;
-  border-radius: 999px;
+.way.on { opacity: 1; visibility: visible; }
+.ui.travelling .way { opacity: 0; visibility: hidden; }
+.way .ring {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--gold);
+  background: rgba(224, 184, 120, 0.13);
 }
-/* Inside and outside are told apart at a glance, so the rail also reads as
-   the shape of the visit: four stops in daylight, five in the dark. */
-.dots .dot[data-part="inside"] { border-style: dashed; }
-
-.resume {
+/* A slow pulse, because a static dot on a static building is furniture and
+   this is the one thing on screen asking to be pressed. */
+.way .ring::after {
+  content: "";
   position: absolute;
-  left: 32px;
-  bottom: 30px;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid var(--gold);
+  animation: pulse 2.8s ease-out infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.85; }
+  70% { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+.way .label {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--scrim);
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.way:hover .ring { background: rgba(224, 184, 120, 0.3); }
+@media (prefers-reduced-motion: reduce) {
+  .way .ring::after { animation: none; opacity: 0.35; }
+}
+
+/* The way out, which only exists once you are in. */
+.out {
+  position: absolute;
+  left: 30px;
+  bottom: 28px;
   appearance: none;
   padding: 9px 18px;
   border-radius: 999px;
   border: 1px solid rgba(244, 230, 210, 0.25);
-  background: rgba(10, 8, 6, 0.55);
+  background: var(--scrim);
   color: var(--warm);
   font: inherit;
   font-size: 11.5px;
@@ -367,30 +253,91 @@ body.dev #hud, body.dev #hint { display: block; }
   visibility: hidden;
   transition: opacity 400ms ease, visibility 400ms, border-color 160ms ease;
 }
-.chrome.free .resume { opacity: 1; visibility: visible; }
-.resume:hover { border-color: var(--gold); }
+.ui.inside .out, .ui.stranded .out { opacity: 1; visibility: visible; }
+.ui.travelling .out { opacity: 0; visibility: hidden; }
+.out:hover { border-color: var(--gold); }
 
-.chrome .hint {
+/* What the cursor does here. It changes when that changes. */
+.hint-line {
   position: absolute;
   left: 50%;
-  bottom: 30px;
+  bottom: 28px;
   transform: translateX(-50%);
   padding: 8px 16px;
   border-radius: 999px;
-  background: rgba(10, 8, 6, 0.6);
+  background: var(--scrim);
   color: #a99a88;
   font-size: 11.5px;
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 700ms ease;
+  transition: opacity 800ms ease;
 }
-.chrome .hint.on { opacity: 1; }
-.chrome .hint strong { color: var(--warm); font-weight: 500; }
+.hint-line.on { opacity: 1; }
+.ui.travelling .hint-line { opacity: 0; }
+.hint-line strong { color: var(--warm); font-weight: 500; }
 
+/* The hour. Nothing about this building's light is authored, so this is not a
+   slideshow control — it recomputes the sun over Barcelona and relights the
+   whole model, which is why it is worth the corner it takes up. */
+.clock {
+  position: absolute;
+  right: 30px;
+  bottom: 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px 7px 16px;
+  border-radius: 999px;
+  background: var(--scrim);
+  pointer-events: auto;
+}
+.clock .hour {
+  color: var(--warm);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  min-width: 3.4em;
+}
+.clock input[type="range"] {
+  appearance: none;
+  width: 150px;
+  height: 18px;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+}
+.clock input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: rgba(244, 230, 210, 0.3);
+}
+.clock input[type="range"]::-moz-range-track {
+  height: 1px;
+  background: rgba(244, 230, 210, 0.3);
+}
+.clock input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.clock input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.clock input[type="range"]:focus-visible { outline: 1px solid var(--gold); outline-offset: 4px; }
+
+/* A phone. The name gets out of the way sooner, the hour keeps its corner,
+   and the line of controls goes: on a device with no keys and no cursor the
+   gestures are the obvious ones, and there is no room to say so. */
 @media (max-width: 820px) {
-  .caption { padding: 70px 20px 86px; max-width: none; }
-  .cap-text { font-size: 12.5px; }
-  .rail { right: 50%; transform: translateX(50%); bottom: 20px; gap: 10px; }
-  .resume { left: 50%; transform: translateX(-50%); bottom: 74px; }
-  .chrome .hint { display: none; }
+  .title { left: 18px; top: 18px; }
+  .hint-line { display: none; }
+  .out { left: 18px; bottom: 74px; }
+  .clock { right: 18px; left: 18px; bottom: 20px; justify-content: space-between; }
+  .clock input[type="range"] { flex: 1; width: auto; }
 }

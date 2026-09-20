@@ -69,6 +69,36 @@ export const defaultCity: CityParams = {
   trees: true,
 }
 
+/**
+ * The temple's own cell, and the three fronts that are met across open
+ * ground. +x is the Nativity side and −x the Passion, which is how towers.ts
+ * lays the eighteen out.
+ *
+ * The Glory esplanade is the one that had to be argued for: the front that is
+ * not built yet is the one that needs the most room, because it is designed
+ * to be met from a distance, and leaving its block standing put a six-storey
+ * wall fourteen metres off the main door.
+ */
+const TEMPLE = '0,0'
+const GAUDI = '1,0'
+const PLACA = '-1,0'
+const ESPLANADE = '0,1'
+
+/**
+ * Which cells of the grid have nothing standing on them.
+ *
+ * Published because the camera needs it as much as the geometry does: an
+ * orbit that comes down to street level has to know where there is street to
+ * come down to, or it parks the viewer inside somebody's flat. See
+ * `Surroundings` in camera/viewer.ts.
+ */
+export const OPEN_CELLS: ReadonlySet<string> = new Set([TEMPLE, GAUDI, PLACA, ESPLANADE])
+
+/** The top of the tallest thing on a block, corner caps included. */
+export function cityRoofline(p: CityParams): number {
+  return p.storeysMax * p.storey + p.storey * 2
+}
+
 export interface City {
   group: THREE.Group
   dispose(): void
@@ -249,23 +279,6 @@ export function buildCity(
   const random = rng(0x5a6f1a)
   const [cx, cz] = params.centre
   const reach = params.pitch * (params.rings + 0.5)
-
-  // The temple's own cell, and the two parks facing its finished fronts.
-  // +x is the Nativity side and −x the Passion, which is how towers.ts lays
-  // the eighteen out.
-  const TEMPLE = '0,0'
-  const GAUDI = '1,0'
-  const PLACA = '-1,0'
-  /**
-   * The Glory esplanade.
-   *
-   * The front that is not built yet is the one that needs the most room: the
-   * Glory façade is designed to be met from a distance, across a forecourt
-   * that would take out the block in front of it. Leaving that block standing
-   * put a six-storey wall fourteen metres off the main door, and the one view
-   * the whole composition is aimed at was a view of somebody's render.
-   */
-  const ESPLANADE = '0,1'
 
   const blocks: THREE.BufferGeometry[] = []
   const parks: THREE.BufferGeometry[] = []

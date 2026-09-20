@@ -6,21 +6,21 @@ import { defaultShafts } from './render/shafts.ts'
 import { columnMetrics } from './geometry/column.ts'
 import { buildChurch, defaultChurch, type Church, type ChurchParams } from './plan/church.ts'
 import { tunePaving } from './plan/floor.ts'
+import { OPEN_CELLS, cityRoofline, defaultCity } from './plan/city.ts'
 import {
   buildHyperboloidRulings,
   buildHyperboloidSurface,
   defaultHyperboloid,
   type HyperboloidParams,
 } from './geometry/hyperboloid.ts'
-import { FreeCamera } from './camera/freecam.ts'
-import { TouchControls } from './camera/touch.ts'
+import { Viewer } from './camera/viewer.ts'
+import type { CameraRig } from './camera/rig.ts'
 import { PhotoOverlay } from './dev/overlay.ts'
 import { censusFrame, censusLight, type FrameCensus, type LightCensus } from './dev/probe.ts'
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
 import { ShareLink } from './share.ts'
-import { Journey } from './ui/journey.ts'
-import { Chrome } from './ui/chrome.ts'
+import { Controls } from './ui/controls.ts'
 import {
   BUILDING_BEARING_DEG,
   barcelonaTime,
@@ -35,7 +35,6 @@ const canvas = document.querySelector<HTMLCanvasElement>('#view')!
 const overlayImg = document.querySelector<HTMLImageElement>('#overlay')!
 const stageEl = document.querySelector<HTMLDivElement>('#stage')!
 const hudEl = document.querySelector<HTMLDivElement>('#hud')!
-const reticle = document.querySelector<HTMLDivElement>('#reticle')!
 
 /**
  * Whether this is the instrument or the building.
@@ -62,9 +61,13 @@ const FUNNEL_BASE_HEIGHT = 2.6
 const FUNNEL_OFFSET_X = 16
 
 const stage = createStage(canvas)
-const cam = new FreeCamera(stage.camera, canvas)
-// Bound to the stage rather than the canvas, so the stick can be drawn in it.
-new TouchControls(stageEl, cam)
+/**
+ * The camera, and the two ways of being with a building it offers — see
+ * camera/viewer.ts. Bound to the stage rather than the canvas so that screen
+ * picking and the on-screen markers share one set of coordinates.
+ */
+const viewer = new Viewer(stage.camera, stageEl)
+const cam = viewer.rig
 const overlay = new PhotoOverlay(overlayImg, document.body)
 
 const plan: ChurchParams = structuredClone(defaultChurch)
@@ -81,8 +84,11 @@ const view: ViewFlags = {
   detailRange: 1,
 }
 const render: RenderFlags = {
-  // The visit sets this per stop — see OUTSIDE_EXPOSURE / INSIDE_EXPOSURE in
-  // ui/journey.ts. This is only what the free camera starts on.
+  // The base. What actually reaches the renderer is this times the viewer's
+  // own adaptation, which opens about two thirds of a stop as you cross the
+  // threshold — see INSIDE_STOP in camera/viewer.ts. Outside is a sunlit wall
+  // and inside is a room lit through coloured glass, and one number has never
+  // held both.
   exposure: 0.8,
   // Low, and it stays low — the probe is Barcelona sky, so more of it is more
   // blue, and past about 0.5 the whole room goes pale and flat as everything
@@ -134,13 +140,21 @@ const render: RenderFlags = {
 }
 
 /**
- * Late September, four in the afternoon — the hour the sun stands square on
- * the Passion wall at an altitude low enough to throw the shafts right across
- * the bay. Found by scanning, not guessed.
+ * Midsummer, mid-morning.
+ *
+ * The hour was a constant while the visit authored one per stop. It is now a
+ * control — the scrubber at the bottom of the screen, which is the one thing
+ * about this building worth handing somebody outright, because nothing here
+ * is authored and every hour of the day is a different building.
+ *
+ * Mid-morning in June is where it opens because that is when the sun is on
+ * the Nativity side, which is the front the camera opens on. Four in the
+ * afternoon, on the far end of the same scrubber, is the hour it stands
+ * square on the Passion glazing and throws the shafts across the nave.
  */
 const sun: SunFlags = {
-  dayOfYear: 262,
-  hour: 16,
+  dayOfYear: 172,
+  hour: 10,
   bearingDeg: BUILDING_BEARING_DEG,
   intensity: 3,
   skyBrightness: 1,
@@ -199,8 +213,28 @@ function rebuildChurch(): void {
   // what it occupies rather than the scene graph being asked.
   // The roof over a room is the vault, not the tower standing on it.
   stage.setModelBounds(built.bounds, built.ceiling + plan.shell.parapet + 3)
-  cam.envelope = built.envelope
+
+  // Where the orbit turns, how close it may come, where the doors are and
+  // where the pavement is. All of it is read off what was actually built,
+  // because a plan number can change any of it.
+  viewer.fit(built.bounds, built.envelope, plan.floor.show ? -plan.floor.podium : 0)
 }
+
+/**
+ * The Eixample, as far as the camera is concerned.
+ *
+ * The blocks are built by the stage rather than by the plan — see
+ * render/scene.ts — but an orbit that can come down to street level has to
+ * know which of them are there, or the first drag downward parks the viewer
+ * inside somebody's flat.
+ */
+viewer.setSurroundings({
+  pitch: defaultCity.pitch,
+  centre: defaultCity.centre,
+  half: defaultCity.side / 2,
+  open: OPEN_CELLS,
+  roofs: cityRoofline(defaultCity),
+})
 
 function rebuild(): void {
   rebuildChurch()
@@ -228,7 +262,7 @@ function applyView(): void {
 }
 
 function applyRender(): void {
-  stage.setExposure(render.exposure)
+  stage.setExposure(render.exposure * viewer.eyeStop)
   stage.scene.environmentIntensity = render.environment
   stage.glass.uniforms.uGlow.value = render.glassGain
   stage.bounce.intensity = render.bounce
@@ -274,7 +308,7 @@ function layout(): void {
   stageEl.style.height = `${h}px`
 
   stage.resize(w, h)
-  cam.setViewportSize(w, h)
+  viewer.setViewportSize(w, h)
   cam.refresh()
 }
 
@@ -283,7 +317,7 @@ window.addEventListener('resize', layout)
 
 function goTo(index: number): void {
   const viewpoint = VIEWPOINTS[index]
-  if (viewpoint) applyViewpoint(viewpoint, cam, sun, applySun)
+  if (viewpoint) applyViewpoint(viewpoint, viewer, sun, applySun)
 }
 
 /**
@@ -294,13 +328,13 @@ function goTo(index: number): void {
  * see share.ts.
  */
 const link = new ShareLink(
-  () => ({ camera: cam.getState(), day: sun.dayOfYear, hour: sun.hour }),
+  () => ({ camera: viewer.getState(), day: sun.dayOfYear, hour: sun.hour }),
   (moment) => {
-    cam.setState(moment.camera)
+    viewer.setState(moment.camera)
     sun.dayOfYear = moment.day
     sun.hour = moment.hour
     applySun()
-    cam.refresh()
+    controls.showHour()
     panel?.refresh()
   },
 )
@@ -312,7 +346,7 @@ let panel: Panel | null = null
 /** Build the instrument the first time it is actually asked for. */
 function openPanel(): Panel {
   panel ??= buildPanel({
-    plan, hyper, view, render, sun, cam, overlay,
+    plan, hyper, view, render, sun, cam: viewer, overlay,
     rebuild, applyView, applyRender, applySun, goTo,
     copyLink: () => void link.copy(),
   })
@@ -332,70 +366,41 @@ function setDev(on: boolean): void {
 }
 
 /**
- * The visit.
+ * The interface.
  *
- * `goTo` above is the harness's way round the building — thirteen frames in
- * whatever order a regression wants them. This is a viewer's way round it,
- * which is a different thing and has to be in an order: across the plaza,
- * up to the front, onto the terraces, through the door, and then five stops
- * inside. See ui/journey.ts.
+ * There used to be a guided visit here — nine authored stops, a rail of dots,
+ * a title card to dismiss before the building appeared. It is gone. What it
+ * asked of a viewer was that they follow it, and what a person actually wants
+ * from a cathedral is to walk round the outside of it and then go in.
+ *
+ * So the app has two states and one door between them, and the interface is
+ * whatever those two states cannot say for themselves: where the door is,
+ * how to get back out, what the cursor does here, and what time it is. See
+ * ui/controls.ts.
  */
-const journey = new Journey(cam, sun, applySun, render, applyRender)
-const chrome = new Chrome(journey, document.body)
-journey.onArrive = (moment, index) => {
-  chrome.arrive(moment, index)
-  chrome.setTravelling(false)
-}
-journey.onDepart = (moment, index) => chrome.depart(moment, index)
+const controls = new Controls(viewer, stageEl, sun, applySun)
 
 /**
- * Any movement of the viewer's own ends the tour where it stands.
+ * The keys, which are all seconds to the mouse.
  *
- * Stopping the flight is not enough on its own — the caption would go on
- * describing a place the camera has walked away from — so the chrome is told
- * as well, and offers the visit back rather than resuming it uninvited.
+ * Escape is the only one worth writing down, because it is the only one that
+ * does something a viewer might otherwise not find: it backs you out. Inside,
+ * that means walking out through the nearest door; outside, it means going
+ * back to the frame the app opened on, which is where somebody who has spun
+ * the building into a corner wants to be.
  */
-const MOVEMENT = new Set([
-  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC',
-  'ShiftLeft', 'ShiftRight',
-])
-/**
- * Looking is not leaving.
- *
- * A click used to end the visit, and a click is also the only way to capture
- * the pointer — so the first thing a viewer does on arriving at a stop, which
- * is look around it, silently threw away the tour they had just started. The
- * caption stayed up describing a place they were still standing in, and the
- * only clue was that the arrows had stopped meaning anything.
- *
- * Turning your head at a viewpoint is part of being at the viewpoint. What
- * ends the visit is going somewhere: the movement keys, or the wheel, which
- * is the speed control and therefore an intention to fly.
- */
-canvas.addEventListener('wheel', () => chrome.takeOver(), { passive: true })
-
-// Number and letter keys jump to the curated views, which is how the same
-// frames get compared after a change. The digits ran out at ten, and phase 4
-// needed the outside of the building in the harness.
 window.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return
   // A panel field has the focus: these are characters, not shortcuts.
   if (event.target instanceof HTMLInputElement) return
 
-  if (MOVEMENT.has(event.code)) {
-    chrome.takeOver()
-    return
-  }
   switch (event.key) {
-    case 'ArrowRight':
-      journey.next()
+    case 'Escape':
+      if (viewer.mode === 'inhabit') viewer.stepOut()
+      else viewer.home()
       return
-    case 'ArrowLeft':
-      journey.prev()
-      return
-    case 'f':
-    case 'F':
-      chrome.explore()
+    case 'Enter':
+      if (viewer.mode === 'regard') viewer.enter()
       return
     case 'p':
     case 'P':
@@ -405,15 +410,10 @@ window.addEventListener('keydown', (event) => {
     case 'L':
       void link.copy()
       return
-    case 'Enter':
-      chrome.begin()
-      return
   }
 
-  // The curated views are the regression harness, not the visit: they move
-  // the camera without telling the chrome, so the caption would go on
-  // describing somewhere else. They stay on the keys they have always been
-  // on, behind the same switch as the panel.
+  // The curated views are the regression harness rather than anything a
+  // viewer needs, so they stay behind the same switch as the panel.
   if (!dev) return
   const index = VIEWPOINTS.findIndex((v) => v.key === event.key)
   if (index >= 0) goTo(index)
@@ -424,20 +424,17 @@ applyRender()
 applySun()
 setDev(dev)
 
-// A link decides where we open — someone was sent a moment and should land
-// in it, not in a title card. Otherwise the title card, and the visit.
-if (link.restore()) {
-  chrome.explore()
-} else {
-  journey.jump(0)
-}
+// A link decides where we open — someone was sent a moment and should land in
+// it. Otherwise the building, from across the plaza, straight away.
+if (link.restore()) controls.showHour()
+else viewer.home()
 
 // Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
 declare global {
   interface Window {
     harness: {
-      cam: FreeCamera
+      cam: CameraRig
       overlay: PhotoOverlay
       plan: ChurchParams
       built: () => Church | null
@@ -451,8 +448,9 @@ declare global {
       applySun: () => void
       applyRender: () => void
       goTo: (index: number) => void
+      viewer: Viewer
+      controls: Controls
       /** What is in this frame, by surface — see dev/probe.ts. */
-      journey: Journey
       census: () => FrameCensus | null
       /** What the light is doing — see dev/probe.ts. */
       light: () => LightCensus
@@ -500,7 +498,8 @@ window.harness = {
   applySun,
   applyRender,
   goTo,
-  journey,
+  viewer,
+  controls,
   census: () => (built ? censusFrame(stage, [built.field.group]) : null),
   light: () => censusLight(stage),
   shot,
@@ -513,13 +512,12 @@ function frame(): void {
   requestAnimationFrame(frame)
   const dt = Math.min(clock.getDelta(), 0.1)
 
-  cam.update(dt)
-  // After the camera's own update, so a frame in which both run ends with the
-  // flight's answer rather than with whatever the idle walker did under it.
-  journey.update(dt)
+  viewer.update(dt)
+  // The pupil, which the viewer moves as it crosses the threshold, and which
+  // the panel's own exposure is the base of.
+  stage.setExposure(render.exposure * viewer.eyeStop)
   stage.render()
-
-  reticle.classList.toggle('on', cam.isLocked)
+  controls.update()
 
   const now = performance.now()
   link.update(now)
@@ -547,8 +545,9 @@ function frame(): void {
       `pos   ${p.x.toFixed(2)}  ${p.y.toFixed(2)}  ${p.z.toFixed(2)}`,
       `look  yaw ${deg(cam.yaw)}°   pitch ${deg(cam.pitch)}°`,
       `lens  ${stage.camera.fov.toFixed(1)}° fov   shift ${(cam.shiftCorrection * 100).toFixed(0)}%`,
-      `move  ${modeLabel()}  ${cam.speed.toFixed(2)} m/s fly  ` +
-        `${cam.walkSpeed.toFixed(2)} m/s walk`,
+      `move  ${viewer.mode}${viewer.travelling ? ' (travelling)' : ''}  ` +
+        `${viewer.height.toFixed(1)} m above the floor  ` +
+        `eye ${(render.exposure * viewer.eyeStop).toFixed(2)}`,
       `mesh  ${Math.round(tris).toLocaleString()} tris  ${draws} draws  ` +
         `${field.pieces} pieces  ${(1 / Math.max(dt, 1e-4)).toFixed(0)} fps`,
       `trunk order ${cm.order}  ${cm.height} m  ⌀ ${cm.innerDiameter.toFixed(1)} m  ` +
@@ -601,13 +600,6 @@ function towerRange(church: Church | null): string {
   const tops = (church?.towers ?? []).map((t) => t.top)
   if (tops.length === 0) return 'none'
   return `${Math.min(...tops).toFixed(1)}–${Math.max(...tops).toFixed(1)} m`
-}
-
-/** What the camera is currently doing, and how far through it is. */
-function modeLabel(): string {
-  const mode = cam.mode
-  if (mode === 'settling') return `settling ${(cam.grounded * 100).toFixed(0)}%`
-  return mode === 'walk' ? 'walking' : 'flying'
 }
 
 function deg(radians: number): string {

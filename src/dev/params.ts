@@ -1,6 +1,6 @@
 import { Pane } from 'tweakpane'
 import type { FolderApi } from 'tweakpane'
-import type { FreeCamera } from '../camera/freecam.ts'
+import type { Viewer } from '../camera/viewer.ts'
 import type { ChurchParams } from '../plan/church.ts'
 import type { HyperboloidParams, RulingFamily } from '../geometry/hyperboloid.ts'
 import type { PhotoOverlay } from './overlay.ts'
@@ -61,7 +61,7 @@ export interface ParamContext {
   view: ViewFlags
   render: RenderFlags
   sun: SunFlags
-  cam: FreeCamera
+  cam: Viewer
   overlay: PhotoOverlay
   /** Regenerate geometry from `hyper` and re-apply `view`. */
   rebuild(): void
@@ -282,18 +282,18 @@ export function buildPanel(ctx: ParamContext): Pane {
   view.addBinding(ctx.view, 'showGround', { label: 'ground' })
   view.on('change', () => ctx.rebuild())
 
-  const cam = pane.addFolder({ title: 'Camera' })
-  cam.addBinding(ctx.cam.camera, 'fov', { min: 12, max: 100, step: 0.1 })
-    .on('change', () => ctx.cam.refresh())
-  cam.addBinding(ctx.cam, 'shiftCorrection', {
+  // The lens, and only the lens. How the camera moves is no longer a set of
+  // numbers to tune — it is two behaviours that follow from which side of the
+  // wall you are on, and neither has a dial worth putting here.
+  const cam = pane.addFolder({ title: 'Lens' })
+  cam.addBinding(ctx.cam.rig.camera, 'fov', { min: 12, max: 100, step: 0.1 })
+    .on('change', () => ctx.cam.rig.refresh())
+  cam.addBinding(ctx.cam.rig, 'shiftCorrection', {
     min: 0,
     max: 1,
     step: 0.01,
     label: 'vertical correction',
-  }).on('change', () => ctx.cam.refresh())
-  cam.addBinding(ctx.cam, 'speed', { min: 0.15, max: 400, step: 0.05, label: 'fly m/s' })
-  cam.addBinding(ctx.cam, 'walkSpeed', { min: 0.4, max: 4, step: 0.05, label: 'walk m/s' })
-  cam.addBinding(ctx.cam, 'grounding', { label: 'ground indoors' })
+  }).on('change', () => ctx.cam.rig.refresh())
   cam.addButton({ title: 'Copy camera JSON' }).on('click', () => {
     void copy(JSON.stringify(ctx.cam.getState(), null, 2))
   })

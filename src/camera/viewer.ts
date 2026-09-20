@@ -1,0 +1,1261 @@
+import * as THREE from 'three'
+import { CameraRig, type CameraState } from './rig.ts'
+import { BODY_RADIUS, EYE_HEIGHT, type ChurchEnvelope, type Doorway } from './envelope.ts'
+
+/**
+ * Two ways of being with a building.
+ *
+ * Outside, the building is the subject and you are an eye going round it.
+ * Inside, the room is around you and you are standing in it. Those are not
+ * two settings of one camera; they are two different relationships, and every
+ * control means something different in each — which is why a single free-fly
+ * camera on WASD and a captured pointer served both of them badly. It asked
+ * somebody who came to look at a cathedral to fly it like a spaceship, it let
+ * them end up lost in the sky or stuck inside a pier, and it hid the whole of
+ * the interaction behind keys they had no reason to know were there.
+ *
+ * So there are two, and the app always knows which one you are in:
+ *
+ *  - **Regarding.** An orbit. The cursor turns the building, the wheel moves
+ *    you in and out, and the geometry of it guarantees you can neither sink
+ *    through the pavement nor end up inside the stone. There is nothing to
+ *    learn: it is the gesture every 3D object on the web has used for twenty
+ *    years, and it is the one a trackpad is shaped for.
+ *  - **Inhabiting.** A walk. The cursor looks, a click on the floor takes you
+ *    there, and the keys are an alternative rather than the price of entry.
+ *
+ * And a door between them in each direction, because a cathedral has doors.
+ */
+export type Relation = 'regard' | 'inhabit'
+
+/** Walking pace. Purposeful — this nave is ninety metres. */
+const WALK_SPEED = 2.8
+/** What shift does to it. */
+const RUN = 2.4
+/** Free flight outside, for the viewer who would rather fly than orbit. */
+const FLY_SPEED = 30
+/** How fast the held height moves, in metres a second. */
+const LIFT_RATE = 9
+/** Radians per pixel when looking around on foot. */
+const LOOK_GAIN = 0.0026
+/** A drag right across the window, in turns and in elevation. */
+const ORBIT_SWEEP = Math.PI * 1.5
+const ORBIT_TILT = Math.PI * 0.9
+/** Seconds for the frame to catch up with the cursor. */
+const ORBIT_DAMPING = 0.09
+
+/**
+ * The narrowest the frame may be across.
+ *
+ * A vertical field is the wrong thing to hold fixed on a phone held
+ * upright. At 375 by 812 a 58 degree vertical field is 29 across, and this
+ * building is 31 degrees wide from the far side of the plaza: the one device
+ * whose shape suits a cathedral best would have shown it with both transepts
+ * out of frame. So the vertical field opens until the horizontal one is at
+ * least this, and on any landscape window it never binds.
+ */
+const MIN_ACROSS = THREE.MathUtils.degToRad(36)
+
+/** The lens each relation wants. Wide inside, because rooms are. */
+const REGARD_FOV = 58
+const REGARD_SHIFT = 0.45
+const INHABIT_FOV = 74
+/**
+ * Less than the photographs use, and for a reason that is not photographic:
+ * a shifted frustum lifts the bottom of the frame as well as straightening
+ * the columns, and the bottom of the frame is where the floor is. Past about
+ * 0.6 a camera tilted up at the vault has no floor in it at all, and a floor
+ * you cannot see is a floor you cannot click.
+ */
+const INHABIT_SHIFT = 0.5
+
+/**
+ * What the eye is open to, as a multiple of the base exposure.
+ *
+ * Outside is a sunlit wall, inside is a room lit through coloured glass, and
+ * no one setting has ever held both. This used to be authored per stop on a
+ * guided tour, which meant it was only ever right for somebody following the
+ * tour. It is better as a consequence of where you are standing: cross the
+ * threshold and the pupil widens over about a second, which is what an eye
+ * does and what nobody has to be told about.
+ */
+const INSIDE_STOP = 1.25
+const OUTSIDE_STOP = 1
+/** Seconds for the pupil to catch up. */
+const ADAPT = 0.9
+
+/** How close the orbit lets you come to the stone. */
+const MASSIF_CLEAR = 4
+const MIN_DISTANCE = 4
+const MAX_DISTANCE = 600
+/**
+ * How far away a picked point may be and still mean anything.
+ *
+ * A ray a hair below level meets the ground thirty kilometres out, and a turn
+ * centred thirty kilometres away is not a turn, it is a translation: one drag
+ * and the camera is in the sea. Past this the answer is "nothing in
+ * particular", which the callers already know what to do with.
+ */
+const PICK_REACH = 1200
+/** Never orbit under the pavement, and never quite to the pole. */
+const MIN_EYE = 2.2
+const MAX_ELEVATION = THREE.MathUtils.degToRad(78)
+const MIN_ELEVATION = THREE.MathUtils.degToRad(-85)
+
+/** Where a flight pauses outside a door before going in. */
+const DOOR_STANDOFF = 16
+/** And how far in it lands: clear of the first pair of columns, under the
+ *  canopy rather than in the doorway looking at it. */
+const DOOR_ENTRY = 14
+
+/**
+ * A rough solid standing in for the building.
+ *
+ * Two questions want it — how close may the orbit come, and what is under the
+ * cursor — and both want a cheap answer rather than an exact one. An
+ * ellipsoid round the bounding box is wrong by a few metres at the corners of
+ * a Latin cross, and is never wrong in the direction that matters, which is
+ * letting the camera inside the stone. A raycast against a million instanced
+ * triangles is the wrong thing to ask on every mouse-down for an answer only
+ * used to decide what to turn around.
+ */
+interface Massif {
+  centre: THREE.Vector3
+  radii: THREE.Vector3
+}
+
+/**
+ * The city the building stands in, as far as the camera is concerned.
+ *
+ * An orbit that comes down to street level is standing in the Eixample, and
+ * the Eixample is six storeys of it — so without this the first drag downward
+ * parks the viewer inside somebody's flat and the screen goes the colour of
+ * stucco. The blocks are a grid with four cells left open (the temple's own,
+ * the two parks facing its finished fronts, and the Glory esplanade), which
+ * is all the shape the camera needs: over an open cell you may stand on the
+ * pavement, and everywhere else you are above the roofs.
+ */
+export interface Surroundings {
+  /** Block centre to block centre. */
+  pitch: number
+  centre: [number, number]
+  /** Half the side of a block's footprint. */
+  half: number
+  /** Cells with nothing built on them, keyed `i,j`. */
+  open: ReadonlySet<string>
+  /** How high the rest of them stand. */
+  roofs: number
+}
+
+/**
+ * How far inside an open cell the pavement is fully available.
+ *
+ * Wide, and that is the point. This is the ramp the camera climbs as a low
+ * orbit swings out of the park and over the roofs of the Eixample, and a
+ * short one is a lift rather than a rise: thirty metres of height over five
+ * of travel reads as the camera being snatched. Half a block gives it the
+ * length of a swoop.
+ */
+const CLEARING_FEATHER = 26
+
+interface Aim {
+  yaw: number
+  pitch: number
+  fov: number
+  shift: number
+}
+
+/** One move of a flight: where it goes, where it ends up looking, how long. */
+interface Leg {
+  from: THREE.Vector3
+  to: THREE.Vector3
+  aimFrom: Aim
+  aimTo: Aim
+  /** Shortest way round, precomputed, so a flight never turns the long way. */
+  turn: number
+  duration: number
+}
+
+/** Smootherstep: zero first *and* second derivative at both ends. */
+function ease(t: number): number {
+  const x = THREE.MathUtils.clamp(t, 0, 1)
+  return x * x * x * (x * (x * 6 - 15) + 10)
+}
+
+/** The yaw and the pitch of a direction, in this camera's own terms. */
+function bearing(d: THREE.Vector3): number {
+  return Math.atan2(-d.x, -d.z)
+}
+
+function rise(d: THREE.Vector3): number {
+  const length = d.length()
+  return length < 1e-8 ? 0 : Math.asin(THREE.MathUtils.clamp(d.y / length, -1, 1))
+}
+
+function shortestTurn(from: number, to: number): number {
+  let d = (to - from) % (Math.PI * 2)
+  if (d > Math.PI) d -= Math.PI * 2
+  if (d < -Math.PI) d += Math.PI * 2
+  return d
+}
+
+export class Viewer {
+  readonly rig: CameraRig
+
+  /** What the building is, as far as movement is concerned. */
+  envelope: ChurchEnvelope | null = null
+
+  /** Told when the relation changes, and when a flight starts or lands. */
+  onRelation: ((relation: Relation) => void) | null = null
+  onTravel: ((travelling: boolean) => void) | null = null
+
+  /** Multiplier on the base exposure — see INSIDE_STOP. */
+  eyeStop = OUTSIDE_STOP
+
+  private relation: Relation = 'regard'
+  /** The vertical field before the viewport's shape has its say. */
+  private baseFov = REGARD_FOV
+
+  // Regarding.
+  /**
+   * What the orbit is currently turning around, which is whatever was under
+   * the cursor when the drag began — and `heart`, which is the building, and
+   * is where anything meaning "the whole thing" turns around instead.
+   * Keeping them apart matters: without it, going home means going back to
+   * the last thing you happened to click on.
+   */
+  private readonly pivot = new THREE.Vector3(0, 60, -19)
+  private readonly heart = new THREE.Vector3(0, 60, -19)
+  /**
+   * Turn and zoom the cursor has asked for and the frame has not yet given.
+   *
+   * The whole of the smoothing: a fraction of it is taken each frame, so a
+   * fast drag and a slow one of the same length end in the same place, and
+   * letting go settles rather than stopping dead. No velocity to estimate, no
+   * flick to measure, and no inertia that depends on how often the mouse
+   * happens to report itself.
+   */
+  private readonly pending = { azimuth: 0, elevation: 0, zoom: 0 }
+  private massif: Massif = {
+    centre: new THREE.Vector3(0, 87, -19),
+    radii: new THREE.Vector3(46, 92, 66),
+  }
+
+  // Inhabiting.
+  private readonly velocity = new THREE.Vector3()
+  /** Height held above the floor by the lift keys, and where it is heading. */
+  private lift = 0
+  private liftWanted = 0
+  /** Where a click on the floor is taking us, if anywhere. */
+  private goal: THREE.Vector3 | null = null
+  private goalSpeed = 0
+
+  // Travelling.
+  private legs: Leg[] = []
+  private legAt = 0
+
+  private readonly keys = new Set<string>()
+  /** Live pointers, so one finger and two mean different things. */
+  private readonly pointers = new Map<number, { x: number; y: number; moved: number }>()
+  private pinch = 0
+  private plazaY = 0
+  private surroundings: Surroundings | null = null
+
+  private readonly ray = new THREE.Raycaster()
+  private readonly dir = new THREE.Vector3()
+  private readonly offset = new THREE.Vector3()
+  private readonly step = new THREE.Vector3()
+  private readonly sideways = new THREE.Vector3()
+  private readonly push = new THREE.Vector3()
+  /** The last place the walker stood that was certainly in the room. */
+  private readonly held = new THREE.Vector3()
+  private holding = false
+  private readonly wasFacing = new THREE.Vector3()
+
+  constructor(
+    camera: THREE.PerspectiveCamera,
+    private readonly element: HTMLElement,
+  ) {
+    this.rig = new CameraRig(camera)
+    this.bind()
+  }
+
+  get mode(): Relation {
+    return this.relation
+  }
+
+  get travelling(): boolean {
+    return this.legs.length > 0
+  }
+
+  /** Whether the camera is in the room rather than out on the plaza. */
+  get indoors(): boolean {
+    const e = this.envelope
+    if (!e) return false
+    const p = this.rig.position
+    return e.inside(p.x, p.z) && p.y < e.ceiling
+  }
+
+  /** How high the walker is holding themselves above the floor. */
+  get height(): number {
+    return this.lift
+  }
+
+  setViewportSize(width: number, height: number): void {
+    this.rig.setViewportSize(width, height)
+    this.rig.fov = this.widen(this.baseFov)
+  }
+
+  /** The vertical field that gives this viewport at least MIN_ACROSS across. */
+  private widen(base: number): number {
+    const { width, height } = this.rig.viewport
+    const aspect = width / Math.max(1, height)
+    if (aspect >= 1) return base
+    const needed = 2 * Math.atan(Math.tan(MIN_ACROSS / 2) / aspect)
+    return THREE.MathUtils.clamp(
+      Math.max(base, THREE.MathUtils.radToDeg(needed)),
+      base,
+      88,
+    )
+  }
+
+  /**
+   * Fit the orbit and its guard rail to what has actually been built.
+   *
+   * The model is rebuilt whenever a plan number changes, and it can change
+   * size when it does, so none of this is a constant.
+   */
+  fit(bounds: THREE.Box3, envelope: ChurchEnvelope, plazaY: number): void {
+    this.envelope = envelope
+    this.plazaY = plazaY
+    const size = bounds.getSize(new THREE.Vector3())
+    const centre = bounds.getCenter(new THREE.Vector3())
+    this.massif = {
+      centre: new THREE.Vector3(centre.x, bounds.max.y / 2, centre.z),
+      radii: new THREE.Vector3(size.x * 0.55, bounds.max.y * 0.53, size.z * 0.54),
+    }
+    // A third of the way up the towers, which is about where the eye goes.
+    this.heart.set(centre.x, Math.max(bounds.max.y * 0.36, plazaY + 1), centre.z)
+    this.pivot.copy(this.heart)
+  }
+
+  /** What is built around the building — see `Surroundings`. */
+  setSurroundings(surroundings: Surroundings): void {
+    this.surroundings = surroundings
+  }
+
+  /**
+   * How low the camera may come where it currently stands.
+   *
+   * Feathered over the last few metres inside an open cell rather than
+   * stepped at its edge, so a low orbit swinging out of the park rises over
+   * the roofs before it reaches them instead of passing through a wall and
+   * being shoved out the other side.
+   */
+  private lowestAt(x: number, z: number): number {
+    const pavement = this.plazaY + MIN_EYE
+    const s = this.surroundings
+    if (!s) return pavement
+    const i = Math.round((x - s.centre[0]) / s.pitch)
+    const j = Math.round((z - s.centre[1]) / s.pitch)
+    if (!s.open.has(`${i},${j}`)) return s.roofs
+    const inset = Math.min(
+      s.half - Math.abs(x - (s.centre[0] + i * s.pitch)),
+      s.half - Math.abs(z - (s.centre[1] + j * s.pitch)),
+    )
+    const t = THREE.MathUtils.clamp(inset / CLEARING_FEATHER, 0, 1)
+    return THREE.MathUtils.lerp(s.roofs, pavement, t)
+  }
+
+  /**
+   * The opening frame.
+   *
+   * Across the pond in Plaça de Gaudí, which is the corner every photograph
+   * of this building is taken from and — since the Eixample went in — a place
+   * there is actually ground to stand on. Not an orbit angle: a position, in
+   * a named open block, with the orbit read off it afterwards. A building in
+   * a city has only a few places you can see it whole from, and none of them
+   * is a number of degrees.
+   */
+  home(): void {
+    this.legs = []
+    this.setRelation('regard')
+    const s = this.surroundings
+    const park = s
+      ? new THREE.Vector3(s.centre[0] + s.pitch * 1.1, 0, s.centre[1] + s.half * 0.5)
+      : new THREE.Vector3(this.heart.x + 150, 0, this.heart.z + 40)
+    park.y = this.plazaY + 3.4
+    this.rig.position.copy(park)
+    this.rig.fov = this.widen(REGARD_FOV)
+    this.rig.shiftCorrection = REGARD_SHIFT
+    this.eyeStop = OUTSIDE_STOP
+    this.pending.azimuth = 0
+    this.pending.elevation = 0
+    this.pending.zoom = 0
+    this.baseFov = REGARD_FOV
+    this.pivot.copy(this.heart)
+    this.rig.lookAt(this.heart)
+    this.hold(0, true)
+    this.rig.refresh()
+  }
+
+  // ---------------------------------------------------------------- doors ---
+
+  /**
+   * The door to offer, which is the one you are looking at.
+   *
+   * Offering the nearest would be wrong: the nearest door to somebody round
+   * the back of the apse is a door in a wall they cannot see, and flying them
+   * to it means flying them through the building. A door has to face you to
+   * be worth offering — and once it does, the flight to it is a straight line
+   * by construction, because you are both on the outward side of the same
+   * wall.
+   */
+  bestDoor(): Doorway | null {
+    const doors = this.envelope?.doors
+    if (!doors || doors.length === 0) return null
+    const p = this.rig.position
+    const view = this.rig.forward(this.dir)
+    let best: Doorway | null = null
+    let score = -Infinity
+    for (const door of doors) {
+      const dx = door.x - p.x
+      const dz = door.z - p.z
+      const range = Math.hypot(dx, dz)
+      if (range < 1e-3) continue
+      // Facing us at all: its outward normal has to point back this way.
+      const facing = (-dx * door.nx - dz * door.nz) / range
+      if (facing < 0.25) continue
+      // And in front of us, so the marker has somewhere on screen to be.
+      const ahead = (dx * view.x + dz * view.z) / range
+      if (ahead < 0.1) continue
+      const value = facing * ahead - range / 4000
+      if (value > score) {
+        score = value
+        best = door
+      }
+    }
+    return best
+  }
+
+  /**
+   * Go in.
+   *
+   * Two legs with a beat between them, rather than one curve. A spline that
+   * both starts wherever the viewer happens to be and arrives square on a
+   * four-metre opening either cuts the corner through the jamb or spends its
+   * whole length straightening out. Arriving at the portal and then stepping
+   * through reads as two intentions instead of one swerve, it is what a
+   * person actually does, and every metre of it is outside the stone until
+   * the last one.
+   */
+  enter(offered?: Doorway | null): void {
+    const e = this.envelope
+    if (!e) return
+    // Whichever door was asked for; failing that the one being looked at;
+    // failing that the nearest, which is what the keyboard and the corner
+    // button come in by when nothing is facing the camera at all.
+    const door =
+      offered ?? this.bestDoor() ?? nearestDoor(e.doors, this.rig.position)
+    if (!door) return
+
+    const n = new THREE.Vector3(door.nx, 0, door.nz)
+    const mouth = new THREE.Vector3(door.x, 0, door.z)
+    const stage = mouth.clone().addScaledVector(n, DOOR_STANDOFF)
+    stage.y = (e.floorAt(stage.x, stage.z) ?? this.plazaY) + EYE_HEIGHT + 1.2
+    const inside = mouth.clone().addScaledVector(n, -DOOR_ENTRY)
+    inside.y = (e.floorAt(inside.x, inside.z) ?? 0) + EYE_HEIGHT
+
+    const here = this.rig.position.clone()
+    const lookUp = mouth.clone().setY(stage.y + 7)
+    const atDoor = aimAt(stage, lookUp, this.widen(REGARD_FOV), REGARD_SHIFT)
+    // Landing, look on along the axis of the door and up: the whole point of
+    // the room you have just walked into is forty-five metres over your head.
+    // Along the axis of the door and up, but not so far up that the floor
+    // leaves the frame. The vault is the whole point of the room you have
+    // just walked into — and the floor is what you click to cross it, so an
+    // arrival that shows none of it hands the viewer a room they cannot walk
+    // in until they think to look down. Thirty degrees holds both.
+    const on = inside.clone().addScaledVector(n, -34)
+    on.y = inside.y + 20
+    const arrival = aimAt(inside, on, this.widen(INHABIT_FOV), INHABIT_SHIFT)
+
+    const reach = here.distanceTo(stage)
+    const approach = THREE.MathUtils.clamp(reach / 95, 1.1, 2.4)
+    this.legs = []
+    // Usually the door is one you are looking at, and then the way to it is a
+    // straight line — you and it are on the same side of the same wall. It is
+    // not always: the keyboard and the fallback button will both happily
+    // offer a door round the far side of the apse, and the line to that one
+    // goes through the building. Over the top, then, rather than through.
+    const over = this.cresting(here, stage)
+    if (over) {
+      const climb = aimAt(over, stage, REGARD_FOV, REGARD_SHIFT)
+      this.legs.push(leg(here, over, this.aim(), climb, approach))
+      this.legs.push(leg(over, stage, climb, atDoor, approach * 0.8))
+    } else {
+      this.legs.push(leg(here, stage, this.aim(), atDoor, approach))
+    }
+    this.legs.push(leg(stage, inside, atDoor, arrival, 1.6))
+    this.legAt = 0
+    this.baseFov = INHABIT_FOV
+    this.setRelation('inhabit')
+    this.onTravel?.(true)
+  }
+
+  /**
+   * A point to clear the building by, or null if the way is already clear.
+   *
+   * Only the crude question is asked — does the straight line pass through
+   * the massif at all — because the answer only has to be safe, and there is
+   * nothing above a cathedral to be in the way.
+   */
+  private cresting(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 | null {
+    const span = to.clone().sub(from)
+    const length = span.length()
+    if (length < 1) return null
+    const pair = roots(from, span.clone().divideScalar(length), this.massif)
+    if (!pair || pair[1] <= 0 || pair[0] >= length) return null
+    return new THREE.Vector3(
+      (from.x + to.x) / 2,
+      this.massif.centre.y + this.massif.radii.y + 25,
+      (from.z + to.z) / 2,
+    )
+  }
+
+  /** And come back out, by the same arithmetic in reverse. */
+  stepOut(): void {
+    const e = this.envelope
+    if (!e) return
+    const here = this.rig.position.clone()
+    const door = nearestDoor(e.doors, here)
+    if (!door) return
+
+    const n = new THREE.Vector3(door.nx, 0, door.nz)
+    const mouth = new THREE.Vector3(door.x, 0, door.z)
+    const stage = mouth.clone().addScaledVector(n, DOOR_STANDOFF)
+    stage.y = (e.floorAt(stage.x, stage.z) ?? this.plazaY) + EYE_HEIGHT + 1.2
+
+    // Back off to a standing view of the front you have just come out of.
+    const away = mouth.clone().addScaledVector(n, this.massif.radii.z * 2.6)
+    away.y = this.plazaY + 6
+    const lookUp = mouth.clone().setY(stage.y + 34)
+    const atDoor = aimAt(stage, lookUp, this.widen(INHABIT_FOV), INHABIT_SHIFT)
+    const arrival = aimAt(away, this.heart, this.widen(REGARD_FOV), REGARD_SHIFT)
+
+    this.legs = [
+      leg(here, stage, this.aim(), atDoor, 1.5),
+      leg(stage, away, atDoor, arrival, 2.3),
+    ]
+    this.legAt = 0
+    this.baseFov = REGARD_FOV
+    this.setRelation('regard')
+    this.onTravel?.(true)
+  }
+
+  /** Arrive now. A flight is a courtesy, not a toll. */
+  skip(): void {
+    if (this.legs.length === 0) return
+    this.land(this.legs[this.legs.length - 1]!)
+    this.legs = []
+    this.onTravel?.(false)
+  }
+
+  // ----------------------------------------------------------- the frame ---
+
+  update(dt: number): void {
+    if (this.legs.length > 0) this.fly(dt)
+    else if (this.relation === 'regard') this.regard(dt)
+    else this.inhabit(dt)
+
+    const want = this.indoors ? INSIDE_STOP : OUTSIDE_STOP
+    this.eyeStop += (want - this.eyeStop) * (1 - Math.exp(-dt / ADAPT))
+    this.rig.refresh()
+  }
+
+  private fly(dt: number): void {
+    const current = this.legs[0]!
+    this.legAt += dt
+    const t = ease(this.legAt / current.duration)
+    this.rig.position.lerpVectors(current.from, current.to, t)
+    this.rig.yaw = current.aimFrom.yaw + current.turn * t
+    this.rig.pitch = THREE.MathUtils.lerp(current.aimFrom.pitch, current.aimTo.pitch, t)
+    this.rig.fov = THREE.MathUtils.lerp(current.aimFrom.fov, current.aimTo.fov, t)
+    this.rig.shiftCorrection = THREE.MathUtils.lerp(current.aimFrom.shift, current.aimTo.shift, t)
+    if (this.legAt < current.duration) return
+
+    this.legs.shift()
+    this.legAt = 0
+    if (this.legs.length > 0) return
+    this.land(current)
+    this.onTravel?.(false)
+  }
+
+  /** Settle into whichever relation the flight was heading for. */
+  private land(final: Leg): void {
+    this.rig.position.copy(final.to)
+    this.rig.yaw = final.aimFrom.yaw + final.turn
+    this.rig.pitch = final.aimTo.pitch
+    this.rig.fov = final.aimTo.fov
+    this.rig.shiftCorrection = final.aimTo.shift
+    this.velocity.set(0, 0, 0)
+    this.goal = null
+    this.lift = 0
+    this.liftWanted = 0
+    this.pending.azimuth = 0
+    this.pending.elevation = 0
+    this.pending.zoom = 0
+    if (this.relation === 'regard') {
+      this.pivot.copy(this.lookingAt() ?? this.heart)
+      this.hold(0, true)
+    }
+  }
+
+  // --------------------------------------------------------------- orbit ---
+
+  private regard(dt: number): void {
+    // Flying with the keys is free movement, and it is still the only way to
+    // get your nose right up against a portal. The orbit then takes whatever
+    // the camera has ended up looking at as its new centre, so the next drag
+    // turns around that rather than around where you started.
+    const flying = this.freeMove(dt, FLY_SPEED)
+    this.rig.position.addScaledVector(this.velocity, dt)
+    if (flying) this.pivot.copy(this.lookingAt() ?? this.heart)
+
+    const taken = 1 - Math.exp(-dt / ORBIT_DAMPING)
+    const azimuth = this.pending.azimuth * taken
+    const elevation = this.pending.elevation * taken
+    const zoom = this.pending.zoom * taken
+    this.pending.azimuth -= azimuth
+    this.pending.elevation -= elevation
+    this.pending.zoom -= zoom
+
+    this.turnAbout(azimuth, elevation)
+    this.dolly(zoom)
+    this.hold(dt, false)
+  }
+
+  /**
+   * Swing the camera round the pivot — *and turn it by the same amount*.
+   *
+   * The distinction is the whole difference between an orbit that can be
+   * re-centred and one that cannot. A camera forced to look at its pivot
+   * swings its whole view the instant the pivot moves, so pressing the mouse
+   * on one tower to turn around it threw the frame somewhere else before the
+   * drag had begun. Rotating the eye and its aim together is a rigid motion:
+   * whatever was in the frame is still in it, wherever the centre of the turn
+   * happens to be.
+   */
+  private turnAbout(dAzimuth: number, dElevation: number): void {
+    const p = this.rig.position
+    this.offset.copy(p).sub(this.pivot)
+    const distance = this.offset.length()
+    if (distance < 1e-4) return
+
+    const elevation = Math.asin(THREE.MathUtils.clamp(this.offset.y / distance, -1, 1))
+    // How low this line of sight may swing before the camera is in the road.
+    // Taken at the position it is leaving rather than the one it is arriving
+    // at, which is near enough over one frame and is corrected by `hold`.
+    const floor = Math.asin(
+      THREE.MathUtils.clamp((this.lowestAt(p.x, p.z) - this.pivot.y) / distance, -1, 1),
+    )
+    const wanted = THREE.MathUtils.clamp(
+      elevation + dElevation,
+      Math.min(Math.max(floor, MIN_ELEVATION), MAX_ELEVATION),
+      MAX_ELEVATION,
+    )
+    const turnUp = wanted - elevation
+    if (Math.abs(dAzimuth) < 1e-9 && Math.abs(turnUp) < 1e-9) return
+
+    const azimuth = Math.atan2(this.offset.x, this.offset.z) + dAzimuth
+    const ce = Math.cos(wanted)
+    p.set(
+      this.pivot.x + Math.sin(azimuth) * ce * distance,
+      this.pivot.y + Math.sin(wanted) * distance,
+      this.pivot.z + Math.cos(azimuth) * ce * distance,
+    )
+    this.rig.turn(dAzimuth, -turnUp)
+  }
+
+  /** In and out along the line from the pivot, with the aim left alone. */
+  private dolly(amount: number): void {
+    if (amount === 0) return
+    const p = this.rig.position
+    this.offset.copy(p).sub(this.pivot)
+    const distance = this.offset.length()
+    if (distance < 1e-4) return
+    const wanted = THREE.MathUtils.clamp(
+      distance * Math.exp(amount),
+      MIN_DISTANCE,
+      MAX_DISTANCE,
+    )
+    p.copy(this.pivot).addScaledVector(this.offset, wanted / distance)
+  }
+
+  /**
+   * Keep the camera out of the stone and out of the road.
+   *
+   * The clearance is a soft floor and the ground is a hard one, and the
+   * difference is deliberate. Flying in close with the keys is allowed to
+   * break the clearance — that is what it is for — and the orbit then floats
+   * you back out over about a second, which reads as the building declining
+   * to be stood inside rather than as the camera being snatched away. Sinking
+   * into the pavement is not a thing anybody wants a gentle recovery from.
+   */
+  private hold(dt: number, snap: boolean): void {
+    const p = this.rig.position
+    const m = this.massif
+    // Where the centre of the turn was on screen before any of this, so it
+    // can be put back there afterwards. A clamp that slides the camera and
+    // leaves the aim alone is the one way this orbit could still lose the
+    // building: swinging a low orbit out of the park lifts it thirty metres
+    // over the roofs, and thirty metres at a hundred and twenty is fifteen
+    // degrees of drift — enough, over a long drag, to leave a viewer looking
+    // at empty sky with a cathedral off the side of the frame.
+    this.wasFacing.copy(this.pivot).sub(p)
+    this.offset.copy(p).sub(m.centre)
+    const q = Math.hypot(
+      this.offset.x / (m.radii.x + MASSIF_CLEAR),
+      this.offset.y / (m.radii.y + MASSIF_CLEAR),
+      this.offset.z / (m.radii.z + MASSIF_CLEAR),
+    )
+    if (q < 1) {
+      // The scaling that puts it on the surface is the same number in world
+      // space as in the ellipsoid's own, because the map between them is
+      // linear.
+      const out = q > 1e-6 ? 1 / q : 1
+      const reach = snap ? 1 : 1 - Math.exp(-dt * 4)
+      p.x += this.offset.x * (out - 1) * reach
+      p.y += this.offset.y * (out - 1) * reach
+      p.z += this.offset.z * (out - 1) * reach
+      if (q <= 1e-6) p.x = m.centre.x + m.radii.x + MASSIF_CLEAR
+    }
+
+    p.y = Math.max(p.y, this.lowestAt(p.x, p.z))
+
+    this.step.copy(this.pivot).sub(p)
+    if (this.wasFacing.lengthSq() > 1e-8 && this.step.lengthSq() > 1e-8) {
+      this.rig.turn(
+        shortestTurn(bearing(this.wasFacing), bearing(this.step)),
+        rise(this.step) - rise(this.wasFacing),
+      )
+    }
+  }
+
+  // ---------------------------------------------------------------- walk ---
+
+  private inhabit(dt: number): void {
+    if (this.freeMove(dt, WALK_SPEED)) this.goal = null
+
+    if (this.goal) {
+      const p = this.rig.position
+      const dx = this.goal.x - p.x
+      const dz = this.goal.z - p.z
+      const remaining = Math.hypot(dx, dz)
+      if (remaining < 0.4) {
+        this.goal = null
+      } else {
+        // Slowing into the last few metres, so arriving is an arrival rather
+        // than a stop. The damping does the rest.
+        const pace = this.goalSpeed * Math.min(1, remaining / 4)
+        const blend = 1 - Math.exp(-dt * 7)
+        this.velocity.x += ((dx / remaining) * pace - this.velocity.x) * blend
+        this.velocity.z += ((dz / remaining) * pace - this.velocity.z) * blend
+      }
+    }
+
+    this.rig.position.addScaledVector(this.velocity, dt)
+    this.lift += (this.liftWanted - this.lift) * (1 - Math.exp(-dt * 5))
+    this.stand(dt)
+  }
+
+  /**
+   * A pace or two forward, which is what the wheel means indoors.
+   *
+   * Sent through the same destination the floor click uses rather than as a
+   * shove to the velocity, so it is bounded by the room, stops at walls, and
+   * eases like every other way of crossing this floor. Repeated notches
+   * extend the destination rather than fighting over it.
+   */
+  private nudge(metres: number): void {
+    const from = this.goal ?? this.rig.position
+    const aim = this.rig.ahead(this.offset)
+    const reached = this.reachable(
+      new THREE.Vector3(from.x + aim.x * metres, 0, from.z + aim.z * metres),
+    )
+    if (!reached) return
+    this.goal = reached
+    const range = Math.hypot(
+      reached.x - this.rig.position.x,
+      reached.z - this.rig.position.z,
+    )
+    this.goalSpeed = THREE.MathUtils.clamp(range * 0.8, 2.5, 14)
+  }
+
+  /**
+   * The keys, which mean the same thing in both relations: go that way.
+   *
+   * Reports whether they asked for anything, because both callers have
+   * something to do about it — the orbit has to re-derive itself, and the
+   * walk has to drop whatever destination it was heading for.
+   */
+  private freeMove(dt: number, speed: number): boolean {
+    const k = this.keys
+    const boost = k.has('ShiftLeft') || k.has('ShiftRight') ? RUN : 1
+    const level = this.relation === 'inhabit'
+    const wants = this.step.set(0, 0, 0)
+    const ahead = level ? this.rig.ahead(this.offset) : this.rig.forward(this.offset)
+
+    if (k.has('KeyW') || k.has('ArrowUp')) wants.add(ahead)
+    if (k.has('KeyS') || k.has('ArrowDown')) wants.sub(ahead)
+    const beside = this.rig.beside(this.sideways)
+    if (k.has('KeyD') || k.has('ArrowRight')) wants.add(beside)
+    if (k.has('KeyA') || k.has('ArrowLeft')) wants.sub(beside)
+
+    const up = k.has('Space')
+    const down = k.has('KeyC') || k.has('KeyZ')
+    if (level) {
+      // Inside, up and down is a height you hold rather than a thrust you
+      // fight: hold the key to rise, let go and you stay, which is what makes
+      // it possible to study a boss rather than hover at it.
+      const headroom = Math.max(0, (this.envelope?.ceiling ?? 60) - 4)
+      if (up) this.liftWanted += LIFT_RATE * dt * boost
+      if (down) this.liftWanted -= LIFT_RATE * dt * boost
+      this.liftWanted = THREE.MathUtils.clamp(this.liftWanted, 0, headroom)
+    } else {
+      if (up) wants.y += 1
+      if (down) wants.y -= 1
+    }
+
+    if (wants.lengthSq() < 1e-9) {
+      // Coasting. Whoever called this still moves the camera by whatever is
+      // left, so letting go of a key eases to a stop instead of cutting.
+      this.velocity.multiplyScalar(Math.exp(-dt * 14))
+      return level ? up || down : false
+    }
+
+    wants.normalize().multiplyScalar(speed * boost)
+    this.velocity.lerp(wants, 1 - Math.exp(-dt * (level ? 22 : 9)))
+    return true
+  }
+
+  /** Keep the walker's feet on the floor and their shoulders out of the stone. */
+  private stand(dt: number): void {
+    const e = this.envelope
+    if (!e) return
+    const p = this.rig.position
+    this.push.copy(p)
+    e.resolve(p, BODY_RADIUS)
+
+    // Slide along whatever pushed back, instead of standing in it pushing.
+    // The columns here are on a seven-and-a-half metre grid square with the
+    // axes, so walking straight down an aisle meets one of them dead centre
+    // rather than glancing off it — and a push straight back out, against a
+    // key still asking to go straight forward, is a walker pinned to a
+    // column for as long as they hold W. Taking the inward part out of the
+    // velocity turns that into rounding the column, which is what a person
+    // does without noticing they did it.
+    this.push.subVectors(p, this.push)
+    if (this.push.lengthSq() > 1e-10) {
+      this.push.normalize()
+      const into = this.velocity.dot(this.push)
+      if (into < 0) this.velocity.addScaledVector(this.push, -into)
+    }
+
+    /**
+     * A room is left by a door or not at all.
+     *
+     * The plan the walls hold you in by is a hall, two arms and a drum, and
+     * where the arm meets the drum the arm is the wider of the two — so there
+     * is a corner, a few metres across, that belongs to neither. A body that
+     * walks into it is in no region at all, which the envelope reads as being
+     * outside the building and answers by pushing it further out. One step
+     * across the corner of the transept and a visitor is standing in the
+     * plaza behind the apse, having walked through a wall.
+     *
+     * Rather than describe that corner, this says the thing that is true of
+     * every corner: while you were in the room a moment ago and are not
+     * standing in a doorway, you are still in the room. Step through an
+     * opening and the hold is given up, which is what makes walking out of
+     * the front door work.
+     */
+    const inRoom = e.inside(p.x, p.z)
+    if (inRoom) {
+      this.held.set(p.x, 0, p.z)
+      this.holding = true
+    } else if (this.holding && !e.inDoorway(p)) {
+      p.x = this.held.x
+      p.z = this.held.z
+      this.velocity.x = 0
+      this.velocity.z = 0
+      this.goal = null
+    } else {
+      this.holding = false
+    }
+
+    const floor = e.floorAt(p.x, p.z)
+    if (floor === null) return
+    p.y = THREE.MathUtils.lerp(p.y, floor + EYE_HEIGHT + this.lift, 1 - Math.exp(-dt * 9))
+  }
+
+  // --------------------------------------------------------------- input ---
+
+  /** Where the middle of the frame lands, for re-anchoring after a flight. */
+  private lookingAt(): THREE.Vector3 | null {
+    return this.along(this.rig.position, this.rig.forward(new THREE.Vector3()), this.plazaY)
+  }
+
+  /** Where a screen point lands in the world. */
+  private pick(clientX: number, clientY: number, floorOnly = false): THREE.Vector3 | null {
+    const rect = this.element.getBoundingClientRect()
+    this.ray.setFromCamera(
+      new THREE.Vector2(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -(((clientY - rect.top) / rect.height) * 2 - 1),
+      ),
+      this.rig.camera,
+    )
+    const origin = this.ray.ray.origin
+    const level = floorOnly
+      ? (this.envelope?.floorAt(origin.x, origin.z) ?? 0)
+      : this.plazaY
+    return this.along(origin, this.ray.ray.direction, level, floorOnly)
+  }
+
+  /**
+   * The nearer of two candidates along a ray: the massif, which stands for
+   * the building, and the ground under it.
+   */
+  private along(
+    origin: THREE.Vector3,
+    direction: THREE.Vector3,
+    level: number,
+    floorOnly = false,
+  ): THREE.Vector3 | null {
+    let entry: number | null = null
+    let best: number | null = null
+    if (!floorOnly) {
+      const pair = roots(origin, direction, this.massif)
+      if (pair && pair[1] > 0.5 && pair[0] < PICK_REACH) {
+        entry = Math.max(pair[0], 0.5)
+        // The middle of the chord, not the near face. An ellipsoid drawn
+        // round a Latin cross stands well proud of the stone, and turning
+        // about a point ten metres in front of a façade is turning about the
+        // end of the building rather than the building: half a turn later it
+        // has swung off the side of the frame. Halfway through is the body of
+        // the thing, and a grazing ray — which has a short chord — still gets
+        // an answer near the surface it grazed.
+        best = (entry + pair[1]) / 2
+      }
+    }
+    let ground = false
+    if (direction.y < -1e-4) {
+      const t = (level - origin.y) / direction.y
+      if (t > 0.5 && t < PICK_REACH && (entry === null || t < entry)) {
+        best = t
+        ground = true
+      }
+    }
+    if (best === null || best > PICK_REACH) return null
+    const hit = origin.clone().addScaledVector(direction, best)
+    // Half pulled back toward the middle of the building, when it is the
+    // building that was hit. Anywhere a turn is centred stays exactly where
+    // it is on screen, so how far the cathedral wanders over a long drag is
+    // just how far the centre of the turn is from the cathedral — and a
+    // viewer dragging across the whole window wants the building still in
+    // front of them much more than they want the particular tower they
+    // happened to press on dead centre.
+    return ground ? hit : hit.lerp(this.heart, 0.5)
+  }
+
+  /**
+   * How far toward a clicked point you may actually go.
+   *
+   * Walked, not teleported: the point is pulled back to the last place along
+   * the way still in the same room, so pointing through a window puts you at
+   * the wall under it rather than out on the plaza.
+   */
+  private reachable(target: THREE.Vector3): THREE.Vector3 | null {
+    const e = this.envelope
+    if (!e) return null
+    const p = this.rig.position
+    const here = e.inside(p.x, p.z)
+    // Stepped at a fixed spacing rather than a fixed count, so a click across
+    // the crossing is tested as finely as a click at your feet and a wall
+    // two metres away is never stepped straight over.
+    const span = Math.hypot(target.x - p.x, target.z - p.z)
+    const steps = THREE.MathUtils.clamp(Math.ceil(span / 1.5), 1, 160)
+    let last: THREE.Vector3 | null = null
+    for (let i = 1; i <= steps; i++) {
+      const f = i / steps
+      const x = p.x + (target.x - p.x) * f
+      const z = p.z + (target.z - p.z) * f
+      if (e.inside(x, z) !== here) break
+      last = new THREE.Vector3(x, 0, z)
+    }
+    if (!last) return null
+    last.y = (e.floorAt(last.x, last.z) ?? 0) + EYE_HEIGHT
+    return last
+  }
+
+  private aim(): Aim {
+    return {
+      yaw: this.rig.yaw,
+      pitch: this.rig.pitch,
+      fov: this.rig.fov,
+      shift: this.rig.shiftCorrection,
+    }
+  }
+
+  private setRelation(relation: Relation): void {
+    if (this.relation === relation) return
+    this.relation = relation
+    this.onRelation?.(relation)
+  }
+
+  private bind(): void {
+    const el = this.element
+
+    el.addEventListener('pointerdown', (event) => {
+      // Capture is a nicety — the release below is bound to the same element
+      // and fires anyway — and it throws outright on a pointer id that is no
+      // longer active, which synthetic events and some pen hardware manage.
+      try {
+        el.setPointerCapture(event.pointerId)
+      } catch {
+        /* keep the gesture without it */
+      }
+      this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: 0 })
+      el.classList.add('dragging')
+      if (this.pointers.size === 2) this.pinch = this.spread()
+      if (this.pointers.size !== 1) return
+
+      // Turn about whatever is under the cursor. Nothing about the frame
+      // changes when the centre of the turn does — see `turnAbout` — so this
+      // costs the viewer nothing until they actually drag.
+      if (this.relation === 'regard' && this.legs.length === 0) {
+        const hit = this.pick(event.clientX, event.clientY)
+        if (hit) this.pivot.copy(hit)
+      }
+    })
+
+    el.addEventListener('pointermove', (event) => {
+      const held = this.pointers.get(event.pointerId)
+      if (!held) return
+      const dx = event.clientX - held.x
+      const dy = event.clientY - held.y
+      held.x = event.clientX
+      held.y = event.clientY
+      held.moved += Math.abs(dx) + Math.abs(dy)
+      if (this.legs.length > 0) return
+
+      if (this.pointers.size >= 2) {
+        // A move arrives per finger, so only the first of them drives: doing
+        // it per finger would count one two-finger drag twice.
+        if ([...this.pointers.keys()][0] !== event.pointerId) return
+        const spread = this.spread()
+        if (this.pinch > 0 && spread > 0) this.zoom(Math.log(this.pinch / spread) * 1.4)
+        this.pinch = spread
+        if (this.relation === 'inhabit') {
+          this.liftWanted = THREE.MathUtils.clamp(
+            this.liftWanted + dy * 0.14,
+            0,
+            Math.max(0, (this.envelope?.ceiling ?? 60) - 4),
+          )
+        }
+        return
+      }
+
+      if (this.relation === 'regard') this.drag(dx, dy)
+      else this.rig.turn(-dx * LOOK_GAIN, -dy * LOOK_GAIN)
+    })
+
+    const release = (event: PointerEvent): void => {
+      const held = this.pointers.get(event.pointerId)
+      this.pointers.delete(event.pointerId)
+      if (this.pointers.size < 2) this.pinch = 0
+      if (this.pointers.size === 0) el.classList.remove('dragging')
+      if (!held) return
+      // A press that did not travel is a click, and a click means something.
+      // The threshold is generous because a hand on a trackpad is never quite
+      // still.
+      if (held.moved < 7) this.click(event)
+    }
+    el.addEventListener('pointerup', release)
+    el.addEventListener('pointercancel', release)
+    el.addEventListener('lostpointercapture', (event) => {
+      this.pointers.delete(event.pointerId)
+      if (this.pointers.size < 2) this.pinch = 0
+      if (this.pointers.size === 0) el.classList.remove('dragging')
+    })
+
+    el.addEventListener('dblclick', (event) => {
+      if (this.relation !== 'regard' || this.legs.length > 0) return
+      const hit = this.pick(event.clientX, event.clientY)
+      this.enter(hit ? nearestDoor(this.envelope?.doors ?? [], hit) : null)
+    })
+
+    el.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault()
+        if (this.legs.length > 0) return
+        if (this.relation === 'regard') {
+          const hit = this.pick(event.clientX, event.clientY)
+          if (hit) this.pivot.copy(hit)
+          this.zoom(event.deltaY * 0.0016)
+        } else {
+          // Inside, the wheel walks you up the nave, which is most of what
+          // there is to do with a room ninety metres long.
+          this.nudge(-event.deltaY * 0.025)
+        }
+      },
+      { passive: false },
+    )
+
+    window.addEventListener('keydown', (event) => {
+      if (event.target instanceof HTMLInputElement) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      this.keys.add(event.code)
+    })
+    window.addEventListener('keyup', (event) => this.keys.delete(event.code))
+    window.addEventListener('blur', () => this.keys.clear())
+  }
+
+  /** What a single click does, which depends on which side of the wall it is. */
+  private click(event: PointerEvent): void {
+    if (this.legs.length > 0) {
+      this.skip()
+      return
+    }
+    if (this.relation !== 'inhabit') return
+    const hit = this.pick(event.clientX, event.clientY, true)
+    if (!hit) return
+    const target = this.reachable(hit)
+    if (!target) return
+    const range = Math.hypot(target.x - this.rig.position.x, target.z - this.rig.position.z)
+    if (range < 0.8) return
+    this.goal = target
+    // Long walks are brisk and short ones are a step; both ease to a stop.
+    this.goalSpeed = THREE.MathUtils.clamp(range * 0.55, 3.5, 22)
+    this.liftWanted = 0
+  }
+
+  private drag(dx: number, dy: number): void {
+    const { width, height } = this.rig.viewport
+    this.pending.azimuth -= (dx * ORBIT_SWEEP) / width
+    this.pending.elevation += (dy * ORBIT_TILT) / height
+  }
+
+  private zoom(amount: number): void {
+    this.pending.zoom = THREE.MathUtils.clamp(this.pending.zoom + amount, -1.5, 1.5)
+  }
+
+  private spread(): number {
+    const [a, b] = [...this.pointers.values()]
+    if (!a || !b) return 0
+    return Math.hypot(a.x - b.x, a.y - b.y)
+  }
+
+  // --------------------------------------------------------- the harness ---
+
+  getState(): CameraState {
+    return this.rig.getState()
+  }
+
+  /**
+   * Put the camera somewhere outright — a shared link, a curated view, a
+   * preset. The relation follows from where it lands, which is the same rule
+   * the exposure uses, and means a link into the nave arrives as a walker.
+   */
+  setState(state: CameraState): void {
+    this.legs = []
+    this.rig.setState(state)
+    this.velocity.set(0, 0, 0)
+    this.goal = null
+    this.lift = 0
+    this.liftWanted = 0
+    this.pending.azimuth = 0
+    this.pending.elevation = 0
+    this.pending.zoom = 0
+    this.setRelation(this.indoors ? 'inhabit' : 'regard')
+    // A link carries its own lens and reproduces it exactly, whatever shape
+    // of window it is opened in: two people sent the same moment should see
+    // the same frame.
+    this.baseFov = state.fov
+    if (this.relation === 'regard') this.pivot.copy(this.lookingAt() ?? this.heart)
+    this.eyeStop = this.indoors ? INSIDE_STOP : OUTSIDE_STOP
+  }
+}
+
+/** Aim from one point at another, with a lens. */
+function aimAt(from: THREE.Vector3, at: THREE.Vector3, fov: number, shift: number): Aim {
+  const d = at.clone().sub(from)
+  if (d.lengthSq() < 1e-9) return { yaw: 0, pitch: 0, fov, shift }
+  d.normalize()
+  return {
+    yaw: Math.atan2(-d.x, -d.z),
+    pitch: Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)),
+    fov,
+    shift,
+  }
+}
+
+function leg(
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  aimFrom: Aim,
+  aimTo: Aim,
+  duration: number,
+): Leg {
+  return {
+    from: from.clone(),
+    to: to.clone(),
+    aimFrom,
+    aimTo,
+    turn: shortestTurn(aimFrom.yaw, aimTo.yaw),
+    duration,
+  }
+}
+
+function nearestDoor(doors: readonly Doorway[], point: THREE.Vector3): Doorway | null {
+  let best: Doorway | null = null
+  let near = Infinity
+  for (const door of doors) {
+    const d = Math.hypot(door.x - point.x, door.z - point.z)
+    if (d < near) {
+      near = d
+      best = door
+    }
+  }
+  return best
+}
+
+/**
+ * Where a ray meets an ellipsoid, in world units along a unit direction.
+ *
+ * Scaling the ray into the ellipsoid's own frame turns it into a unit sphere,
+ * where the test is a quadratic. `t` survives the scaling because the
+ * parameter is on the world ray, not on the scaled one.
+ */
+function roots(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  massif: Massif,
+): [number, number] | null {
+  const r = massif.radii
+  const ox = (origin.x - massif.centre.x) / r.x
+  const oy = (origin.y - massif.centre.y) / r.y
+  const oz = (origin.z - massif.centre.z) / r.z
+  const dx = direction.x / r.x
+  const dy = direction.y / r.y
+  const dz = direction.z / r.z
+  const a = dx * dx + dy * dy + dz * dz
+  if (a < 1e-12) return null
+  const b = 2 * (ox * dx + oy * dy + oz * dz)
+  const c = ox * ox + oy * oy + oz * oz - 1
+  const disc = b * b - 4 * a * c
+  if (disc < 0) return null
+  const root = Math.sqrt(disc)
+  return [(-b - root) / (2 * a), (-b + root) / (2 * a)]
+}

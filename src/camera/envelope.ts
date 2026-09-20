@@ -190,6 +190,33 @@ export class ChurchEnvelope implements Envelope {
     this.outer = p.outer ? new Region(p.outer) : null
   }
 
+  /**
+   * The ways through the wall.
+   *
+   * Published because a door is not only a hole in the collision: it is the
+   * one place a viewer is invited to cross from regarding the building to
+   * being inside it, and the interface has to be able to point at one. See
+   * camera/viewer.ts.
+   */
+  get doors(): readonly Doorway[] {
+    return this.p.doors ?? []
+  }
+
+  /** Underside of the highest vault, which is what roofs the room. */
+  get ceiling(): number {
+    return this.p.ceiling
+  }
+
+  /** Whether (x, z) is over the floor of the room rather than the plaza. */
+  inside(x: number, z: number): boolean {
+    return this.inner.contains(x, z)
+  }
+
+  /** Whether a body is standing in the depth of one of the openings. */
+  inDoorway(point: THREE.Vector3): boolean {
+    return this.doorAt(point) !== null
+  }
+
   floorAt(x: number, z: number): number | null {
     if (this.inner.contains(x, z)) {
       for (const terrace of this.p.terraces ?? []) {

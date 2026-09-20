@@ -1,4 +1,4 @@
-import type { CameraState } from '../camera/freecam.ts'
+import type { CameraState } from '../camera/rig.ts'
 import type { HyperboloidParams } from '../geometry/hyperboloid.ts'
 
 /**
