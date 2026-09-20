@@ -93,6 +93,8 @@ front.
 | Shell — terraces, parapets, roof lanterns, the three fronts | `src/plan/shell.ts` |
 | Thirteen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
+| Two-thumb touch controls, with a stick that appears under the thumb | `src/camera/touch.ts` |
+| The address bar as the save format — a link to a moment of light | `src/share.ts` |
 | Envelope: a rectangle for the nave, a disc for the apse, a terrace you can climb | `src/camera/envelope.ts` |
 
 ## Running
@@ -125,6 +127,29 @@ npm run build       # typecheck + production build
 | drop an image | load it as a reference |
 | 1–9, 0 | the curated interior viewpoints |
 | N G T | the Nativity front, the Glory front, the terraces |
+| L | copy a link to exactly this frame and hour |
+
+On a touch device the left thumb walks — a stick appears where it lands, and
+deflection is proportional — the right thumb looks, and two fingers rise and
+fall together and pinch for speed. The panel opens closed there and the
+render gets the whole screen.
+
+## Links
+
+The address bar is the save format, and it holds everything a moment of this
+building needs: where the camera stands, where it looks, the lens, and the
+day and hour the sun is computed from.
+
+```
+#at=4.2,1.65,17&look=-0.163,0.598&lens=68,0.62&sun=262,16
+```
+
+It is readable on purpose. `sun=262,16` is the nineteenth of September at
+four in the afternoon, and you can change it to `sun=172,9.6` by hand and get
+midsummer morning without going near the app. Pasting one into a tab that is
+already open moves the camera there, since the page does not reload for a
+hash. Decoding is all-or-nothing — the right hour at the wrong place is worse
+than no link at all.
 
 `window.harness` exposes the camera, overlay, parameters and a `rebuild()` for
 driving the harness from the console.

@@ -13,6 +13,7 @@ import {
   type HyperboloidParams,
 } from './geometry/hyperboloid.ts'
 import { FreeCamera } from './camera/freecam.ts'
+import { TouchControls } from './camera/touch.ts'
 import { PhotoOverlay } from './dev/overlay.ts'
 import { censusFrame, type FrameCensus } from './dev/probe.ts'
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
@@ -36,6 +37,12 @@ const reticle = document.querySelector<HTMLDivElement>('#reticle')!
 
 /** Width reserved for the parameter panel so it never covers the render. */
 const PANEL_GUTTER = 310
+/**
+ * Below this the panel stops being given room of its own and floats, closed,
+ * over the top corner. Three hundred and ten pixels of gutter on a phone is
+ * most of the phone.
+ */
+const NARROW = 820
 /** The funnel's lower rim sits at this height, so tuning z doesn't move it. */
 const FUNNEL_BASE_HEIGHT = 2.6
 /** Keeps the funnel clear of the tree while both are on screen. */
@@ -43,6 +50,8 @@ const FUNNEL_OFFSET_X = 16
 
 const stage = createStage(canvas)
 const cam = new FreeCamera(stage.camera, canvas)
+// Bound to the stage rather than the canvas, so the stick can be drawn in it.
+new TouchControls(stageEl, cam)
 const overlay = new PhotoOverlay(overlayImg, document.body)
 
 const plan: ChurchParams = structuredClone(defaultChurch)
@@ -197,7 +206,8 @@ function applySun(): void {
 }
 
 function layout(): void {
-  const availW = Math.max(240, window.innerWidth - PANEL_GUTTER)
+  const narrow = window.innerWidth < NARROW
+  const availW = Math.max(240, window.innerWidth - (narrow ? 0 : PANEL_GUTTER))
   const availH = window.innerHeight
   let w = availW
   let h = availH
@@ -274,6 +284,8 @@ window.addEventListener('keydown', (event) => {
 rebuild()
 applyRender()
 applySun()
+// A phone opens on the building, not on the instrument panel.
+panel.expanded = window.innerWidth >= NARROW
 layout()
 
 // A link decides where we open, and otherwise we open standing in the bay

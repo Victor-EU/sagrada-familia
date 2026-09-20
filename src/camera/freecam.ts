@@ -51,6 +51,15 @@ export class FreeCamera {
   /** Whether the camera is allowed to ground itself at all. */
   grounding = true
 
+  /**
+   * Continuous intention, for devices that have no keys.
+   *
+   * Each component is −1 to 1 and is *added* to whatever the keys are asking
+   * for rather than replacing it, so a tablet with a keyboard attached uses
+   * both at once and neither has to know about the other. See camera/touch.ts.
+   */
+  readonly analog = { forward: 0, strafe: 0, lift: 0 }
+
   /** What the building is, as far as movement is concerned. */
   envelope: Envelope | null = null
 
@@ -109,7 +118,10 @@ export class FreeCamera {
   }
 
   private bind(): void {
-    this.domElement.addEventListener('click', () => {
+    // Pointer lock on press, and only for a mouse: a phone has no pointer to
+    // capture, and asking for it on every tap only produces a refusal.
+    this.domElement.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') return
       if (!this.locked) void this.domElement.requestPointerLock()
     })
     document.addEventListener('pointerlockchange', () => {
@@ -118,12 +130,7 @@ export class FreeCamera {
     document.addEventListener('mousemove', (e) => {
       if (!this.locked) return
       const sensitivity = 0.0022
-      this.yaw -= e.movementX * sensitivity
-      this.pitch = THREE.MathUtils.clamp(
-        this.pitch - e.movementY * sensitivity,
-        -MAX_PITCH,
-        MAX_PITCH,
-      )
+      this.turn(-e.movementX * sensitivity, -e.movementY * sensitivity)
     })
     window.addEventListener('keydown', (e) => {
       // Let Tweakpane inputs receive typing.
@@ -145,7 +152,7 @@ export class FreeCamera {
   update(dt: number): void {
     const k = this.keys
     const boost = k.has('ShiftLeft') || k.has('ShiftRight') ? 4 : 1
-    const ascend = k.has('Space')
+    const ascend = k.has('Space') || this.analog.lift > 0.25
     const descend = k.has('KeyC')
 
     this.updateGrounding(dt, ascend)
@@ -172,10 +179,19 @@ export class FreeCamera {
     if (ascend) this.desired.y += 1 - g
     if (descend) this.desired.y -= 1 - g
 
+    // The keys are on or off, so their intention is normalised on its own
+    // before the analogue stick is added: a thumb half over is half a pace,
+    // and W is always exactly one whatever else is happening.
+    if (this.desired.lengthSq() > 0) this.desired.normalize()
+    this.desired.addScaledVector(this.forward, this.analog.forward)
+    this.desired.addScaledVector(this.right, this.analog.strafe)
+    this.desired.y += this.analog.lift * (1 - g)
+
     const flySpeed = this.speed * boost
     const walkSpeed = this.walkSpeed * (boost > 1 ? 2.2 : 1)
     const speed = THREE.MathUtils.lerp(flySpeed, walkSpeed, g)
-    if (this.desired.lengthSq() > 0) this.desired.normalize().multiplyScalar(speed)
+    if (this.desired.lengthSq() > 1) this.desired.normalize()
+    this.desired.multiplyScalar(speed)
 
     // Exponential damping — frame-rate independent. Heavy in the air so the
     // camera carries mass; light on foot so it stops where you stop.
@@ -250,6 +266,12 @@ export class FreeCamera {
       this.viewWidth,
       this.viewHeight,
     )
+  }
+
+  /** Turn by a delta, in radians, with the pitch kept inside its limits. */
+  turn(dYaw: number, dPitch: number): void {
+    this.yaw += dYaw
+    this.pitch = THREE.MathUtils.clamp(this.pitch + dPitch, -MAX_PITCH, MAX_PITCH)
   }
 
   /** Aim at a world point, expressed in this camera's own yaw/pitch terms. */

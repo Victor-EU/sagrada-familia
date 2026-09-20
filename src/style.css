@@ -19,6 +19,9 @@ html, body {
   /* Position and size are set from layout() in main.ts — left/top/width/height
      only, so nothing here can over-constrain them. */
   position: absolute;
+  /* Every touch in here is a camera control. Without this the browser spends
+     the first 300 ms of each one deciding whether it was a scroll. */
+  touch-action: none;
   left: 0;
   top: 0;
   overflow: hidden;
@@ -89,6 +92,53 @@ html, body {
   transition: opacity 140ms linear, transform 140ms ease-out;
 }
 #toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* The walking thumb. It is drawn where the thumb lands rather than in a
+   fixed corner, because a fixed one is always in the wrong place for the
+   hand that happens to be holding the phone. */
+.stick {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms linear;
+}
+.stick.on { opacity: 1; }
+.stick::before {
+  content: "";
+  position: absolute;
+  left: -56px;
+  top: -56px;
+  width: 112px;
+  height: 112px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+.knob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ink);
+  opacity: 0.45;
+  transform: translate(-15px, -15px);
+}
+
+/* A phone. The readout is a working instrument and the phone is not where
+   the work happens, so it goes; the controls line stays, because on a device
+   with no keys it is the only place the gestures are written down. */
+@media (max-width: 820px) {
+  #hud { display: none; }
+  #hint {
+    right: 14px;
+    max-width: none;
+    line-height: 1.6;
+  }
+}
 #hint {
   bottom: 14px;
   white-space: normal;
@@ -96,5 +146,13 @@ html, body {
   line-height: 1.7;
 }
 #hint strong { color: var(--ink); font-weight: 600; }
+
+/* Which half of the controls is worth writing down depends on what the
+   device has, not on how wide it is: a tablet is wide and has no keys. */
+#hint .touch { display: none; }
+@media (pointer: coarse) {
+  #hint .pointer { display: none; }
+  #hint .touch { display: inline; }
+}
 
 .tp-dfwv { width: 290px !important; }
