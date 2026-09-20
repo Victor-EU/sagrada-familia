@@ -97,6 +97,28 @@ export interface VaultCell {
  * Flare c such that a hyperboloid of throat radius r0 reaches radius R after
  * rising (or falling) `depth`:  R = r0·√(1 + (depth/c)²).
  */
+/**
+ * Ribs around a vault surface.
+ *
+ * Twelve, which is the largest column order and the count the vault already
+ * answers to everywhere else — a cell springs from twelve-sided trunks, so
+ * twelve creases arrive over the branches rather than beating against them.
+ * It is also what the coarsest level of detail can afford: surfaceRadial
+ * bottoms out near 24 segments on a funnel, which is exactly two samples per
+ * pleat, so the creases survive all the way out.
+ */
+const VAULT_PLEATS = 16
+
+/**
+ * How deep, as a fraction of the local radius.
+ *
+ * Shallow. These are creases in a shell, not corrugations — in the
+ * photographs the ridges catch a highlight and the valleys hold a thin
+ * shadow, and the funnel still reads as one smooth flare from across the
+ * nave. Deeper than this and a funnel starts to look like a cast gear.
+ */
+const VAULT_PLEAT_DEPTH = 0.16
+
 export function flareFor(throat: number, reach: number, depth: number): number {
   const ratio = Math.max(reach / Math.max(throat, 1e-4), 1.0001)
   return depth / Math.sqrt(ratio * ratio - 1)
@@ -163,7 +185,12 @@ export function vaultSurface(
   detail: number,
 ): VaultSurface {
   const profile = Math.hypot(zTop - zBottom, reach - throatRadius)
-  const radialSegments = surfaceRadial(reach, detail)
+  // A multiple of 2·pleats, for the same reason shaftRadial is a multiple of
+  // 2·order: it lands a sample on every ridge *and* every valley, so the
+  // coarsest funnel in the building still has all twelve creases in the right
+  // places rather than a drifting beat against them.
+  const period = VAULT_PLEATS * 2
+  const radialSegments = period * Math.max(1, Math.round(surfaceRadial(reach, detail) / period))
   const params: HyperboloidParams = {
     throatRadius,
     ellipticity: 1,
@@ -172,6 +199,8 @@ export function vaultSurface(
     zTop,
     radialSegments,
     heightSegments: surfaceRows(profile, detail),
+    pleats: VAULT_PLEATS,
+    pleatDepth: VAULT_PLEAT_DEPTH,
   }
   return {
     geometry: buildHyperboloidSurface(params),

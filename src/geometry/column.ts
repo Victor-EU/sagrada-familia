@@ -220,23 +220,74 @@ function offsetsAt(z: number, stages: Stage[]): number[] {
   return offsets
 }
 
+/**
+ * Where the section is, and which flat face the point is standing on.
+ *
+ * The section is not a curve. It is the intersection of rotated copies of
+ * regular polygons, so it is a polygon itself: flat faces meeting at sharp
+ * creases, and the creases are the flutes. Which face a given angle lands on
+ * falls out of the same search that finds the radius — the polygon that won
+ * the max and the offset that won the min — and `facet` is how far round that
+ * face the point sits, measured from the middle of it.
+ *
+ * That angle is what the normal needs. On a flat face r = inradius / cos of
+ * it, so dr/dα is r·tan of it exactly, and it steps from +tan(half a face) to
+ * −tan(half a face) across a crease instead of passing smoothly through. A
+ * central difference over the radius ring cannot see that: it averages the
+ * two slopes, which at a symmetric crease comes to zero, and shades the
+ * sharpest edge on the column as though it were the roundest part of it.
+ * That is why a shaft cut into twenty-four flutes was arriving as a tube.
+ */
+interface Section {
+  radius: number
+  /** Signed angle from the middle of the flat face, in [−π/sides, π/sides]. */
+  facet: number
+}
+
+/** Reused: this is called once per vertex and the result is read immediately. */
+const SECTION: Section = { radius: 0, facet: 0 }
+
+function sectionAt(
+  alpha: number,
+  offsets: number[],
+  polys: Poly[],
+  inradius: number,
+): Section {
+  let minR = Infinity
+  let facet = 0
+  for (let i = 0; i < offsets.length; i++) {
+    const beta = alpha + offsets[i]!
+    let maxR = 0
+    let maxA = 0
+    for (let j = 0; j < polys.length; j++) {
+      const poly = polys[j]!
+      const step = (Math.PI * 2) / poly.sides
+      let a = (beta - poly.phase) % step
+      if (a < 0) a += step
+      a -= step / 2
+      const r = inradius / Math.cos(a)
+      if (r > maxR) {
+        maxR = r
+        maxA = a
+      }
+    }
+    if (maxR < minR) {
+      minR = maxR
+      facet = maxA
+    }
+  }
+  SECTION.radius = minR
+  SECTION.facet = facet
+  return SECTION
+}
+
 function sectionRadius(
   alpha: number,
   offsets: number[],
   polys: Poly[],
   inradius: number,
 ): number {
-  let minR = Infinity
-  for (let i = 0; i < offsets.length; i++) {
-    const beta = alpha + offsets[i]!
-    let maxR = 0
-    for (let j = 0; j < polys.length; j++) {
-      const r = polygonRadius(beta, polys[j]!, inradius)
-      if (r > maxR) maxR = r
-    }
-    if (maxR < minR) minR = maxR
-  }
-  return minR
+  return sectionAt(alpha, offsets, polys, inradius).radius
 }
 
 /**
@@ -345,17 +396,22 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
   const dAlpha = (Math.PI * 2) / cols
   const dZ = buildHeight / rows
 
-  // Radius grid first, so normals can come from finite differences on it
-  // rather than from averaging face normals.
+  // Radius grid first, so the z-slope can come from differences on it. The
+  // α-slope is taken from the face the point is on instead — see sectionAt.
   const grid: Float64Array[] = []
+  const facets: Float64Array[] = []
   for (let row = 0; row <= rows; row++) {
     const z = row * dZ
     const offsets = offsetsAt(z, stages)
     const ring = new Float64Array(cols)
+    const facetRing = new Float64Array(cols)
     for (let col = 0; col < cols; col++) {
-      ring[col] = sectionRadius(col * dAlpha, offsets, polys, m.polygonInradius)
+      const section = sectionAt(col * dAlpha, offsets, polys, m.polygonInradius)
+      ring[col] = section.radius
+      facetRing[col] = section.facet
     }
     grid.push(ring)
+    facets.push(facetRing)
   }
 
   const positions: number[] = []
@@ -367,6 +423,7 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
   for (let row = 0; row <= rows; row++) {
     const z = row * dZ
     const ring = grid[row]!
+    const facetRing = facets[row]!
     const below = grid[Math.max(0, row - 1)]!
     const above = grid[Math.min(rows, row + 1)]!
     const zSpan = (Math.min(rows, row + 1) - Math.max(0, row - 1)) * dZ
@@ -380,7 +437,9 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
 
       positions.push(r * ca, r * sa, z)
 
-      const rA = (ring[(c + 1) % cols]! - ring[(c - 1 + cols) % cols]!) / (2 * dAlpha)
+      // Exact on a flat face, and discontinuous across a crease, which is the
+      // whole point: r = inradius / cos(facet) gives dr/dα = r·tan(facet).
+      const rA = r * Math.tan(facetRing[c]!)
       const rZ = zSpan > 0 ? (above[c]! - below[c]!) / zSpan : 0
 
       // N = ∂P/∂α × ∂P/∂z for P = (r cos α, r sin α, z), which reduces to:

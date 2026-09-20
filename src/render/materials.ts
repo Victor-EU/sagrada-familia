@@ -205,8 +205,24 @@ const INDOOR_LIGHT = /* glsl */ `
   vec3 roomNormal = inverseTransformDirection( normal, viewMatrix );
   float fromFloor = max( 0.0, -roomNormal.y );
   float fromAbove = max( 0.0, roomNormal.y );
-  float fromGlass = 1.0 - abs( roomNormal.y );
-  float fill = uRoomFloor * fromFloor + uRoomSky * fromAbove + uRoomSide * fromGlass;
+  float lateral = 1.0 - abs( roomNormal.y );
+
+  // Sideways is not one answer either. The glazing is in the long walls, so a
+  // face turned across the church is looking at a window a few metres away
+  // and a face turned along it is looking down ninety metres of colonnade.
+  // Held equal, the two came back the same tone — which erases every vertical
+  // crease in the building at a stroke, because the flutes of a shaft are all
+  // sideways and differ only in which way round they point. The twenty-four
+  // faces of a column were being handed one colour and a fluted shaft arrived
+  // as a tube.
+  //
+  // x is across the church and z is along it. This is the one place the
+  // shading knows the plan, and it is least true at the crossing, where the
+  // transept opens the other axis up too.
+  vec2 compass = normalize( vec2( roomNormal.x, roomNormal.z ) + vec2( 1e-5 ) );
+  float fromGlass = lateral * mix( uRoomAlong, uRoomSide, abs( compass.x ) );
+
+  float fill = uRoomFloor * fromFloor + uRoomSky * fromAbove + fromGlass;
 
   reflectedLight.indirectDiffuse =
     mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * uRoomGain * fill;
@@ -220,6 +236,7 @@ uniform float uRoomGain;
 uniform float uRoomFloor;
 uniform float uRoomSky;
 uniform float uRoomSide;
+uniform float uRoomAlong;
 `
 
 /** Normalised so rotating onto it changes hue and not how much light there is. */
@@ -235,6 +252,7 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomFloor: { value: number }
   uRoomSky: { value: number }
   uRoomSide: { value: number }
+  uRoomAlong: { value: number }
 }
 
 /**
@@ -313,7 +331,10 @@ export function roomUniforms(): RoomUniforms {
      */
     uRoomFloor: { value: 8 },
     uRoomSky: { value: 1.2 },
-    uRoomSide: { value: 0.4 },
+    /** Turned across the church, at the glazing a few metres away. */
+    uRoomSide: { value: 0.85 },
+    /** Turned along it, at the next column and the ninety metres behind it. */
+    uRoomAlong: { value: 0.12 },
   }
 }
 

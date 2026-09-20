@@ -29,6 +29,18 @@ export interface HyperboloidParams {
   zTop: number
   radialSegments: number
   heightSegments: number
+  /**
+   * Ribs around the surface. 0 leaves it smooth.
+   *
+   * The funnels are not smooth. Every photograph looking up into one shows a
+   * pleated surface — narrow flats meeting along sharp radial creases that
+   * run from the throat out to the rim, so the star around a boss is made of
+   * light and shade rather than drawn on. Smooth, the funnel has one tone
+   * across its whole width and reads as a plastic horn.
+   */
+  pleats?: number
+  /** How deep the pleats cut, as a fraction of the local radius. */
+  pleatDepth?: number
 }
 
 export const defaultHyperboloid: HyperboloidParams = {
@@ -39,6 +51,8 @@ export const defaultHyperboloid: HyperboloidParams = {
   zTop: 2.4,
   radialSegments: 128,
   heightSegments: 96,
+  pleats: 0,
+  pleatDepth: 0,
 }
 
 /** Radius multiplier at height z — 1 at the throat, growing hyperbolically. */
@@ -48,9 +62,31 @@ export function radiusFactor(z: number, flare: number): number {
 }
 
 /**
- * Triangulated surface. Normals come from the implicit gradient rather than
- * from averaging face normals — exact, and it matters on a white model where
- * shading *is* the form.
+ * The pleat profile and its slope, as a multiplier on the radius.
+ *
+ * A triangle wave, not a cosine: a cosine gives a corrugation with no edges
+ * anywhere, and the whole point is the crease. This is flat between creases
+ * and turns a corner at each one, so dg/dθ steps between two constants and
+ * the shading breaks where the stone does.
+ */
+function pleat(theta: number, pleats: number, depth: number): { g: number; slope: number } {
+  if (pleats <= 0 || depth <= 0) return { g: 1, slope: 0 }
+  const turns = (theta * pleats) / (Math.PI * 2)
+  let frac = turns % 1
+  if (frac < 0) frac += 1
+  // +1 at a ridge, −1 in a valley, straight between.
+  const wave = 4 * Math.abs(frac - 0.5) - 1
+  const rising = frac > 0.5 ? 1 : -1
+  return {
+    g: 1 + depth * wave,
+    slope: depth * rising * 4 * (pleats / (Math.PI * 2)),
+  }
+}
+
+/**
+ * Triangulated surface. Normals are exact — the cross of the two parametric
+ * derivatives, which for a smooth surface agrees with the implicit gradient
+ * and for a pleated one keeps the creases the gradient would have lost.
  */
 export function buildHyperboloidSurface(p: HyperboloidParams): THREE.BufferGeometry {
   const a = p.throatRadius
@@ -67,9 +103,9 @@ export function buildHyperboloidSurface(p: HyperboloidParams): THREE.BufferGeome
   const indices = new Uint32Array(radial * rows * 6)
 
   const span = p.zTop - p.zBottom
-  const invA2 = 1 / (a * a)
-  const invB2 = 1 / (b * b)
-  const invC2 = 1 / (p.flare * p.flare)
+  const c2 = p.flare * p.flare
+  const pleats = p.pleats ?? 0
+  const pleatDepth = p.pleatDepth ?? 0
 
   let v = 0
   let t = 0
@@ -77,21 +113,30 @@ export function buildHyperboloidSurface(p: HyperboloidParams): THREE.BufferGeome
     const vFrac = row / rows
     const z = p.zBottom + span * vFrac
     const rf = radiusFactor(z, p.flare)
+    // d(rf)/dz for rf = √(1 + (z/c)²).
+    const rfZ = z / (c2 * rf)
 
     for (let col = 0; col < cols; col++) {
       const uFrac = col / radial
       const theta = uFrac * Math.PI * 2
-      const x = a * rf * Math.cos(theta)
-      const y = b * rf * Math.sin(theta)
+      const { g, slope } = pleat(theta, pleats, pleatDepth)
+      const ct = Math.cos(theta)
+      const st = Math.sin(theta)
+      const A = a * rf
+      const B = b * rf
 
-      positions[v * 3] = x
-      positions[v * 3 + 1] = y
+      positions[v * 3] = A * g * ct
+      positions[v * 3 + 1] = B * g * st
       positions[v * 3 + 2] = z
 
-      // ∇F = (2x/a², 2y/b², −2z/c²), normalised.
-      let nx = x * invA2
-      let ny = y * invB2
-      let nz = -z * invC2
+      // N = ∂P/∂θ × ∂P/∂z for P = (A·g·cos θ, B·g·sin θ, z). With g ≡ 1 this
+      // is the implicit gradient again, up to a positive factor.
+      const aZ = a * rfZ
+      const bZ = b * rfZ
+      let nx = B * (slope * st + g * ct)
+      let ny = -A * (slope * ct - g * st)
+      let nz =
+        A * (slope * ct - g * st) * bZ * g * st - B * (slope * st + g * ct) * aZ * g * ct
       const len = Math.hypot(nx, ny, nz) || 1
       nx /= len
       ny /= len
