@@ -134,7 +134,9 @@ the building anyone is standing in.
 | Tower generator — paraboloid shaft, star section, pierced | `src/geometry/tower.ts` |
 | The eighteen, on published heights and on the grid | `src/plan/towers.ts` |
 | Shell — terraces, parapets, roof lanterns, the three fronts | `src/plan/shell.ts` |
-| Fourteen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
+| Seventeen curated viewpoints, on the number and letter keys | `src/dev/viewpoints.ts` |
+| The building's bearing, measured off its footprint: 314.4° | `src/light/sun.ts` |
+| Three frames matched to the author's own December photographs | `src/dev/viewpoints.ts`, `reference/SOURCES.md` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
 | Two-thumb touch controls, with a stick that appears under the thumb | `src/camera/touch.ts` |
 | The address bar as the save format — a link to a moment of light | `src/share.ts` |
@@ -193,7 +195,7 @@ screen says, and changes when it changes.
 | P | the parameter panel and the readouts (also `?dev` in the address) |
 | O, X, `[` `]` | the reference photo, difference blend, its opacity — with the panel |
 | drop an image | load it as a reference |
-| 1–9, 0, N D G T | the curated viewpoints — **only with the panel open** |
+| 1–9, 0, N D G T X W V | the curated viewpoints — **only with the panel open** |
 
 The curated viewpoints are the regression harness rather than a visit: they
 move the camera without telling the interface, so they live behind the same
@@ -248,6 +250,19 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
 
 - Dimensions in `defaultHyperboloid` are placeholders. Real funnel sizes are an
   open question in the design doc and land here once photo-matched.
+- The bearing is **measured now**, not assumed: 314.4° from the Glory end to
+  the apse, off 215 m of the basilica's long walls in OpenStreetMap. The
+  provisional 315 was six tenths of a degree out.
+- Six of the author's own frames, shot on one December afternoon in 2025 on
+  Classic Chrome, are in `reference/` with their minutes. The sky palette is
+  solved against the exterior pair — the film pass is modelled in Python for
+  one colour and the zenith searched until what comes out is the photograph's
+  — and lands within ten points of it at both hours. The interior pair is
+  **not matched yet**, and the gap is not a slider: a camera in that room
+  exposes for the glass, a stop and a half under where the model stands, and
+  the wash the Passion glass throws on the vault reads nine tenths saturated
+  gold where the model throws a pale pink. That is the glass palette and the
+  indoor exposure together, and it is the next thing to decide.
 - Generators work in their own frame with `z` as the axis; the world is y-up and
   placement rotates. The mathematics stays clean.
 - Deferred from phase 0: wrap-lighting / thin-edge scattering on the plaster.

@@ -28,12 +28,14 @@ export const SITE = {
  * Passion façade (−X) to the south-west. That is consistent with the thing
  * everyone knows about the building — morning on Nativity, evening on Passion.
  *
- * PROVISIONAL. The design doc still carries "measure the true bearing off
- * satellite imagery" as an open question, and every shadow in the model is
- * wrong by whatever this is wrong by. A degree or two either way is invisible;
- * more is not.
+ * Measured, not assumed. The building's footprint in OpenStreetMap
+ * (relation 9194723, read on 20 September 2026) has 215 m of edge longer than
+ * five metres, and the length-weighted mean of their bearings, folded onto
+ * one grid axis, is 44.40° — so the long walls run at 134.4°/314.4° and the
+ * nave points 314.4° from the Glory end toward the apse. The provisional 315
+ * was six tenths of a degree out, which is under a minute of sun.
  */
-export const BUILDING_BEARING_DEG = 315
+export const BUILDING_BEARING_DEG = 314.4
 
 const DEG = Math.PI / 180
 

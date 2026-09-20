@@ -248,6 +248,55 @@ export const VIEWPOINTS: Viewpoint[] = [
     day: 172,
     hour: 8.5,
   },
+  // Three frames matched to the author's own photographs, all from one
+  // December afternoon — see reference/SOURCES.md. Each carries the minute
+  // it was taken, which is what makes them worth more than the Commons set:
+  // the sun in the model is where the sun was.
+  {
+    key: 'x',
+    name: 'Passion porch, December',
+    note:
+      'ex-passion-porch-dec2025: from the pavement under the Passion front, ' +
+      '18 mm, ten past three on 18 December. The sun is 17° up at 214°, on ' +
+      'the front and eleven degrees off square, so every column throws its ' +
+      'shadow to the right across the porch. The sky is the colour test.',
+    position: [-70, 1.6, -36],
+    target: [-40, 45, -30],
+    fov: 47,
+    shiftCorrection: 0,
+    day: 352,
+    hour: 15.17,
+  },
+  {
+    key: 'w',
+    name: 'Passion wall, half past one in December',
+    note:
+      'in-nave-passion-1330-dec2025: across the nave at the west glazing, ' +
+      '18 mm. The sun is 24° up and 34° off the wall, and the whole wall is ' +
+      'lit from behind — the frame the glass gain and the indoor stop are ' +
+      'judged against.',
+    position: [14, 1.6, -2],
+    target: [-24, 16, -6],
+    fov: 47,
+    shiftCorrection: 0,
+    day: 352,
+    hour: 13.5,
+  },
+  {
+    key: 'v',
+    name: 'The wash on the vault',
+    note:
+      'in-vault-wash-dec2025: looking up from the Passion aisle at five to ' +
+      'three. What the glazing does to the canopy when the sun is square on ' +
+      'it — gold and red thrown across the whole vault, which is the wash ' +
+      'rig’s frame.',
+    position: [-2, 1.6, -4],
+    target: [-20, 45, -4],
+    fov: 47,
+    shiftCorrection: 0,
+    day: 352,
+    hour: 14.92,
+  },
 ]
 
 export interface SunSetting {

@@ -427,7 +427,14 @@ export const ROOM_LIGHT = 0xffd8a8
  * nearer to a flame than to amber.
  */
 export const GLASS_EAST = 0xb6e2cc
-export const GLASS_WEST = 0xffc99a
+/**
+ * Warmer and much more saturated than the first guess, off the author's own
+ * December frames: the wash the Passion glass throws onto the canopy at
+ * three in the afternoon reads 203 117 19 through Classic Chrome — hue 32°,
+ * nine tenths saturated — and 0xffc99a, at four tenths, was the colour of a
+ * lamp rather than of sun through orange glass.
+ */
+export const GLASS_WEST = 0xffb14a
 
 export function roomUniforms(): RoomUniforms {
   return {

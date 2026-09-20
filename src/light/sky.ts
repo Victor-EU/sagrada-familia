@@ -68,16 +68,20 @@ const PALETTE = {
   // toward grey — which is most of why the exterior read as a maquette under
   // a studio dome rather than a building standing in a city.
   //
-  // Deeper again for the film. These are chosen for what comes out of
-  // render/film.ts, not for what goes in: AgX greys a saturated blue on its
-  // way through and the Classic Chrome mix darkens it, so the zenith here is
-  // about half the radiance the old palette carried and lands on screen at
-  // the cobalt a midday photograph of the fronts has — measured, 44 87 170
-  // against the photograph's 28 78 160. The envelope's fill is scaled back
-  // up separately, so the sky being darker does not make the shade darker.
+  // Deeper again for the film, and matched to a photograph rather than to
+  // taste. These are chosen for what comes out of render/film.ts, not for
+  // what goes in: AgX greys a saturated blue on its way through and pushes
+  // it toward violet, and the Classic Chrome mix darkens it, so the zenith
+  // here is a third of the radiance the old palette carried and carries far
+  // more green than the sky it produces. What it produces, on the December
+  // frames in reference/ shot on the same film — `ex-passion-porch-dec2025`
+  // reads 28 73 112 at the zenith, hue 207° — is 37 80 118 at hue 208°: the
+  // same deep teal-blue, a shade lighter, which June is allowed to be. The
+  // envelope's fill is scaled back up separately, so the sky being darker
+  // does not make the shade darker.
   day: {
-    zenith: new THREE.Vector3(0.013, 0.082, 0.40),
-    horizon: new THREE.Vector3(0.44, 0.60, 0.90),
+    zenith: new THREE.Vector3(0.008, 0.115, 0.215),
+    horizon: new THREE.Vector3(0.40, 0.58, 0.84),
     ground: new THREE.Vector3(0.22, 0.20, 0.17),
     // Daylight is not white. A touch of amber here is what makes stone read
     // as stone, and it is what the sunlit faces in every photograph have.

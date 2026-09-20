@@ -79,7 +79,16 @@ const INHABIT_SHIFT = 0.5
  * threshold and the pupil widens over about a second, which is what an eye
  * does and what nobody has to be told about.
  */
-const INSIDE_STOP = 1.25
+/**
+ * Down from 1.25, against the photographs. A camera in that room exposes for
+ * the glass, because the glass is the picture: on the December frames in
+ * reference/ the lit stone of the Passion wall sits at a third of white and
+ * the lancets at three quarters, saturated. At 1.25 the same wall came back
+ * pale — the stone at 70 % and the glass at 62 % and a quarter saturated,
+ * because past white the film lets a colour go grey. A stop closed is where
+ * the glass keeps its colour and the stone becomes the thing it lands on.
+ */
+const INSIDE_STOP = 0.9
 /**
  * Well under the room. A photograph of this building is exposed for the
  * sunlit stone, and the sunlit stone at the old figure was over the film's

@@ -1,9 +1,10 @@
 # Reference photographs — where they came from and what each one is for
 
-Twenty-eight frames, 49.3 MB, inside and out. Every one is from Wikimedia Commons
+Thirty-four frames, 52 MB, inside and out. Twenty-eight are from Wikimedia Commons
 under a licence that permits reuse, and every one is recorded below with its author,
-its licence and a link back to the file page. They are harness input: nothing here is
-bundled into the build.
+its licence and a link back to the file page. Six are the author's own, taken on one
+December afternoon in 2025 and listed in their own section at the end. They are harness
+input: nothing here is bundled into the build.
 
 ## How they were sized
 
@@ -86,3 +87,24 @@ axial views of the nave at different heights, two readings of each front.
   redistribution, and these are not redistributed — but the record is kept here so that
   it exists if one ever leaves this directory.
 
+
+## Own frames — 18 December 2025
+
+Six of thirty-eight, shot on a Fujifilm X-S10 between 13:03 and 15:10 with the
+**Classic Chrome** film simulation, which is what the frame's colour is now graded
+toward (see `src/render/film.ts`). Their value is not composition: it is that every one
+carries a **timestamp**, so the sun in the model can be put exactly where it was, and
+that the exterior pair records what a clear December sky and sunlit Montjuïc stone look
+like through the very film the render imitates. Sampled: the zenith of
+`ex-passion-porch-dec2025` is 28 73 112 — hue 207°, three quarters saturated, under half
+value — which is a good deal deeper and greener than any Commons frame in the set. The
+originals are kept in `Photos/`, at 6240 px; these are 1920 px copies.
+
+| file | px | size | what it is for | photograph | licence |
+| --- | --- | --- | --- | --- | --- |
+| `ex-passion-front-up-dec2025.jpg` | 1920x1280 | 0.54 MB | Passion front from the pavement, 26 mm, 13:03 — the towers and the porch gable against a December sky. | Victor Zhang, Fujifilm X-S10, 26 mm, 18 Dec 2025 13:03, Classic Chrome | own work |
+| `ex-passion-porch-dec2025.jpg` | 1920x1280 | 0.48 MB | Passion porch from the pavement, 18 mm, 15:10 — sun 17° up at 214°, columns throwing their shadows across the front. | Victor Zhang, Fujifilm X-S10, 18 mm, 18 Dec 2025 15:10, Classic Chrome | own work |
+| `in-nave-passion-1330-dec2025.jpg` | 1920x1280 | 0.45 MB | Nave looking toward the Passion glazing, 18 mm, 13:29 — the west wall ablaze at a December midday. | Victor Zhang, Fujifilm X-S10, 18 mm, 18 Dec 2025 13:29, Classic Chrome | own work |
+| `in-nave-passion-wide-dec2025.jpg` | 1920x1280 | 0.51 MB | Same wall wider, 13:34 — the two glazings in one frame, green Nativity rose top right. | Victor Zhang, Fujifilm X-S10, 18 mm, 18 Dec 2025 13:34, Classic Chrome | own work |
+| `in-vault-wash-dec2025.jpg` | 1920x1280 | 0.55 MB | The vault at 14:55: the Passion glass thrown onto the canopy as gold and red. | Victor Zhang, Fujifilm X-S10, 18 mm, 18 Dec 2025 14:55, Classic Chrome | own work |
+| `in-vault-wash-columns-dec2025.jpg` | 1920x1280 | 0.48 MB | Same wash a minute later, with the columns rising into it. | Victor Zhang, Fujifilm X-S10, 18 mm, 18 Dec 2025 14:56, Classic Chrome | own work |

@@ -48,11 +48,15 @@ const introEl = document.querySelector<HTMLDivElement>('#intro')!
  * true. One frame's grace here and they are on screen for the whole of it.
  */
 performance.mark('boot')
-await new Promise<void>((resolve) =>
+await new Promise<void>((resolve) => {
   // Two frames, not one: the first callback runs before that frame is
   // painted, and it is the frame after that which is certain to have been.
-  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
-)
+  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))
+  // A hidden tab gets no frames at all, and a page that waits for one never
+  // builds — it would open on the wait line and stay there until it was
+  // looked at. Nothing to paint for is nothing to wait for.
+  setTimeout(resolve, 1500)
+})
 
 /**
  * Whether this is the instrument or the building.
