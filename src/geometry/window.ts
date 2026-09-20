@@ -666,6 +666,23 @@ export function mergeOrEmpty(pieces: THREE.BufferGeometry[]): THREE.BufferGeomet
     geometry.setIndex(Array.from({ length: count }, (_, i) => i))
   }
 
+  // And the same for the attribute set. Three's own primitives all carry a
+  // uv; anything built by hand here mostly does not, and a merge of the two
+  // is refused. Nothing in this project samples a uv — the grain is in world
+  // space and the stones have no maps — so the honest fix is to give the
+  // hand-built pieces the attribute they are missing rather than to strip it
+  // from the primitives and find out later which chunk wanted it.
+  const attributes = new Set<string>()
+  for (const geometry of real) for (const name of Object.keys(geometry.attributes)) attributes.add(name)
+  for (const geometry of real) {
+    for (const name of attributes) {
+      if (geometry.getAttribute(name)) continue
+      const count = geometry.getAttribute('position')!.count
+      const size = real.find((g) => g.getAttribute(name))!.getAttribute(name)!.itemSize
+      geometry.setAttribute(name, new THREE.Float32BufferAttribute(new Float32Array(count * size), size))
+    }
+  }
+
   const merged = mergeGeometries(real, false)
   if (!merged) {
     const shapes = real.map((g) => Object.keys(g.attributes).sort().join('+'))

@@ -53,6 +53,17 @@ export const PORPHYRY = 0xa1766c
  */
 export const VAULT = 0xeee6d8
 
+/**
+ * Glazed ceramic fruit.
+ *
+ * Pale, not gaudy. The baskets on the roof pinnacles photograph as cream and
+ * eau-de-nil with a little coral in them — grapes, apples, peaches — and the
+ * saturated version of that is a fairground. What makes them read from the
+ * street is that they are *shiny* on a matt building, so the roughness is
+ * doing most of the work here and the hue is doing very little.
+ */
+export const CERAMIC = 0xd9d2b0
+
 /** Clerestory and enclosing walls: sandstone, a shade lighter for the dressing. */
 export const WALL = 0xe3d3b8
 
@@ -117,6 +128,13 @@ export type StoneName =
    * the cheaper mistake: that face has the sun on it and barely notices.
    */
   | 'shell'
+  /**
+   * The glazed ceramic of the roof: the fruit on every pinnacle, and the
+   * mosaic that caps a bell tower. Not stone at all — it is Venetian glass
+   * and enamelled tile, which is why it is the one thing on a sandstone
+   * building that reads as colour from the street.
+   */
+  | 'ceramic'
 
 /**
  * Colour and roughness only.
@@ -141,6 +159,7 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
   facade: { color: SANDSTONE, roughness: 0.88 },
   hollow: { color: HOLLOW, roughness: 0.96 },
   shell: { color: SANDSTONE, roughness: 0.88 },
+  ceramic: { color: CERAMIC, roughness: 0.28 },
 }
 
 function stone(name: StoneName): THREE.MeshStandardMaterial {
@@ -571,6 +590,7 @@ export function openQuarry(): Quarry {
     porphyry: stone('porphyry'),
     vault: stone('vault'),
     wall: stone('wall'),
+    ceramic: stone('ceramic'),
     facade: stone('facade'),
     hollow: stone('hollow'),
     shell: stone('shell'),

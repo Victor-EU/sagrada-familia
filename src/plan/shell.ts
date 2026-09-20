@@ -3,6 +3,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { buildPinnacle } from '../geometry/tower.ts'
 import { buildPavement } from './floor.ts'
 import { MODULE } from './module.ts'
+import { buildCrust, buildHood, buildPassionPortico } from '../geometry/portico.ts'
+import { buildFruit, buildGable } from '../geometry/roofwork.ts'
+import { mergeOrEmpty } from '../geometry/window.ts'
 import { named, type Parts } from './parts.ts'
 
 /**
@@ -72,6 +75,14 @@ export interface ShellParams {
   /** Width of the mullions dividing the upper front. */
   mullion: number
   pinnacles: boolean
+  /** The Passion portico and the Nativity hoods. */
+  porch: boolean
+  /** How far the Passion portico stands out from its wall. */
+  porchReach: number
+  /** Steep triangles over every bay of a wall head. */
+  gables: boolean
+  /** How far a nave gable's apex stands above the wall head. */
+  gableRise: number
   /** Pinnacle height and girth along the parapets. */
   pinnacleHeight: number
   pinnacleRadius: number
@@ -95,6 +106,10 @@ export const defaultShell: ShellParams = {
   gable: 6.5,
   mullion: 0.9,
   pinnacles: true,
+  porch: true,
+  porchReach: 9.5,
+  gables: true,
+  gableRise: 7.2,
   // A module tall and a fifth of a module across: they read at a hundred
   // metres, which is the only distance they are ever seen from.
   pinnacleHeight: MODULE,
@@ -178,6 +193,9 @@ export interface Shell {
   /** How far the building now reaches out past its own walls. */
   reach: number
 }
+
+/** Which of the three fronts this is; they are not interchangeable. */
+type FrontKind = 'nativity' | 'passion' | 'glory'
 
 export function buildShell(
   parts: Parts,
@@ -295,6 +313,7 @@ export function buildShell(
     outward: THREE.Vector2,
     width: number,
     height: number,
+    kind: FrontKind,
   ): void => {
     const top = height + s.parapet
     // One front is one draw call. Seven hundred separate slabs is the right
@@ -489,6 +508,66 @@ export function buildShell(
     // and the four bell towers land on them.
     for (const x of pierLines(width)) panel(x, s.pier, -4, top, s.project)
 
+    /**
+     * Anything built in the porch's own frame — x across, y up, z out from
+     * the wall face — put where the front stands.
+     *
+     * The same right-handed basis the slabs use, and for the same reason: a
+     * left-handed one mirrors the geometry and the normals come out pointing
+     * into the stone.
+     */
+    const stand = (depth: number): THREE.Matrix4 => {
+      const outwardVec = new THREE.Vector3(outward.x, 0, outward.y)
+      const up = new THREE.Vector3(0, 1, 0)
+      return new THREE.Matrix4()
+        .makeBasis(new THREE.Vector3().crossVectors(up, outwardVec), up, outwardVec)
+        .setPosition(face.x + outward.x * depth, 0, face.y + outward.y * depth)
+    }
+
+    const porch: THREE.BufferGeometry[] = []
+    if (kind === 'passion' && s.porch) {
+      porch.push(
+        buildPassionPortico({
+          width: width * 0.92,
+          height: s.portalHeight * 0.82,
+          reach: s.porchReach,
+          legs: 6,
+          slab: 1.3,
+          blades: 13,
+          bladeRise: 4.2,
+        }),
+      )
+    }
+    if (kind === 'nativity' && s.porch) {
+      for (const bay of portals(s.pier, width)) {
+        const hood = buildHood({
+          span: MODULE - s.pier + 1.6,
+          reach: s.porchReach * 0.52,
+          rise: 5.4,
+          sill: s.portalHeight * 0.86,
+        })
+        hood.translate(bay.centre, 0, 0)
+        porch.push(hood)
+      }
+      // The piers are the stone that stands at the front plane; the bays
+      // behind them are a metre back and are somebody else's surface.
+      porch.push(
+        buildCrust({
+          bands: pierLines(width).map((centre) => ({ centre, width: s.pier })),
+          from: 2,
+          to: top - 3,
+          depth: 0,
+          count: 640,
+          seed: 19,
+        }),
+      )
+    }
+    if (porch.length > 0) {
+      const merged = mergeOrEmpty(porch)
+      merged.applyMatrix4(stand(s.project))
+      parts.piece(named('porch', merged, parts.stone('facade')), merged)
+    }
+
     // A box comes back indexed and an extrusion does not, and a merge of the
     // two returns null rather than throwing — so everything is flattened on
     // the way in. (plan/city.ts learned this the expensive way: a Mesh with
@@ -515,6 +594,7 @@ export function buildShell(
     new THREE.Vector2(1, 0),
     facadeWidth,
     p.armCrown,
+    'nativity',
   )
   front(
     new THREE.Vector2(-frontX, p.crossingZ),
@@ -522,6 +602,7 @@ export function buildShell(
     new THREE.Vector2(-1, 0),
     facadeWidth,
     p.armCrown,
+    'passion',
   )
   front(
     new THREE.Vector2(0, p.gloryZ),
@@ -529,7 +610,61 @@ export function buildShell(
     new THREE.Vector2(0, 1),
     facadeWidth,
     p.naveCrown,
+    'glory',
   )
+
+  /**
+   * The gables.
+   *
+   * Over every bay of a wall head stands a steep triangle with a round light
+   * in it, and the valley between two of them is as much of the silhouette as
+   * the peaks are. Without them the roofline of this model was a parapet with
+   * spikes on it; the building's is a saw.
+   *
+   * They face outward, so the two flanks are mirrored and the Glory end turns
+   * a quarter. The apse is left alone: it is a chevet with a lantern over it,
+   * and it does not have bays in that sense.
+   */
+  const gable = (x: number, z: number, turn: number, crown: number, rise: number): void => {
+    const piece = mergeOrEmpty(
+      buildGable({
+        span: MODULE * 0.94,
+        rise,
+        depth: MODULE * 0.72,
+        teeth: 7,
+        toothDepth: 0.36,
+        eye: rise * 0.13,
+      }),
+    )
+    const stand = new THREE.Matrix4()
+      .makeTranslation(x, crown + s.parapet, z)
+      .multiply(new THREE.Matrix4().makeRotationY(turn))
+    // Flat stone, so there is nothing for a level of detail to coarsen: one
+    // tessellation, offered at zero error.
+    parts.surface(
+      `gable:${rise.toFixed(1)}`,
+      () => ({ geometry: piece.clone(), error: 0 }),
+      stand,
+      'shell',
+      true,
+    )
+  }
+
+  if (s.gables) {
+    for (const side of [1, -1]) {
+      const turn = side > 0 ? Math.PI / 2 : -Math.PI / 2
+      // The clerestory of the central vessel, and the aisle wall outboard.
+      for (let z = p.gloryZ - MODULE / 2; z > p.crossNear; z -= MODULE) {
+        gable(side * p.clerX, z, turn, p.naveCrown, s.gableRise)
+        gable(side * p.wallX, z, turn, p.aisleCrown, s.gableRise * 0.74)
+      }
+    }
+    for (let x = -p.wallX + MODULE / 2; x < p.wallX; x += MODULE) {
+      const crown = Math.abs(x) < p.clerX ? p.naveCrown : p.aisleCrown
+      const rise = Math.abs(x) < p.clerX ? s.gableRise : s.gableRise * 0.74
+      gable(x, p.gloryZ, 0, crown, rise)
+    }
+  }
 
   // Pinnacles along the parapets, one to a column line, because that is what
   // holds them up. The roofline of this building is not a straight edge in
@@ -567,7 +702,7 @@ export function buildShell(
       )
     }
 
-    for (const spot of pinnacles) {
+    for (const [i, spot] of pinnacles.entries()) {
       parts.surface(
         'roof pinnacle',
         (detail) =>
@@ -580,6 +715,26 @@ export function buildShell(
           }),
         new THREE.Matrix4().makeTranslation(spot.x, spot.y, spot.z),
         'facade',
+      )
+      // And the basket it carries. Two kinds, alternating, because the real
+      // ones are not all grapes — the roof is wheat and fruit in turn, and a
+      // row of identical baskets reads as a manufactured part.
+      const bunch = i % 2 === 0 ? 30 : 20
+      parts.surface(
+        `roof fruit:${bunch}`,
+        () => ({
+          geometry: buildFruit({ radius: s.pinnacleRadius * 1.5, count: bunch, seed: 7 + bunch }),
+          // A berry is a centimetre or two off round at this size; nothing
+          // below it to drop to.
+          error: 0.02,
+        }),
+        new THREE.Matrix4().makeTranslation(
+          spot.x,
+          spot.y + s.pinnacleHeight * 0.93,
+          spot.z,
+        ),
+        'ceramic',
+        true,
       )
     }
   }
