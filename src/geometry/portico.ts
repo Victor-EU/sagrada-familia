@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { buildInscription, textWidth } from './letters.ts'
 import { mergeOrEmpty } from './window.ts'
 
 /**
@@ -151,6 +152,32 @@ export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
   deck.translate(0, p.height + p.slab / 2, p.reach * 0.5)
   deck.rotateX(-0.045)
   pieces.push(deck)
+
+  // The charge, cut across the fascia of the canopy.
+  //
+  // The real front carries the titulus over the door in Latin capitals, and
+  // this is the one band of writing on the Passion side that a person
+  // standing on the steps reads without looking up. Sized to the fascia
+  // rather than typed: the canopy is as wide as the front it stands across
+  // and the front is a parameter.
+  const titulus = 'IESUS NAZARENUS REX IUDAEORUM'
+  const cap = (p.width * 0.84) / Math.max(1, textWidth(titulus, 0.2))
+  // Lighter in the stroke than the tower bands: twenty-nine letters across
+  // one fascia is a much smaller cap height, and a heavy cut at that size
+  // closes every counter in the line.
+  const charge = buildInscription({
+    text: titulus,
+    size: cap,
+    tracking: 0.2,
+    weight: 0.12,
+    relief: 0.22,
+  })
+  charge.translate(
+    (-textWidth(titulus, 0.2) * cap) / 2,
+    p.height + p.slab * 0.28,
+    p.reach * 1.17,
+  )
+  pieces.push(charge)
 
   // The blades: a row of slabs leaning back, their tops describing a shallow
   // gable, with a course of blocks along the rake carrying the inscription.

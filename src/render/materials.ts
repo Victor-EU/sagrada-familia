@@ -58,13 +58,30 @@ export const VAULT = 0xeee6d8
 /**
  * Glazed ceramic fruit.
  *
- * Pale, not gaudy. The baskets on the roof pinnacles photograph as cream and
- * eau-de-nil with a little coral in them — grapes, apples, peaches — and the
- * saturated version of that is a fairground. What makes them read from the
- * street is that they are *shiny* on a matt building, so the roughness is
- * doing most of the work here and the hue is doing very little.
+ * This was cream, on the reasoning that a saturated version would be a
+ * fairground, and the photograph says otherwise. Sampling only the lit glaze
+ * off `reference/ex-terraces-roofscape.jpg` — the top thirty per cent of
+ * pixels by saturation in each basket, so shadow and background are out of
+ * it — the four baskets in that frame run:
+ *
+ * | basket | sampled | hue | saturation |
+ * | --- | --- | --- | --- |
+ * | green-yellow | #7e6f3c | 47 | 0.52 |
+ * | orange | #855327 | 28 | 0.70 |
+ * | green | #836327 | 39 | 0.70 |
+ * | red | #702924 | 4 | 0.67 |
+ *
+ * against 0.27 for the stone they stand on. The old cream sat at 0.19 — the
+ * *same saturation as the stone* — which is why a roof full of baskets
+ * rendered as white cauliflower. They are four hues and they are half again
+ * as saturated as anything else on the building, which is the whole reason
+ * people photograph them.
+ *
+ * The base colour is left near white because the fruit is painted per berry
+ * — see `FRUIT_PALETTE` and `buildFruit` — and a tinted base would multiply
+ * into every one of them.
  */
-export const CERAMIC = 0xd9d2b0
+export const CERAMIC = 0xf2efe8
 
 /** Clerestory and enclosing walls: sandstone, a shade lighter for the dressing. */
 export const WALL = 0xe3d3b8
@@ -306,7 +323,17 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
  * profile. Anything cut from one of these *must* carry a `color` attribute —
  * three multiplies by it, and geometry without one comes back black.
  */
-const PAINTED: readonly StoneName[] = ['mosaic']
+/**
+ * The glazes on the roof baskets, straight off the photograph above.
+ *
+ * Five rather than four: the sampled quartet plus a pale one, because a
+ * basket that is all fruit and no highlight reads as a single lump at the
+ * distance these are seen from and the real ones carry a few near-white
+ * pieces that break the mass up.
+ */
+export const FRUIT_PALETTE = [0x8f7a33, 0x9c5d24, 0x8f6b22, 0x7e2a24, 0xd8cda6] as const
+
+const PAINTED: readonly StoneName[] = ['mosaic', 'ceramic']
 
 /**
  * The albedo a named stone is cut at.

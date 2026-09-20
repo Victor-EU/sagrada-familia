@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { buildInscription, textWidth } from './letters.ts'
 import { mergeOrEmpty } from './window.ts'
 
 /**
@@ -31,6 +32,8 @@ export interface GableParams {
   toothDepth: number
   /** Radius of the light in the gable's face. Zero for none. */
   eye: number
+  /** A word cut across the face. Empty for a blank gable. */
+  word?: string
 }
 
 /**
@@ -82,6 +85,20 @@ export function buildGable(p: GableParams): THREE.BufferGeometry[] {
 
   const pieces = [body]
   if (p.teeth > 0 && p.toothDepth > 0) pieces.push(rakeTeeth(p, half))
+  if (p.word) {
+    // Low in the face, under the light, where the triangle is still wide
+    // enough to hold a word — and sized so it never runs out past the rake.
+    // Every gable on the apse in `reference/ex-apse-flank-west.jpg` carries
+    // one: Amen, Honor, Poder, Accio de Gracies, all of them legible from
+    // the street, and they are most of why that roofline reads as built
+    // rather than as extruded.
+    const at = p.rise * 0.15
+    const room = 2 * half * (1 - at / p.rise) * 0.86
+    const size = Math.min(p.rise * 0.16, room / Math.max(0.5, textWidth(p.word)))
+    const line = buildInscription({ text: p.word, size, relief: 0.2 })
+    line.translate((-textWidth(p.word) * size) / 2, at, 0.02)
+    pieces.push(line)
+  }
   if (p.eye > 0.05) {
     // The light sits low in the face, where the triangle is still wide enough
     // to hold it, and it is a ring rather than a disc: there is a window in
@@ -127,6 +144,8 @@ export interface FruitParams {
   /** How many pieces of fruit. */
   count: number
   seed: number
+  /** Glazes to paint the berries with. Without one the basket is stone. */
+  palette?: readonly number[]
 }
 
 /**
@@ -136,11 +155,33 @@ export interface FruitParams {
  * little below its middle — which is what a basket does, and what every
  * photograph of these shows: the cluster is widest below halfway and closes
  * to a point on top, where a small cap sits.
+ *
+ * Painted per berry rather than per basket, but not at random. In
+ * `reference/ex-terraces-roofscape.jpg` each basket is plainly *the green
+ * one* or *the red one* — one glaze dominates and a handful of pieces break
+ * it — so the seed picks a dominant and most berries take it. A basket with
+ * an even mix of all five is a bowl of sweets, which is the failure the old
+ * cream was trying to avoid and avoided by giving up the colour entirely.
  */
 export function buildFruit(p: FruitParams): THREE.BufferGeometry {
   const random = mulberry(p.seed)
   const pieces: THREE.BufferGeometry[] = []
   const count = Math.max(6, Math.round(p.count))
+  const glazes = p.palette
+  // The pale glaze is kept last in the palette and used as the accent.
+  const dominant = glazes ? p.seed % Math.max(1, glazes.length - 1) : 0
+  const paint = (geometry: THREE.BufferGeometry, hex: number): void => {
+    if (!glazes) return
+    const n = geometry.getAttribute('position').count
+    const colour = new Float32Array(n * 3)
+    const c = new THREE.Color(hex).convertSRGBToLinear()
+    for (let i = 0; i < n; i++) {
+      colour[i * 3] = c.r
+      colour[i * 3 + 1] = c.g
+      colour[i * 3 + 2] = c.b
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3))
+  }
 
   for (let i = 0; i < count; i++) {
     // Fibonacci on the sphere, so they spread without clumping, then pulled
@@ -160,12 +201,23 @@ export function buildFruit(p: FruitParams): THREE.BufferGeometry {
       y * r * 0.86 + p.radius * 0.1,
       Math.sin(angle) * ring * r * droop,
     )
+    if (glazes) {
+      const roll = random()
+      const pick =
+        roll < 0.66
+          ? dominant
+          : roll < 0.88
+            ? (dominant + 1 + Math.floor(random() * 2)) % Math.max(1, glazes.length - 1)
+            : glazes.length - 1
+      paint(sphere, glazes[pick] ?? 0xffffff)
+    }
     pieces.push(sphere)
   }
 
   // The cap: a small stone finial the cluster is gathered under.
   const cap = new THREE.ConeGeometry(p.radius * 0.34, p.radius * 1.0, 6, 1)
   cap.translate(0, p.radius * 1.35, 0)
+  paint(cap, 0xcfc6b4)
   pieces.push(cap)
 
   return mergeOrEmpty(pieces)
@@ -180,4 +232,108 @@ function mulberry(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+export interface GargoyleParams {
+  /** How far it stands out from the wall. */
+  reach: number
+  /** How far the head hangs below the root. */
+  drop: number
+  /** Widest across the body. */
+  girth: number
+  /** Sides round the body. */
+  sides: number
+  seed: number
+}
+
+/**
+ * A gargoyle, as a shape rather than as an animal.
+ *
+ * Every cornice on the apse in `reference/ex-apse-flank-west.jpg` carries a
+ * row of these, and what they are at that distance — which is the only
+ * distance any viewpoint in this project sees them from — is not a lizard or
+ * a snail. It is a dark knuckle standing a metre and a half out of the wall
+ * at the one place where the wall turns a corner, breaking the cornice line
+ * and throwing a shadow back onto it. That is the whole of the effect and it
+ * is worth two hundred triangles.
+ *
+ * So: a tube swept along a curve that leaves the wall level, arcs out and
+ * falls, with a shoulder near the root and a flare at the head. No face, no
+ * limbs, no attempt at a creature. The real ones *are* creatures and at
+ * sixty metres nobody has ever been able to tell, which is the argument for
+ * building the mass and stopping.
+ *
+ * Its own frame: the wall is the xy plane, z runs out of it, y is up.
+ */
+export function buildGargoyle(p: GargoyleParams): THREE.BufferGeometry {
+  const random = mulberry(p.seed)
+  const rings = 9
+  const sides = Math.max(4, p.sides)
+  // A little sideways set, so a row of them is not a row of one.
+  const sway = (random() - 0.5) * p.girth * 1.6
+  const positions: number[] = []
+
+  const at = (t: number): THREE.Vector3 =>
+    new THREE.Vector3(
+      sway * Math.sin(t * 2.4),
+      -p.drop * Math.pow(t, 1.9),
+      p.reach * t,
+    )
+  /** Base, plus a shoulder near the root and a flare at the head. */
+  const girthAt = (t: number): number =>
+    p.girth *
+    (0.34 +
+      0.62 * Math.exp(-(((t - 0.3) / 0.3) ** 2)) +
+      0.55 * Math.exp(-(((t - 0.9) / 0.13) ** 2)))
+
+  const ring = (t: number): THREE.Vector3[] => {
+    const centre = at(t)
+    const ahead = at(Math.min(1, t + 0.02))
+    const behind = at(Math.max(0, t - 0.02))
+    const axis = ahead.clone().sub(behind).normalize()
+    const side = new THREE.Vector3(1, 0, 0).cross(axis).normalize()
+    if (side.lengthSq() < 1e-6) side.set(1, 0, 0)
+    const up = axis.clone().cross(side).normalize()
+    const r = girthAt(t)
+    const out: THREE.Vector3[] = []
+    for (let i = 0; i < sides; i++) {
+      const a = (i / sides) * Math.PI * 2
+      // Squashed, because a gargoyle is a beam with a beast cut on it and a
+      // round tube reads as a drainpipe.
+      out.push(
+        centre
+          .clone()
+          .addScaledVector(side, Math.cos(a) * r)
+          .addScaledVector(up, Math.sin(a) * r * 0.76),
+      )
+    }
+    return out
+  }
+
+  let previous = ring(0)
+  for (let k = 1; k <= rings; k++) {
+    const current = ring(k / rings)
+    for (let i = 0; i < sides; i++) {
+      const j = (i + 1) % sides
+      const a = previous[i]!
+      const b = previous[j]!
+      const c = current[j]!
+      const d = current[i]!
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
+      positions.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z)
+    }
+    previous = current
+  }
+  // Close the head, so the mouth is not an open pipe against the sky.
+  const tip = at(1)
+  for (let i = 0; i < sides; i++) {
+    const a = previous[i]!
+    const b = previous[(i + 1) % sides]!
+    positions.push(a.x, a.y, a.z, b.x, b.y, b.z, tip.x, tip.y, tip.z)
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
 }

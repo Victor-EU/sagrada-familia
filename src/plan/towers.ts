@@ -6,9 +6,12 @@ import {
   buildStar,
   buildTowerLouvres,
   buildTowerShaft,
+  towerBand,
   type TowerOpenings,
   type TowerParams as TowerShaftParams,
 } from '../geometry/tower.ts'
+import { buildInscription, textWidth, wrapAroundY } from '../geometry/letters.ts'
+import { mergeOrEmpty } from '../geometry/window.ts'
 import { named, type Parts } from './parts.ts'
 import { MODULE } from './module.ts'
 import { MOSAIC_PALETTE, stoneColour, type StoneName } from '../render/materials.ts'
@@ -349,6 +352,21 @@ export interface Towers {
   peak: number
 }
 
+/**
+ * What the bell towers say.
+ *
+ * The twelve apostles' towers are written on, and between them they carry the
+ * Sanctus of the Mass: *Sanctus, Sanctus, Sanctus, Dominus Deus Sabaoth* on
+ * the shafts and *Hosanna in excelsis* above. Which word stands on which
+ * tower is not something this model can know from a photograph — what the
+ * photographs establish is that Sanctus is much the commonest, which is why
+ * it is two of every four here. The word goes in the kind key: two towers of
+ * identical height and girth saying different things are two different
+ * objects, and the last phase lost a whole facade's colour to exactly this
+ * mistake made about stone.
+ */
+const BAND_WORDS = ['Sanctus', 'Hosanna', 'Sanctus', 'Excelsis'] as const
+
 export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): Towers {
   /**
    * A bell tower: a solid lower third with long windows in it, a raised
@@ -388,6 +406,7 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
   }
 
   let peak = 0
+  let written = 0
   const standing: TowerSite[] = []
 
   for (const site of sites) {
@@ -475,6 +494,45 @@ export function buildTowers(parts: Parts, sites: TowerSite[], p: TowerParams): T
       'hollow',
       true,
     )
+
+    // The writing. Cut on the raised ring the belfry already carries, which
+    // is what the ring is for and what it has been missing: from the plaza a
+    // bare band is a bright line round a tower, and a written one is the
+    // thing in `reference/ex-plaza-nativity.jpg` that you can read four times
+    // across one frame.
+    const band = towerBand(shape(1))
+    if (band) {
+      const word = BAND_WORDS[written % BAND_WORDS.length]!
+      written += 1
+      // Cap height just under half the band, which is what the photograph
+      // gives: measured off `ex-plaza-nativity.jpg` against a four-metre
+      // shaft, the word Sanctus is about 3.7 m of arc and its capitals about
+      // 0.9 m, so the ring shows clear above and below the writing.
+      const size = band.height * 0.46
+      const width = textWidth(word) * size
+      // As many as go round leaving a fifth of the circumference in gaps.
+      // Derived rather than typed, so a slimmer shaft carries fewer without
+      // anything here having to know which tower it is looking at.
+      const round = 2 * Math.PI * band.meanRadius
+      const repeats = Math.max(3, Math.floor((round * 0.82) / width))
+      parts.surface(
+        `${key}:band:${word}:${repeats}`,
+        (detail) => {
+          const pieces: THREE.BufferGeometry[] = []
+          for (let i = 0; i < repeats; i += 1) {
+            const line = buildInscription({ text: word, size, detail })
+            line.translate(0, band.y - size * 0.5, 0)
+            pieces.push(
+              wrapAroundY(line, band.radiusAt, (i * Math.PI * 2) / repeats, band.meanRadius),
+            )
+          }
+          return { geometry: mergeOrEmpty(pieces), error: 0.01 }
+        },
+        stand,
+        site.fabric,
+        true,
+      )
+    }
 
     const shaftTop = base + shaft
     if (site.crown === 'pinnacle' || site.crown === 'finial') {

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { buildCrane, type CraneParams } from '../geometry/works.ts'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
@@ -49,6 +50,8 @@ export interface CityParams {
   storeysMax: number
   /** Where the temple's own block is centred, in model x/z. */
   centre: [number, number]
+  /** The tower cranes on the site. See `buildCrane`. */
+  cranes: boolean
   trees: boolean
 }
 
@@ -67,6 +70,7 @@ export const defaultCity: CityParams = {
   // behind the Glory front rather than on the crossing.
   centre: [0, -19],
   trees: true,
+  cranes: true,
 }
 
 /**
@@ -432,6 +436,37 @@ export function buildCity(
         treeSpots.push(new THREE.Vector3(cx + t, 0, cz + kerb))
         treeSpots.push(new THREE.Vector3(cx + t, 0, cz - kerb))
       }
+    }
+  }
+
+  /**
+   * The plant, which stands on the site rather than in the grid.
+   *
+   * Two, because there are two in `ex-apse-flank-west.jpg` and two in
+   * `ex-flank-elevation.jpg`, and they stand where the work is: one against
+   * the apse, which is the end still being built, and one off the Glory
+   * front, which is the end not yet built at all. Their steel is sampled off
+   * the photographs — the three cranes in `reference/` come back at hue 20
+   * to 37 and saturation 0.40 to 0.56, which is one paint and not three.
+   *
+   * The jibs are slewed across the building rather than away from it. A
+   * crane parked with its jib pointing out of frame is a crane nobody sees,
+   * and in every photograph here the jib crosses the towers.
+   */
+  if (params.cranes) {
+    const steel = new THREE.Color(0xc98b46)
+    const rigs: Array<[number, number, CraneParams]> = [
+      [-52, -58, { height: 82, jib: 56, counter: 20, mast: 2.4, trolley: 34, drop: 46, turn: 0.62 }],
+      [58, 34, { height: 64, jib: 48, counter: 17, mast: 2.1, trolley: 29, drop: 36, turn: 2.05 }],
+    ]
+    for (const [x, z, rig] of rigs) {
+      // Non-indexed, because the blocks it is merged with are extrusions and
+      // mergeGeometries refuses a list where some carry an index and some do
+      // not — it fails on the first crane and takes the whole city with it.
+      const crane = buildCrane(rig).toNonIndexed()
+      crane.translate(x, 0, z)
+      tintAll(crane, steel, 0.5)
+      blocks.push(crane)
     }
   }
 

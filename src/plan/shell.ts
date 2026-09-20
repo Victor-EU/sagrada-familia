@@ -11,10 +11,10 @@ import {
   buildHood,
   buildPassionPortico,
 } from '../geometry/portico.ts'
-import { buildFruit, buildGable } from '../geometry/roofwork.ts'
+import { buildFruit, buildGable, buildGargoyle } from '../geometry/roofwork.ts'
 import { mergeOrEmpty } from '../geometry/window.ts'
 import { named, type Parts } from './parts.ts'
-import type { StoneName } from '../render/materials.ts'
+import { FRUIT_PALETTE, type StoneName } from '../render/materials.ts'
 import { LAYER_SKYLINE } from '../render/sunrig.ts'
 
 /**
@@ -720,7 +720,21 @@ export function buildShell(
    * a quarter. The apse is left alone: it is a chevet with a lantern over it,
    * and it does not have bays in that sense.
    */
+  /**
+   * What the roofline says.
+   *
+   * The Sanctus of the Mass, in order, one word to a gable, repeating along
+   * the flank — which is how the real roofline is written and why the words
+   * are not picked at random. Six of them rather than the full nine, because
+   * every distinct word is a distinct instanced kind and a roofline is not
+   * worth twenty draw calls.
+   */
+  const SANCTUS = ['Sanctus', 'Dominus', 'Deus', 'Sabaoth', 'Hosanna', 'Excelsis']
+  let spoken = 0
+
   const gable = (x: number, z: number, turn: number, crown: number, rise: number): void => {
+    const word = SANCTUS[spoken % SANCTUS.length]!
+    spoken += 1
     const piece = mergeOrEmpty(
       buildGable({
         span: MODULE * 0.94,
@@ -729,6 +743,7 @@ export function buildShell(
         teeth: 7,
         toothDepth: 0.36,
         eye: rise * 0.13,
+        word,
       }),
     )
     const stand = new THREE.Matrix4()
@@ -737,7 +752,7 @@ export function buildShell(
     // Flat stone, so there is nothing for a level of detail to coarsen: one
     // tessellation, offered at zero error.
     parts.surface(
-      `gable:${rise.toFixed(1)}`,
+      `gable:${rise.toFixed(1)}:${word}`,
       () => ({ geometry: piece.clone(), error: 0 }),
       stand,
       'shell',
@@ -766,12 +781,28 @@ export function buildShell(
   // any photograph of it and it should not be one here.
   if (s.pinnacles) {
     const inset = s.parapet * 0.5
+    /**
+     * Where a beast leans out, and which way it faces.
+     *
+     * Collected alongside the pinnacles and only on the two runs whose
+     * outward direction is obvious — the flanks, which face ±x, and the
+     * chevet, which faces along its own radius. The Glory parapet is left
+     * bare, which is honest: that front is not built and nothing here knows
+     * what is on it.
+     */
+    const beasts: Array<[THREE.Vector3, THREE.Vector3]> = []
     for (const side of [1, -1]) {
       for (let z = p.gloryZ - MODULE / 2; z > p.crossFar; z -= MODULE) {
         const inArm = p.transept !== null && z <= p.transept.near && z >= p.transept.far
         const crown = inArm ? p.transept!.crown : z < p.crossNear ? p.armCrown : p.aisleCrown
         const edge = inArm ? p.transept!.outerX : p.wallX
         pinnacles.push(new THREE.Vector3(side * (edge - inset), crown + s.parapet, z))
+        // Between the pinnacles, not under them: the gargoyles in the
+        // photographs sit at the middle of a bay and the pinnacles at its end.
+        beasts.push([
+          new THREE.Vector3(side * edge, crown + s.parapet * 0.42, z + MODULE / 2),
+          new THREE.Vector3(side, 0, 0),
+        ])
       }
       for (let z = p.gloryZ - MODULE / 2; z > p.crossFar; z -= MODULE) {
         const crown = z < p.crossNear ? p.crossingCrown : p.naveCrown
@@ -795,6 +826,43 @@ export function buildShell(
           p.apseCentreZ - r * Math.cos(phi),
         ),
       )
+      if (i < steps) {
+        const mid = -limit + ((i + 0.5) / steps) * 2 * limit
+        beasts.push([
+          new THREE.Vector3(
+            p.apseOuter * Math.sin(mid),
+            p.ambulatoryCrown + s.parapet * 0.42,
+            p.apseCentreZ - p.apseOuter * Math.cos(mid),
+          ),
+          new THREE.Vector3(Math.sin(mid), 0, -Math.cos(mid)),
+        ])
+      }
+    }
+
+    // And stand them. Four shapes between them, keyed by seed as everything
+    // instanced here is: a row of one beast repeated is a moulding, and a
+    // row of fourteen distinct ones is fourteen draw calls for something
+    // nobody can tell apart at the range it is seen from.
+    for (const [k, [spot, out]] of beasts.entries()) {
+      const variant = k % 4
+      parts.surface(
+        `gargoyle:${variant}`,
+        () => ({
+          geometry: buildGargoyle({
+            reach: 2.3,
+            drop: 1.5,
+            girth: 0.56,
+            sides: 7,
+            seed: 41 + variant * 13,
+          }),
+          error: 0.02,
+        }),
+        new THREE.Matrix4()
+          .makeTranslation(spot.x, spot.y, spot.z)
+          .multiply(new THREE.Matrix4().makeRotationY(Math.atan2(out.x, out.z))),
+        'shell',
+        true,
+      )
     }
 
     for (const [i, spot] of pinnacles.entries()) {
@@ -811,14 +879,28 @@ export function buildShell(
         new THREE.Matrix4().makeTranslation(spot.x, spot.y, spot.z),
         'facade',
       )
-      // And the basket it carries. Two kinds, alternating, because the real
-      // ones are not all grapes — the roof is wheat and fruit in turn, and a
-      // row of identical baskets reads as a manufactured part.
+      // And the basket it carries. Two sizes and five glazings, because the
+      // real ones are not all grapes — the roof is wheat and fruit in turn,
+      // green and orange and red in turn, and a row of identical baskets
+      // reads as a manufactured part.
+      //
+      // Five and not thirty. Everything that decides the geometry has to be
+      // in the key or the first caller's basket is served to all of them —
+      // and the seed decides the *colour* here, so a seed outside the key
+      // would paint the whole roof with whatever the first pinnacle drew.
+      // Five variants is ten instanced kinds for the entire roofscape and
+      // no two neighbours alike.
       const bunch = i % 2 === 0 ? 30 : 20
+      const variant = i % 5
       parts.surface(
-        `roof fruit:${bunch}`,
+        `roof fruit:${bunch}:${variant}`,
         () => ({
-          geometry: buildFruit({ radius: s.pinnacleRadius * 1.5, count: bunch, seed: 7 + bunch }),
+          geometry: buildFruit({
+            radius: s.pinnacleRadius * 1.5,
+            count: bunch,
+            seed: 7 + variant,
+            palette: FRUIT_PALETTE,
+          }),
           // A berry is a centimetre or two off round at this size; nothing
           // below it to drop to.
           error: 0.02,

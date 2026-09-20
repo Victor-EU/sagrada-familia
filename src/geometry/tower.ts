@@ -240,6 +240,53 @@ function towerFabric(p: TowerParams): {
   return { rings, cols, mask }
 }
 
+/** Where an inscription stands on a shaft, and what surface it stands on. */
+export interface TowerBand {
+  /** Height of the middle of the band above the shaft's foot. */
+  y: number
+  /** The shaft's own section there, so letters follow the star into its valleys. */
+  radiusAt: (alpha: number) => number
+  /** Mean radius, which is what turns a length of writing into an angle. */
+  meanRadius: number
+  /** Height of the raised ring the letters are cut on. */
+  height: number
+}
+
+/**
+ * The inscription ring, as a surface rather than as a step in the radius.
+ *
+ * The ring itself has been here since the belfry was rebuilt — a band two
+ * metres tall standing three and a half centimetres proud, which from the
+ * plaza is a bright line round the tower and nothing more. What the building
+ * has on that line is *writing*, a metre and a half high, and the letters
+ * have to sit on the ring rather than near it: a stroke that floats a
+ * centimetre off a shaft catches its own shadow and reads as a sticker, and
+ * one that sinks into a star valley disappears for a third of its length.
+ *
+ * So this hands out the same section the shaft is built from, and the setter
+ * in `letters.ts` bends the finished word onto it.
+ */
+export function towerBand(p: TowerParams): TowerBand | null {
+  const o = p.openings
+  if (!o || o.sanctus <= 0) return null
+
+  const y = o.sanctus * p.height
+  const t = y / p.height
+  const k = Math.max(0.05, p.taper)
+  const radius =
+    p.footRadius * Math.sqrt(Math.max(0.04, 1 - (1 - k * k) * t)) * (1 + SANCTUS_RELIEF)
+  const star = p.starFoot + (p.starTop - p.starFoot) * Math.pow(Math.min(Math.max(t, 0), 1), 0.7)
+  const turn = THREE.MathUtils.degToRad(p.twistDeg) * t
+  const profile = starProfile(p.points)
+
+  return {
+    y,
+    radiusAt: (alpha: number) => radius * (1 + star * (profile(alpha + turn) - 1)),
+    meanRadius: radius,
+    height: SANCTUS_HEIGHT,
+  }
+}
+
 export function buildTowerShaft(p: TowerParams): TowerSurface {
   const { rings, cols, mask } = towerFabric(p)
   return buildRings(

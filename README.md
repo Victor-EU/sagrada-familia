@@ -286,6 +286,60 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
 
 ## Notes
 
+- **Twenty generators, and not one of them made ornament.** Tree column,
+  vault cell, portico leg, hood, crust, tower shaft, louvre, column base,
+  cypress, bridge, arch fringe, gable, column, pinnacle, cross, star, fruit,
+  hypar, glass panel, hyperboloid — all structure. There was no letter, no
+  gargoyle, no crane, no railing, no door anywhere in the model, and that is
+  the plain version of what the octave measurements in `docs/relief.md` were
+  circling. A building whose whole surface is carved cannot be modelled by
+  getting its stone right.
+- **The building is written on, and now the model is.** *Sanctus*, *Hosanna*
+  and *Excelsis* round every bell tower's raised ring; the Sanctus of the
+  Mass in order, one word to a gable, along the nave and aisle rooflines;
+  *IESUS NAZARENUS REX IUDAEORUM* across the Passion canopy. A **stroke
+  font** rather than outlines — thirty hand-authored glyphs, no imported
+  asset, no triangulator — because a carved inscription is a raised bar of
+  constant width and the skeleton *is* the letter. The tower words are set
+  flat and wrapped onto the shaft's own star section so they follow it into
+  its valleys, and the repeat count comes off the circumference rather than
+  a typed number. 44,622 triangles for every inscription on the building.
+- **The relief on a letter is not about the letter, it is about the shadow
+  beside it.** At a tenth of the cap height the first attempt read as a flat
+  mark the colour of the shaft. A sixth throws a shadow as wide as the stroke
+  at any sun above twenty degrees, which is every hour these frames use.
+- **Arc length runs clockwise, and the first version ran it the other way.**
+  Anticlockwise is the natural way to write the formula and it put *Sanctus*
+  on all twelve towers as *sutcnaS*.
+- **The ceramic fruit was painted at the same saturation as the stone it
+  stands on.** `CERAMIC` was cream at 0.19 on the reasoning that stronger
+  would be a fairground; the lit glaze in `ex-terraces-roofscape.jpg`
+  measures 0.52 to 0.70 across four hues against 0.27 for the stone. Eighty-
+  four baskets were rendering as white cauliflower. Five glazes now, painted
+  per berry with one dominant per basket, because each real basket is plainly
+  *the green one* or *the red one*.
+- **There is a crane in every exterior photograph in `reference/`** and two
+  in three of them, and in `ex-flank-elevation.jpg` the crane is the second
+  largest object in the frame. Nobody alive has seen this building without
+  one. Two now stand on the site, from one lattice generator that also does
+  both jibs; the steel was sampled off the photographs at hue 20–37 and
+  saturation 0.40–0.56 and the render landed at hue 32, saturation 0.45.
+- **Forty-two gargoyles, and none of them is an animal.** At the only
+  distance any viewpoint here sees them from, a gargoyle is a dark knuckle
+  two metres out of a cornice throwing a shadow back onto it. The real ones
+  are lizards and snails and nobody has ever been able to tell.
+- **Tracery in the gable faces was built twice and taken out.** Keeping the
+  upward cells of a subdivided triangle and dropping the downward ones is
+  arithmetically a lattice and visually a disaster: upward cells meet only at
+  their corners, so the face came back as disconnected triangles with the
+  gable's own back showing through. Built the right way round — solid with
+  openings cut — it measured about one pixel per opening from every viewpoint
+  in the harness, which is not worth its risk.
+- **Ornament is not relief, and the instruments say so.** The octave
+  measurement that diagnosed the outside did not move at all across this
+  round: 7.63 to 7.59 in the coarse band against a photograph's 16.56. That
+  band is the porch, the cornice and the window reveal, and none of them was
+  touched. See `docs/relief.md`.
 - **The exterior's fabrics are four, and the model had one.** Every figure
   is measured: the Nativity front photographs at 77 66 64 and the new panel
   of the central towers at 157 151 143, and a render that puts both within
