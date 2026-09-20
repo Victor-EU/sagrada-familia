@@ -28,6 +28,20 @@ export interface Moment {
   position: [number, number, number]
   target: [number, number, number]
   fov: number
+  /**
+   * What the eye is open to here.
+   *
+   * A photographer walking in through the Nativity door changes this and
+   * thinks nothing of it: outside is a sunlit wall and inside is a room lit
+   * through coloured glass, and no single setting has ever held both. The
+   * model has the same problem and had been answering it with one number, so
+   * whichever half was right made the other wrong — an interior bright enough
+   * to read left the towers bleached, and towers that held their stone left
+   * the nave a cave.
+   *
+   * This is the camera, not the building. The sun above both is the same sun.
+   */
+  exposure: number
   shiftCorrection: number
   day: number
   hour: number
@@ -43,7 +57,30 @@ export interface Moment {
  * first frame and flown in, which costs nothing and buys the only six seconds
  * of this whole thing that nobody will skip.
  */
-export const OVERTURE: Pick<Moment, 'position' | 'target' | 'fov' | 'shiftCorrection'> = {
+/** The half of the render flags a stop is allowed to move. */
+export interface ViewSetting {
+  exposure: number
+}
+
+/**
+ * Outside, where the subject is a sunlit wall against a Barcelona sky.
+ *
+ * Under one exposure for the whole visit the towers came back bleached —
+ * measured against the photographs, sunlit Montjuïc sandstone sits around
+ * 0.42 of full and this model had it at 0.81, which is the look of a white
+ * maquette rather than of stone.
+ */
+const OUTSIDE_EXPOSURE = 0.8
+
+/**
+ * Inside, where the subject is a room lit through coloured glass.
+ *
+ * Two thirds of a stop open on the outside, which is roughly what the eye
+ * does over the same walk and much less than a camera would need.
+ */
+const INSIDE_EXPOSURE = 1
+
+export const OVERTURE: Pick<Moment, 'position' | 'target' | 'fov' | 'shiftCorrection' | 'exposure'> = {
   // High over the Eixample, on the Nativity quarter, with the grid running
   // away behind. The opening frame is the one that has to do the arguing:
   // this building's whole claim is how much bigger it is than the city it
@@ -53,6 +90,7 @@ export const OVERTURE: Pick<Moment, 'position' | 'target' | 'fov' | 'shiftCorrec
   target: [0, 80, -22],
   fov: 42,
   shiftCorrection: 0.3,
+  exposure: OUTSIDE_EXPOSURE,
 }
 
 export const JOURNEY: Moment[] = [
@@ -67,6 +105,7 @@ export const JOURNEY: Moment[] = [
       'than the hill. Eighteen are planned and not one was finished in his ' +
       'lifetime.',
     part: 'outside',
+    exposure: OUTSIDE_EXPOSURE,
     // Standing in Plaça de Gaudí, across the pond, which is where every
     // photograph of this building is taken from and is now somewhere you can
     // actually stand. The old position was out on bare ground at the Glory
@@ -92,6 +131,7 @@ export const JOURNEY: Moment[] = [
       'Matthias, and the stone is Montjuïc sandstone, from a quarry that ' +
       'closed in 1938 and has been matched ever since.',
     part: 'outside',
+    exposure: OUTSIDE_EXPOSURE,
     // In under the front, close enough that it stops fitting in one eye.
     position: [70, 2, -26],
     target: [10, 120, -28],
@@ -109,6 +149,7 @@ export const JOURNEY: Moment[] = [
       'is why the parapet has pinnacles along it and the clerestory steps up ' +
       'behind rather than hiding.',
     part: 'outside',
+    exposure: OUTSIDE_EXPOSURE,
     position: [18.5, 33.4, 12],
     target: [3, 96, -36],
     fov: 72,
@@ -125,6 +166,7 @@ export const JOURNEY: Moment[] = [
       'leaning piers of the front. Four metres of opening, and the last of ' +
       'the sky.',
     part: 'outside',
+    exposure: OUTSIDE_EXPOSURE,
     // Far enough back that the portal has its piers around it. Square on the
     // doorway's own z, so the step inside that follows travels straight along
     // the opening instead of into the jamb beside it.
@@ -145,6 +187,7 @@ export const JOURNEY: Moment[] = [
       'them crutches — so a leaning, branching tree carries the vault to the ' +
       'ground on its own.',
     part: 'inside',
+    exposure: INSIDE_EXPOSURE,
     // Straight in along the door's own axis, so the flight goes through the
     // opening rather than through the jamb beside it. The doorways are at
     // z = -26.3 and z = -33.8; the pier is between them.
@@ -165,6 +208,7 @@ export const JOURNEY: Moment[] = [
       'are basalt and carry the Evangelists. Each column is cut from a ' +
       'different stone by how much weight it takes.',
     part: 'inside',
+    exposure: INSIDE_EXPOSURE,
     position: [0, 1.65, -34],
     target: [0, 44, -60],
     fov: 70,
@@ -181,6 +225,7 @@ export const JOURNEY: Moment[] = [
       'Sandstone in the aisles, granite down the middle — the same four ' +
       'stones the Basilica lists, standing where it says they stand.',
     part: 'inside',
+    exposure: INSIDE_EXPOSURE,
     position: [3.4, 1.65, 20],
     target: [1.2, 9, -34],
     fov: 64,
@@ -197,6 +242,7 @@ export const JOURNEY: Moment[] = [
       'gold, and this is the hour the sun stands square on it — the light on ' +
       'the floor is the colour of the glass it came through.',
     part: 'inside',
+    exposure: INSIDE_EXPOSURE,
     position: [6.2, 1.65, 4.6],
     target: [-9.4, 13, -2],
     fov: 62,
@@ -213,6 +259,7 @@ export const JOURNEY: Moment[] = [
       'greens and blues; both sides wash toward white as they climb, so the ' +
       'vault stays luminous instead of being stained by what is under it.',
     part: 'inside',
+    exposure: INSIDE_EXPOSURE,
     position: [-6.5, 5, 4.5],
     target: [9.4, 2, -1],
     fov: 62,
@@ -231,6 +278,7 @@ interface Pose {
   shift: number
   day: number
   hour: number
+  exposure: number
 }
 
 /**
@@ -285,6 +333,8 @@ export class Journey {
     private readonly cam: FreeCamera,
     private readonly sun: SunSetting,
     private readonly applySun: () => void,
+    private readonly view: ViewSetting,
+    private readonly applyView: () => void,
   ) {}
 
   get moment(): Moment {
@@ -305,6 +355,7 @@ export class Journey {
       shift: this.cam.shiftCorrection,
       day: this.sun.dayOfYear,
       hour: this.sun.hour,
+      exposure: this.view.exposure,
     }
   }
 
@@ -319,11 +370,12 @@ export class Journey {
       shift: m.shiftCorrection,
       day: m.day,
       hour: m.hour,
+      exposure: m.exposure,
     }
   }
 
   /** Stand the camera somewhere without it counting as a stop on the visit. */
-  place(at: Pick<Moment, 'position' | 'target' | 'fov' | 'shiftCorrection'>): void {
+  place(at: Pick<Moment, 'position' | 'target' | 'fov' | 'shiftCorrection' | 'exposure'>): void {
     const position = new THREE.Vector3(...at.position)
     const dir = new THREE.Vector3(...at.target).sub(position).normalize()
     this.cam.camera.position.copy(position)
@@ -331,6 +383,8 @@ export class Journey {
     this.cam.pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1))
     this.cam.camera.fov = at.fov
     this.cam.shiftCorrection = at.shiftCorrection
+    this.view.exposure = at.exposure
+    this.applyView()
     this.cam.teleport()
     this.cam.refresh()
   }
@@ -440,6 +494,7 @@ export class Journey {
       shift: THREE.MathUtils.lerp(a.shift, b.shift, t),
       day: THREE.MathUtils.lerp(a.day, b.day, t),
       hour: THREE.MathUtils.lerp(a.hour, b.hour, t),
+      exposure: THREE.MathUtils.lerp(a.exposure, b.exposure, t),
     }
     this.apply(pose)
 
@@ -461,6 +516,10 @@ export class Journey {
     this.sun.dayOfYear = pose.day
     this.sun.hour = pose.hour
     this.applySun()
+    // Eased along with everything else, so stepping in through the door is a
+    // pupil widening over the length of the walk rather than a cut.
+    this.view.exposure = pose.exposure
+    this.applyView()
     this.cam.refresh()
   }
 }

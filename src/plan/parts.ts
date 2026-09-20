@@ -3,6 +3,7 @@ import { buildTreeColumn, type TreeColumn, type TreeColumnParams } from '../geom
 import type { VaultShape } from './section.ts'
 import { buildColumnBase, columnMetrics, type ColumnOrder } from '../geometry/column.ts'
 import { DETAIL_LEVELS, shaftRadial } from '../geometry/detail.ts'
+import { agreeWinding } from '../geometry/normals.ts'
 import {
   bossOffsets,
   buildVaultCell,
@@ -289,6 +290,7 @@ export class Parts {
 
   /** A mesh drawn once, already placed in world space. */
   piece(mesh: THREE.Object3D, ...geometries: THREE.BufferGeometry[]): void {
+    for (const geometry of geometries) agreeWinding(geometry)
     this.group.add(mesh)
     this.geometries.push(...geometries)
   }
@@ -308,6 +310,12 @@ export class Parts {
   ): void {
     let kind = this.kinds.get(key)
     if (!kind) {
+      // Every instanced surface the field draws is registered here, and the
+      // one-offs go through piece(), which makes these the two places the
+      // winding invariant can be stated once rather than in each generator
+      // that happens to remember it. Once per key: the later calls for the
+      // same shape are only adding somewhere else to stand it.
+      for (const level of levels) agreeWinding(level.geometry)
       kind = {
         name: key,
         levels,

@@ -169,6 +169,22 @@ function stone(name: StoneName): THREE.MeshStandardMaterial {
  * room at the luminance it already had, so the stone keeps its brightness and
  * loses the sky.
  *
+ * And a room has directions. Rotating the probe's colour fixed the hue and
+ * left it pouring the same light onto every surface whichever way it faced,
+ * which is the one thing an ambient must not do here: measured against the
+ * photographs, the real nave runs its vault 2.4x brighter than its columns
+ * and this render ran them at 1.07x — one flat tone floor to vault, so the
+ * flutes on a column and the ribs in a vault had no shaded side to be seen
+ * by. A sky probe makes that worse rather than better, because a vault soffit
+ * faces *down*, and down in a sky probe is the ground: the brightest surface
+ * in the building was being handed the dimmest part of the sky.
+ *
+ * So the fill is asked where it comes from. Three answers, and none of them
+ * is the sky: the floor is pale stone under a sunlit nave and throws light up
+ * onto every soffit above it, the lucernaris and the clerestory come from
+ * overhead, and the glazing is in the walls and arrives sideways. A surface
+ * gets the ones it faces.
+ *
  * Only the ambient. The sun is left exactly as it arrives, because the sun
  * arriving through Vila-Grau's glazing is the subject of the whole model and
  * nothing here is allowed to touch its colour.
@@ -181,8 +197,19 @@ const INDOOR_LIGHT = /* glsl */ `
 {
   vec3 ambient = reflectedLight.indirectDiffuse;
   float luminance = dot( ambient, vec3( 0.2126, 0.7152, 0.0722 ) );
+
+  // Which way the surface faces decides which of the room's three sources it
+  // is standing under. Doubled-sided webbing has already had its normal
+  // flipped toward the viewer by here, so a vault seen from the floor below
+  // correctly reads as facing down.
+  vec3 roomNormal = inverseTransformDirection( normal, viewMatrix );
+  float fromFloor = max( 0.0, -roomNormal.y );
+  float fromAbove = max( 0.0, roomNormal.y );
+  float fromGlass = 1.0 - abs( roomNormal.y );
+  float fill = uRoomFloor * fromFloor + uRoomSky * fromAbove + uRoomSide * fromGlass;
+
   reflectedLight.indirectDiffuse =
-    mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * uRoomGain;
+    mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * uRoomGain * fill;
 }
 `
 
@@ -190,6 +217,9 @@ const INDOOR_PARS = /* glsl */ `
 uniform vec3 uRoomBounce;
 uniform float uRoomWarmth;
 uniform float uRoomGain;
+uniform float uRoomFloor;
+uniform float uRoomSky;
+uniform float uRoomSide;
 `
 
 /** Normalised so rotating onto it changes hue and not how much light there is. */
@@ -202,6 +232,9 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomBounce: { value: THREE.Color }
   uRoomWarmth: { value: number }
   uRoomGain: { value: number }
+  uRoomFloor: { value: number }
+  uRoomSky: { value: number }
+  uRoomSide: { value: number }
 }
 
 /**
@@ -253,16 +286,34 @@ export function roomUniforms(): RoomUniforms {
      * fill is cut hard for the whole scene so the exterior gets its contrast
      * back, and the stones standing inside get it multiplied here.
      *
-     * Seven rather than 4.2. The old figure was set while the ambient was
-     * being rotated two thirds of the way onto amber, so most of what it was
-     * multiplying was hue rather than light; with the rotation cut back to
-     * under half there is more room to raise the fill without the room going
-     * one colour. What that buys is the thing every photograph of this
-     * interior has and this render did not: the *shaded* side of a column is
-     * still clearly stone, and still clearly lighter than the shadow behind
-     * it.
+     * Two rather than seven. Seven was set when this was the only thing
+     * lighting the room, and it was: turning the sun off entirely moved a
+     * measured interior by one part in a hundred, so every photograph-famous
+     * thing about this interior — the gold off the Passion glass, the green
+     * off the Nativity glass, a shaft of it lying on the floor — was being
+     * computed correctly and then buried under a flat fill seven times its
+     * size. The fill stops being the light in the room and goes back to being
+     * what keeps a shadow from being black; the sun does the work, which is
+     * the only way the light gets to be *coloured*.
      */
-    uRoomGain: { value: 7 },
+    uRoomGain: { value: 1 },
+    /**
+     * Where the fill comes from, now that it is asked.
+     *
+     * The floor is the big one and the surprising one. It is pale Montjuïc
+     * paving under the brightest part of the room, it is enormous, and every
+     * soffit in the building faces it — so the vaults are lit from below,
+     * which is why they photograph brighter than the columns holding them up
+     * and why they were the thing most wrong before.
+     *
+     * Overhead is the lucernaris and the clerestory, real but much smaller in
+     * area. Sideways is the glazing, which matters less than it sounds: the
+     * glass is doing its best work as *sun*, and counting it twice here would
+     * put its colour on faces it never reaches.
+     */
+    uRoomFloor: { value: 8 },
+    uRoomSky: { value: 1.2 },
+    uRoomSide: { value: 0.4 },
   }
 }
 

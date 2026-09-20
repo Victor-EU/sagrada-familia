@@ -81,7 +81,9 @@ const view: ViewFlags = {
   detailRange: 1,
 }
 const render: RenderFlags = {
-  exposure: 1,
+  // The visit sets this per stop — see OUTSIDE_EXPOSURE / INSIDE_EXPOSURE in
+  // ui/journey.ts. This is only what the free camera starts on.
+  exposure: 0.8,
   // Low, and it stays low — the probe is Barcelona sky, so more of it is more
   // blue, and past about 0.5 the whole room goes pale and flat as everything
   // piles up at the top of the ACES curve where it desaturates toward white.
@@ -140,7 +142,7 @@ const sun: SunFlags = {
   dayOfYear: 262,
   hour: 16,
   bearingDeg: BUILDING_BEARING_DEG,
-  intensity: 1,
+  intensity: 3,
   skyBrightness: 1,
 }
 
@@ -338,7 +340,7 @@ function setDev(on: boolean): void {
  * up to the front, onto the terraces, through the door, and then five stops
  * inside. See ui/journey.ts.
  */
-const journey = new Journey(cam, sun, applySun)
+const journey = new Journey(cam, sun, applySun, render, applyRender)
 const chrome = new Chrome(journey, document.body)
 journey.onArrive = (moment, index) => {
   chrome.arrive(moment, index)
