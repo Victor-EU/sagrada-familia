@@ -181,28 +181,94 @@ The two axial frames are close on every instrument. The two December wall
 frames are not: they are still too bright, too flat and half as saturated
 as they should be, and they have one cause in common with the canopy.
 
-## The one thing left, and it is the big one
+## The vault was lit by a constant, and now it is lit by the floor
 
-**The vault is lit by a constant, and nothing reaches it.** Measured on a
-frame under the crown, switching the glazing's shadowed rig off changes the
-vault by nothing whatsoever — 92 73 54 before and after, to the byte — and
-ambient occlusion moves it by four parts in 255 at any radius from three
-metres to nine.
+*Second pass, same day.*
 
-The reason is structural. The wash rig runs along the two horizontal axes
-because the nave is a long room glazed on its two long sides, and a soffit
-faces a horizontal source edge-on and takes nothing from it; above the
-clerestory heads there is no opening for it to see in any case, so every
-ray it casts at the nave vault is stopped by the wall below. The real
-canopy is lit from underneath — by the clerestory throwing up and inward,
-and by a hundred metres of pale pavement — and neither of those is in the
-model.
+The canopy came out of the work above still wrong, and wrong in a way no
+grading could reach. Measured on a frame under the crown, switching the
+glazing's shadowed rig off changed the vault by nothing whatsoever — 92 73
+54 before and after, to the byte — and ambient occlusion moved it by four
+parts in 255 at any radius from three metres to nine. It had one tone.
 
-So the canopy has exactly one tone, and colour can only be added to it
-flat. At four tenths saturation it is pale stone under gold light; pushed
-to the 0.55 the photographs measure it stops being lit stone and becomes a
-terracotta ceiling. `ROOM_LIGHT` is parked at the first of those.
+The reason was structural. The wash rig runs along the two horizontal axes,
+because the nave is a long room glazed on its two long sides — and a soffit
+faces a horizontal source edge-on, so `dot(n, −heading)` is zero over the
+whole canopy. Above the clerestory heads there is no opening for those rays
+to pass through in any case. Every ray the rig cast at the nave vault was
+stopped by the wall below it, and what was left standing in for the light
+was `uRoomFloor`: one number, the same for a soffit over open pavement and
+a soffit tucked behind a branch.
 
-Until the vault has a source with shadows in it, no amount of grading fixes
-the canopy — and the canopy is a sixth of every frame taken inside this
-building.
+### Tilting the existing rig does not work
+
+The first idea was to lean the two headings upward, which costs nothing.
+It does not survive the arithmetic. Traced back from a column flank at ten
+metres, a heading tilted thirty degrees leaves the building below ground —
+the ray that lights that flank enters the far wall at y = −3 — so every
+column in the room goes dark to buy the vault. Light that lands on a
+downward-facing surface has to be travelling *upward*, and there is no
+upward-travelling light from a window.
+
+### What actually lights the canopy is the floor
+
+A hundred metres of pale polished pavement, lit through the glazing, and
+every soffit in the building faces it. That is why the vaults photograph
+brighter than the columns holding them up, and it is a source that can be
+rendered exactly: **one orthographic pass straight up**.
+
+The map is depth only — what is overhead is not glass — and the floors are
+left out of it by name, the way `roof.ts` excludes the porches. A camera
+under the building looking up meets the pavement before it meets anything
+else, so left in, the floor shadows the whole building from its own light
+and the map comes back black. The plaza needed a name to be excluded by;
+it now has one.
+
+A receiver asks the map whether anything stands between it and the floor.
+Nine taps spread four and a half metres, because the floor is not a window:
+a soffit forty-five metres up sees nearly the whole plan at once, so what a
+branch casts on the vault above it is a broad darkening with no edge in it.
+The cosine is `max(0, −n.y)`, which is the whole of the term and also a
+free early-out: a vertical surface takes nothing and pays nothing.
+
+The colour is the floor's own — the room's gold carrying a quarter of
+whichever half of the church is overhead, so the canopy over the Passion
+aisle is warm at four in the afternoon and the canopy over the Nativity
+aisle is not. At a half the branch undersides came back terracotta, which
+is the glazing's colour and not the pavement's.
+
+### What it bought
+
+| | before | after |
+| --- | --- | --- |
+| Canopy, mean luminance | 41.3 | 59.3 |
+| Canopy, response to its own light source | none, to the byte | ×1.44 |
+| Vault ÷ column, measured by surface | — | 1.66 |
+| Vault ÷ column, in the photograph | — | 1.50 |
+| `uRoomFloor`, the constant it replaces | 4 | 0.7 |
+
+The surface figures are taken by blacking out every albedo except the one
+being measured and reading the frame back — there is no global illumination
+here, so a black neighbour changes nothing about how the kept stone is lit.
+That also settled a number this README had been quoting wrongly: the real
+nave does **not** run its vault 2.4 times its columns. Measured on
+`in-nave-axial-canopy`, vault patches at 50 and 116 against column patches
+at 71 and 40 give 1.50, and the render now sits at 1.66.
+
+The canopy has light and shade in it for the first time: the star plates
+read, the funnel throats go deep, and a branch darkens the vault above it.
+The frame under the crown holds at 2.5 per cent dark and 4.7 contrast while
+its saturation goes to 0.46, which is the level that used to turn the
+ceiling terracotta when it was applied flat. Colour stops being a stain
+once there is modelling underneath it.
+
+The loft pass runs once per rebuild, not per frame.
+
+### Still open
+
+The columns read darker than a bright midday photograph shows them, though
+they match the author's own December frames, which are the ones with the
+minute-accurate sun. And the canopy takes the floor's light but not the
+clerestory's: light entering a window and travelling up-and-inward off a
+sunlit aisle roof is real, and is not modelled. Both are smaller than what
+was fixed.

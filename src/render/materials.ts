@@ -579,7 +579,8 @@ const INDOOR_LIGHT = /* glsl */ `
   // and the two aisles came out identical — which is the one thing a visitor
   // notices first and the photographs never let you forget.
   float toward = clamp( compass.x * 0.72 + standing * 0.58, -1.0, 1.0 );
-  vec3 glass = mix( uGlassPassion, uGlassNativity, smoothstep( -0.45, 0.45, toward ) );
+  vec3 glassRaw = mix( uGlassPassion, uGlassNativity, smoothstep( -0.45, 0.45, toward ) );
+  vec3 glass = glassRaw;
 
   // A sideways face is not looking only at a window. It is looking at a
   // window and at ninety metres of stone, and what a hundred square metres
@@ -599,6 +600,25 @@ const INDOOR_LIGHT = /* glsl */ `
   // correcting. The glazing is not a guess: it is the light itself, arriving
   // through a known colour, and diluting it with Barcelona sky is how the
   // Passion side ends up the same temperature as the Nativity side.
+  // What the floor is the colour of, and therefore what it throws back up.
+  //
+  // Pale polished stone under a room lit through Vila-Grau's glazing, so
+  // it is the room's own gold carrying a share of whichever half of the
+  // church is overhead — the nave floor under the Passion side is orange
+  // at four in the afternoon and green at ten in the morning, and the
+  // canopy above it takes that colour on. A share rather than the whole,
+  // because the floor is stone before it is a mirror.
+  vec3 hearth = mix( ambient, luminance * uRoomBounce, uRoomWarmth )
+    * mix( vec3( 1.0 ), glassRaw, uLoftTint );
+
+  // The light from below, with its shadows — see sfLoft in washrig.ts. This
+  // is what lights the canopy, and until it existed the canopy was lit by a
+  // constant: a soffit faces the two horizontal wash directions edge-on and
+  // took nothing at all from them.
+  vec3 lofted = hearth * sfLoft( roomNormal, vSunWorld );
+
+  // What is left of the flat term. Small, and for the light that has
+  // bounced more than once — the fill in a corner the floor cannot see.
   float fromRoom = uRoomFloor * fromFloor + uRoomSky * fromAbove;
   vec3 room = mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * fromRoom;
   vec3 window = luminance * glass * fromGlass;
@@ -606,7 +626,7 @@ const INDOOR_LIGHT = /* glsl */ `
   // And only where the surface actually stands in the room — see SHELTER.
   // The face of a wall that looks out over the plaza, or the top of a
   // terrace, takes the sky like everything else outside.
-  vec3 fill = ( room + window + washed * luminance ) * uRoomGain;
+  vec3 fill = ( room + window + washed * luminance + lofted ) * uRoomGain;
   reflectedLight.indirectDiffuse = mix( ambient, fill, sfSheltered );
 }
 `
@@ -724,6 +744,7 @@ uniform float uGlassShare;
 uniform float uNaveHalf;
 uniform float uWashCover;
 uniform float uWashPurity;
+uniform float uLoftTint;
 uniform vec3 uGlassNativity;
 uniform vec3 uGlassPassion;
 `
@@ -750,6 +771,8 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uWashCover: { value: number }
   /** How much of the glass's own saturation survives the room it crosses. */
   uWashPurity: { value: number }
+  /** How far the floor's bounce is tinted by the glazing above it. */
+  uLoftTint: { value: number }
   uGlassNativity: { value: THREE.Color }
   uGlassPassion: { value: THREE.Color }
 }
@@ -902,20 +925,16 @@ export function roomUniforms(): RoomUniforms {
      * measure between vault and column — and flat is exactly what a frame
      * looking up the nave came back as.
      *
-     * It is still a constant, and that is now the largest thing wrong with
-     * the interior. Measured on a frame under the crown: switching the
-     * glazing's shadowed rig off changes the vault by nothing whatsoever —
-     * 92 73 54 before and after, to the byte — and ambient occlusion moves
-     * it by four parts in 255 at any radius from three metres to nine. The
-     * wash rig runs along the two horizontal axes and a soffit takes
-     * nothing from a source it faces edge-on; above the clerestory heads
-     * there is no opening for it to see in any case, so every ray it casts
-     * at the nave vault is stopped by the wall below it. The real canopy is
-     * lit from underneath — by the clerestory throwing up and inward, and
-     * by the pavement — and neither of those is in the model. Until one is,
-     * the vault has one tone and nothing will give it modelling.
+     * And now it is nearly nothing, because the thing it was standing in
+     * for has been built. This was a constant pretending to be the floor:
+     * it gave every soffit the same light whether it stood over open
+     * pavement or behind a branch, which is why the canopy had exactly one
+     * tone and no amount of colour would model it. `sfLoft` in
+     * washrig.ts is that light with its shadows in it. What is left here is
+     * what a constant is honestly for — the second and third bounce, the
+     * fill in a corner the floor cannot see at all.
      */
-    uRoomFloor: { value: 4 },
+    uRoomFloor: { value: 0.7 },
     /**
      * And up at the canopy, which is not a small source at all.
      *
@@ -1019,8 +1038,11 @@ export function roomUniforms(): RoomUniforms {
      * now and this fills in behind it: on the same frame, contrast goes
      * from 2.3 to 5.8 and saturation from 0.30 to 0.38, with two and a
      * half per cent of the picture finally dark.
+     *
+     * A shade lower again now that the floor's own light is built and
+     * reaches the lower half of the room as well as the canopy.
      */
-    uRoomGlass: { value: 0.9 },
+    uRoomGlass: { value: 0.8 },
     /**
      * How far a sideways face's light is tinted by the window it faces.
      *
@@ -1033,8 +1055,17 @@ export function roomUniforms(): RoomUniforms {
      * came back one green and one pink, and a two-tone column is as wrong
      * as a brown one. The tint has to be something you notice about the
      * light rather than something you notice about the stone.
+     *
+     * And a seventh rather than a fifth, because the two halves of the
+     * building are not equally saturated and this number is shared. The
+     * colours are normalised to unit luminance before they get here, which
+     * amplifies whatever is dark in them: the Passion amber comes out as
+     * (1.92, 0.81, 0.14), so even a fifth of it puts a shaft at a third
+     * saturated while the same fifth of the Nativity mint puts one at a
+     * twelfth. Measured by blacking out every albedo but the two column
+     * stones, this term alone was worth 0.15 of saturation on the shafts.
      */
-    uGlassShare: { value: 0.22 },
+    uGlassShare: { value: 0.15 },
     /** Half the width of the glazed envelope, so a position can be a side. */
     uNaveHalf: { value: 24 },
     /**
@@ -1052,6 +1083,12 @@ export function roomUniforms(): RoomUniforms {
     // Three fifths. Enough that a wall beside a window is plainly the
     // colour of that window and a column ten metres off is plainly not.
     uWashPurity: { value: 0.6 },
+    // A quarter. The pavement is warm stone first, and what it returns is
+    // its own colour bent toward the light landing on it rather than
+    // replaced by it — at a half the branch undersides came back a
+    // saturated terracotta, which is the glazing's colour and not the
+    // floor's.
+    uLoftTint: { value: 0.25 },
     uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
     uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
@@ -1669,7 +1706,7 @@ export function stonePatch(
     surface: MASONRY_SURFACE,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-10' : 'stone-sky-6',
+    key: indoors ? 'stone-room-11' : 'stone-sky-6',
   }
 }
 

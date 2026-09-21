@@ -265,6 +265,10 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // frame; the grid now reaches 670 m, and the ground has to get past it or
   // the blocks stand on nothing.
   const ground = new THREE.Mesh(new THREE.CircleGeometry(1800, 96), groundMaterial())
+  // Named, so the pass that asks how much floor a soffit can see knows to
+  // leave it out — see UNDERFOOT in render/washrig.ts. A camera under the
+  // building looking up meets the plaza before it meets the building.
+  ground.name = 'plaza'
   patchForSunlight(ground.material as THREE.MeshStandardMaterial, sun.uniforms)
 
   // The pavement is stone with one extra job: it knows where it is standing,

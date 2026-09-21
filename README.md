@@ -139,8 +139,18 @@ fixed, and with them the flutes that read as corrugation, windows whose
 panes all crossed white together, a nave lined in running bond, and the
 lucernaris — the lit ovals on every branching knot, which are the only
 light at column height and were simply not there. See `docs/interior.md`
-for the ten photograph pairs and the ablation table. What is still wrong is
-in there too: the vault is lit by a constant that nothing reaches.
+for the ten photograph pairs and the ablation table.
+
+Last, the **canopy**, which came out of all that still lit by a constant:
+switching the glazing's own rig off changed the vault by nothing at all, to
+the byte, because the rig runs along the two horizontal axes and a soffit
+faces those edge-on. Light that lands on a downward-facing surface has to
+be travelling upward, and there is no upward-travelling light from a
+window — so what lights the canopy is the floor, a hundred metres of pale
+pavement that every soffit in the building faces. That is one orthographic
+pass straight up, and a soffit now asks it how much of the pavement it can
+see. The vault gains half as much light again, a branch darkens the vault
+above it, and the star plates read for the first time.
 
 | Built | Where |
 | --- | --- |
@@ -209,6 +219,7 @@ in there too: the vault is lit by a constant that nothing reaches.
 | The room's colour is in its light, not on its stone | `src/render/materials.ts` |
 | The lucernaris — three lit ovals set into every branching knot | `src/plan/parts.ts`, `src/geometry/branch.ts` |
 | A fluted shaft that reads as round, and a window that is not a grid | `src/geometry/column.ts`, `src/geometry/window.ts` |
+| The light from below: how much pavement each soffit can see | `src/render/washrig.ts` |
 
 ## Running
 
@@ -706,13 +717,29 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   white — which meant nothing in the building was ever the brightest thing
   in it. A tenth of the quarries are near-clear and clip; the rest are deep
   and keep their hue at the same exposure, and the gain is 6.
-- **The vault is lit by a constant and nothing reaches it.** Switching the
-  wash rig off changes the canopy by nothing whatsoever, to the byte, and
-  occlusion moves it by four parts in 255 at any radius. The rig runs along
+- **The vault was lit by a constant and nothing reached it.** Switching the
+  wash rig off changed the canopy by nothing whatsoever, to the byte, and
+  occlusion moved it by four parts in 255 at any radius. The rig runs along
   the two horizontal axes and a soffit faces those edge-on; above the
-  clerestory heads there is no opening for it to see in any case. The real
-  canopy is lit from underneath, by the clerestory throwing up and inward
-  and by the pavement, and neither is in the model — so the canopy has one
-  tone, colour can only be added to it flat, and past four tenths saturation
-  it stops being lit stone and becomes a terracotta ceiling. This is the
-  largest thing still wrong with the interior.
+  clerestory heads there is no opening for it to see in any case. Leaning
+  the headings upward does not rescue it either — traced back from a column
+  flank at ten metres, a thirty-degree tilt leaves the building below
+  ground, so every column goes dark to buy the vault. Light landing on a
+  downward-facing surface must be travelling *upward*, and no window emits
+  any. What does is the floor: one orthographic pass straight up, nine taps
+  spread four and a half metres because a soffit forty-five metres up sees
+  nearly the whole plan at once, and the floors excluded from their own map
+  by name. The canopy gains half as much light again and, far more to the
+  point, gains shadows.
+- **The nave's vault is not 2.4 times its columns.** That figure had been
+  quoted here for two rounds and is wrong. Measured on `in-nave-axial-
+  canopy`, vault patches at 50 and 116 against column patches at 71 and 40
+  give **1.50**; the render sits at 1.66. Surface figures are taken by
+  blacking out every albedo but the one being measured and reading the frame
+  back — there is no global illumination here, so a black neighbour changes
+  nothing about how the kept stone is lit, and it is exact where a
+  hand-placed sample box is a guess about what it landed on.
+- **Colour stops being a stain once there is modelling under it.** The same
+  canopy saturation that read as a terracotta ceiling while the vault was
+  one flat tone reads as gold light on pale stone now that the floor casts
+  shadows on it. Nothing about the colour changed.
