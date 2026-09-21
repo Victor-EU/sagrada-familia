@@ -105,23 +105,56 @@ export function lancet(
   ring.push(new THREE.Vector2(0, height))
   for (let j = ys.length - 2; j >= 1; j--) ring.push(new THREE.Vector2(-halfAt(ys[j]!), ys[j]!))
 
+  /**
+   * The leading, and why it is not a grid.
+   *
+   * Cut on a regular grid, a light is a run of identical rectangles, and a
+   * wall of those reads as pixel art rather than as glass — which is
+   * exactly what the interior frames were showing. Leaded glass is cut by
+   * hand from sheets: the cames run roughly in rows and roughly up the
+   * light, and every quarry is a slightly different quadrilateral.
+   *
+   * So the grid's interior nodes wander and its edge nodes do not. Sharing
+   * one jittered node between the four panes that meet at it is what keeps
+   * the leading a continuous net: jitter each pane's own corners instead
+   * and the cames come apart into loose tiles with daylight between them.
+   * Edges stay put because they are the opening's own outline, which the
+   * stone was cut to.
+   */
+  const jitter = mulberry32(Math.round(width * 977 + height * 131) + columns)
+  const nodes: THREE.Vector2[][] = []
+  for (let j = 0; j < ys.length; j++) {
+    const y = ys[j]!
+    const w = halfAt(y)
+    const row: THREE.Vector2[] = []
+    const fixedRow = j === 0 || j === ys.length - 1
+    for (let i = 0; i <= columns; i++) {
+      const t = i / columns
+      const edge = i === 0 || i === columns || fixedRow
+      // A fifth of a cell across and a seventh of a course up. Past about a
+      // quarter the quadrilaterals start to cross each other at the corners.
+      const dx = edge ? 0 : (jitter() - 0.5) * 0.42
+      const dy = edge ? 0 : (jitter() - 0.5) * 0.3
+      const span = (ys[Math.min(ys.length - 1, j + 1)]! - ys[Math.max(0, j - 1)]!) / 2
+      row.push(
+        new THREE.Vector2(
+          THREE.MathUtils.lerp(-w, w, t) + (dx * 2 * w) / columns,
+          y + dy * span,
+        ),
+      )
+    }
+    nodes.push(row)
+  }
+
   const panes: THREE.Vector2[][] = []
   for (let j = 0; j + 1 < ys.length; j++) {
-    const y0 = ys[j]!
-    const y1 = ys[j + 1]!
-    const w0 = halfAt(y0)
-    const w1 = halfAt(y1)
+    const w0 = halfAt(ys[j]!)
+    const w1 = halfAt(ys[j + 1]!)
     if (w0 < 1e-4 && w1 < 1e-4) continue
+    const low = nodes[j]!
+    const high = nodes[j + 1]!
     for (let i = 0; i < columns; i++) {
-      const a = i / columns
-      const b = (i + 1) / columns
-      const cell = [
-        new THREE.Vector2(THREE.MathUtils.lerp(-w0, w0, a), y0),
-        new THREE.Vector2(THREE.MathUtils.lerp(-w0, w0, b), y0),
-        new THREE.Vector2(THREE.MathUtils.lerp(-w1, w1, b), y1),
-        new THREE.Vector2(THREE.MathUtils.lerp(-w1, w1, a), y1),
-      ]
-      panes.push(cell)
+      panes.push([low[i]!, low[i + 1]!, high[i + 1]!, high[i]!])
     }
   }
   // The apex row collapses to a fan of triangles rather than degenerate quads.

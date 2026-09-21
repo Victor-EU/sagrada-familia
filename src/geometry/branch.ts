@@ -96,11 +96,35 @@ export function childOrder(order: ColumnOrder): ColumnOrder {
   return i > 0 ? COLUMN_ORDERS[i - 1]! : order
 }
 
+/**
+ * A knot, as somewhere to hang a light.
+ *
+ * Every branching node of every column in this building carries a
+ * *lucernari* — an oval of lit alabaster set into the stone of the knot, and
+ * after the windows the brightest thing in the room. It is the only light at
+ * column height, it is what makes a knot read as a designed joint rather
+ * than as a swelling in a branch, and six of the ten photographs this model
+ * is judged against have a dozen of them in shot.
+ *
+ * The geometry is merged away into one instanced tree, so the knots have to
+ * publish where they ended up: an emissive surface cannot be part of a piece
+ * of stone.
+ */
+export interface KnotSite {
+  /** Centre, in the tree's own frame with its foot at the origin. */
+  at: THREE.Vector3
+  /** Semi-axes of the ellipsoid it is set into: across, and up. */
+  radius: number
+  height: number
+}
+
 export interface TreeColumn {
   /** The whole tree as one geometry, standing on the origin, y up. */
   geometry: THREE.BufferGeometry
   /** Where the outermost branches end — the vault springs from these. */
   tips: THREE.Vector3[]
+  /** Every branching node, for the lights that hang on them. */
+  knots: KnotSite[]
   totalHeight: number
   /** Widest horizontal reach, for placing walls and for culling. */
   radius: number
@@ -121,6 +145,7 @@ export interface TreeColumn {
  */
 export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColumn {
   const tipMarkers: THREE.Object3D[] = []
+  const knotMarkers: { node: THREE.Object3D; radius: number; height: number }[] = []
   const root = new THREE.Group()
 
   // One geometry per (order, lengthFraction) — every branch at a given level
@@ -185,12 +210,11 @@ export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColum
     // The knot sits on the capital so that its lower half swallows it.
     const knot = new THREE.Mesh(knotGeometry(order))
     knot.position.y = length
-    knot.scale.set(
-      m.inradius * params.knotRadiusScale * thickness,
-      m.inradius * params.knotHeightScale,
-      m.inradius * params.knotRadiusScale * thickness,
-    )
+    const knotRadius = m.inradius * params.knotRadiusScale * thickness
+    const knotHeight = m.inradius * params.knotHeightScale
+    knot.scale.set(knotRadius, knotHeight, knotRadius)
     parent.add(knot)
+    knotMarkers.push({ node: knot, radius: knotRadius, height: knotHeight })
 
     if (level >= params.levels) {
       // Mark the branch end rather than resolving it now — world matrices are
@@ -247,6 +271,11 @@ export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColum
   geometry.computeBoundingBox()
 
   const tips = tipMarkers.map((marker) => marker.getWorldPosition(new THREE.Vector3()))
+  const knots: KnotSite[] = knotMarkers.map((k) => ({
+    at: k.node.getWorldPosition(new THREE.Vector3()),
+    radius: k.radius,
+    height: k.height,
+  }))
   let totalHeight = 0
   for (const t of tips) totalHeight = Math.max(totalHeight, t.y)
 
@@ -266,5 +295,5 @@ export function buildTreeColumn(params: TreeColumnParams, detail = 1): TreeColum
     order = childOrder(order)
   }
 
-  return { geometry, tips, totalHeight, radius, error }
+  return { geometry, tips, knots, totalHeight, radius, error }
 }

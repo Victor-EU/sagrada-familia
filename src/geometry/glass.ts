@@ -175,8 +175,38 @@ export function paneColor(
   // strongly as before, because the first bay had been glazed nearly clear.
   const entrance = THREE.MathUtils.lerp(0.22, 0, THREE.MathUtils.clamp(along, 0, 1))
   const wash = THREE.MathUtils.clamp((grade - 0.3) / 0.55 + entrance, 0, 1)
-  const saturation = THREE.MathUtils.lerp(0.98, 0.56, wash) * (0.74 + random() * 0.44)
-  const lightness = THREE.MathUtils.lerp(0.33, 0.7, wash) * (0.78 + random() * 0.48)
+  let saturation = THREE.MathUtils.lerp(0.98, 0.56, wash) * (0.74 + random() * 0.44)
+  let lightness = THREE.MathUtils.lerp(0.33, 0.7, wash) * (0.78 + random() * 0.48)
+
+  /**
+   * A window is not one lightness, and that was the whole reason the gain
+   * had to be held down.
+   *
+   * With every pane at the same level, every pane crosses the film's white
+   * point at the same moment: turn the glazing up far enough for a window
+   * to blaze and the entire wall goes white together, turn it down far
+   * enough to keep the colour and no window in the building is ever the
+   * brightest thing in it. That is a false choice, and it comes from the
+   * distribution rather than the gain.
+   *
+   * A real light is bimodal. A minority of the panes are near-clear — the
+   * quarries at the edge of a light, the pale grounds Vila-Grau sets his
+   * colour against — and they clip, and the bloom fringes them; the
+   * majority are deep, and at the same exposure they sit at half to three
+   * quarters of white with their hue intact. Both are in every photograph
+   * of these windows, in the same frame, a hand's width apart.
+   *
+   * A tenth of them. A sixth, which is what counting pale cells in the
+   * aisle lights of in-glazing-passion-warm gives, came out as a
+   * checkerboard: the pale ones are scattered by the same PRNG that sets
+   * every other property, so they never cluster the way cut glass does,
+   * and at one in six an evenly-scattered minority stops reading as a
+   * minority. A tenth reads as a few bright quarries in a coloured light.
+   */
+  if (random() < 0.1) {
+    lightness = 0.72 + random() * 0.16
+    saturation *= 0.55
+  }
 
   return out.setHSL(
     hue,
@@ -215,6 +245,7 @@ uniform float uGlow;
 uniform float uFront;
 uniform float uBlaze;
 uniform float uFocus;
+uniform float uShadeGlow;
 uniform vec3 uCentre;
 varying vec3 vPaneColor;
 varying vec3 vPaneNormal;
@@ -263,8 +294,17 @@ void main() {
   // outside — a window seen from the room is the sky, whichever way it faces.
   vec3 faceToEye = towardEye < 0.0 ? - N : N;
   float sunOnFace = max( dot( faceToEye, uSunDirection ), 0.0 );
-  float front = uFront * mix( mix( 0.35, 1.0, sunOnFace ), 1.0, roomSide );
-  float gain = mix( front, uGlow + uBlaze * solar, backlit * roomSide );
+  float front = uFront * mix( 0.35, 1.0, sunOnFace );
+
+  // From the room, a window the sun is not behind is still a window with
+  // the sky behind it. This used to hand it the *outdoor* figure — a fifth
+  // of the lit value — so at four in the afternoon the whole Nativity wall
+  // was a field of dark green tiles while the Passion wall blazed, and at
+  // ten in the morning the reverse. Every photograph of this nave has both
+  // walls lit at once, the sunward one brighter; the shaded one is sky
+  // through glass, which is most of the light in the building.
+  float lit = uGlow * mix( uShadeGlow, 1.0, backlit ) + uBlaze * solar * backlit;
+  float gain = mix( front, lit, roomSide );
 
   gl_FragColor = vec4( vPaneColor * gain, 1.0 );
   #include <tonemapping_fragment>
@@ -279,6 +319,8 @@ export interface GlassMaterial extends THREE.ShaderMaterial {
     uFront: { value: number }
     uBlaze: { value: number }
     uFocus: { value: number }
+    /** A room-side pane with the sun on the far side of the building, as a share of one with the sun behind it. */
+    uShadeGlow: { value: number }
     /** The middle of the building, which is the side of a pane the room is on. */
     uCentre: { value: THREE.Vector3 }
   }
@@ -296,6 +338,9 @@ export function glassMaterial(glow = 1.7): GlassMaterial {
       uBlaze: { value: 26 },
       /** How tightly that is concentrated. Half a degree, near enough. */
       uFocus: { value: 900 },
+      // A little under half. On in-glazing-nativity-side the shaded wall's
+      // lancets sit at about 0.45 of the sunlit wall's in the same frame.
+      uShadeGlow: { value: 0.45 },
     },
     vertexShader: GLASS_VERTEX,
     fragmentShader: GLASS_FRAGMENT,

@@ -377,6 +377,7 @@ uniform float uPavGrain;
 uniform float uPavWarmth;
 uniform vec3 uPavBounce;
 uniform float uRoomGain;
+uniform float uRoomSky;
 
 /** Distance from x to the nearest line of a grid of this period. */
 float sfToGrid( const in float x, const in float period ) {
@@ -504,8 +505,16 @@ const PAVING_LIGHT = /* glsl */ `
   // cold grey slab under a room full of warm light, which is the exact
   // opposite of every photograph, where the nave floor is the brightest
   // thing below the windows and throws the light back up the aisle.
+  // And at the share an upward-facing surface indoors gets, which is the
+  // one thing this was still missing. Every other stone in the building
+  // asks which way it faces and is answered — a vault soffit looks at the
+  // floor and gets eight, a column flank looks at a window and gets three —
+  // and the floor alone was taking the bare probe at one. It faces forty-
+  // five metres of lit vault covering the whole plan, so it is the same
+  // exchange seen from the other end, and leaving it out put a near-black
+  // pavement under a luminous canopy in every frame down the nave.
   reflectedLight.indirectDiffuse =
-    mix( ambient, luminance * uPavBounce, uPavWarmth ) * uRoomGain;
+    mix( ambient, luminance * uPavBounce, uPavWarmth ) * uRoomGain * uRoomSky;
 }
 `
 

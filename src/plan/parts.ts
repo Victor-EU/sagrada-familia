@@ -42,6 +42,12 @@ export class Parts {
   /** Every shaft standing on the floor, for the camera to bump into. */
   readonly columns: { x: number; z: number; radius: number }[] = []
 
+  /**
+   * Every kind the building is made of, by shape key.
+   *
+   * The lucernaris are the one kind whose placements come in at many
+   * different scales under a single key — see `lucernaris`.
+   */
   private readonly kinds = new Map<string, FieldKindSpec>()
   private readonly trees = new Map<string, TreeColumn[]>()
   private readonly cells = new Map<string, VaultCell[]>()
@@ -124,8 +130,72 @@ export class Parts {
     this.base(shape.order, matrix, trees, cut)
 
     const tree = trees[0]!
+    this.lucernaris(tree, matrix)
     if (opts.crown !== undefined && opts.vault) this.rosette(shape, tree, matrix, opts.crown, opts.vault)
     return tree.totalHeight
+  }
+
+  /**
+   * The lights on the knots.
+   *
+   * Every branching node in this building carries an oval of lit alabaster,
+   * and after the windows they are the brightest things in the room — the
+   * only light at column height, and the only reason a knot reads as a
+   * joint somebody designed rather than as a bulge in a branch. Six of the
+   * ten photographs this model is matched against have a dozen in shot and
+   * the model had none of them.
+   *
+   * One unit geometry for the whole building, scaled by each knot's own
+   * size through the placement matrix, so a hundred and fifty columns of
+   * four different orders are one instanced draw. A lens rather than a
+   * plate: the real ones are set into each face of the knot and there are
+   * several to a knot, so a band round its waist is what they add up to
+   * from any direction a visitor stands in.
+   */
+  private lucernaris(tree: TreeColumn, placement: THREE.Matrix4): void {
+    if (tree.knots.length === 0) return
+
+    // Only the knots worth lighting. A tree throws a knot at the top of
+    // every shaft it owns, branches included, and the ones above the first
+    // division are a third of the size and mostly hidden inside the canopy
+    // — lit, they were a second population of small bright objects with
+    // nothing to sit on. The building's own answer is the same: it is the
+    // main branchings that carry these.
+    let largest = 0
+    for (const knot of tree.knots) largest = Math.max(largest, knot.radius)
+
+    const spot = new THREE.Vector3()
+    for (const knot of tree.knots) {
+      if (knot.radius < largest * LAMP_MIN_KNOT) continue
+      spot.copy(knot.at).applyMatrix4(placement)
+      for (let i = 0; i < LAMP_FACES; i++) {
+        // Offset off the axes so a lamp does not sit where a branch leaves.
+        const azimuth = ((i + 0.5) / LAMP_FACES) * Math.PI * 2
+        const out = knot.radius * LAMP_INSET
+        const matrix = new THREE.Matrix4()
+          .makeScale(
+            knot.radius * LAMP_DEPTH,
+            knot.height * LAMP_RISE,
+            knot.radius * LAMP_WIDTH,
+          )
+          .premultiply(new THREE.Matrix4().makeRotationY(azimuth))
+          .premultiply(
+            at(
+              spot.x + Math.cos(azimuth) * out,
+              spot.y,
+              spot.z - Math.sin(azimuth) * out,
+            ),
+          )
+        this.surface(
+          'lucernari',
+          // A unit sphere, and the placement makes it an oval. Its error is
+          // a fraction of a small object's radius and decides nothing.
+          () => ({ geometry: lampGeometry(), error: 0.004 }),
+          matrix,
+          'lamp',
+        )
+      }
+    }
   }
 
   /**
@@ -338,6 +408,43 @@ export class Parts {
  * bias in either direction.
  */
 export const COLUMN_TOLERANCE_PX = 5
+
+/**
+ * A lucernari, in the knot's own girths.
+ *
+ * Four separate ovals set round the knot rather than one band about its
+ * waist, which is what the first two attempts built. A band is a ring of
+ * light whichever way you look at it, and six hundred of them turned a
+ * frame down the nave into a rack of glowing bracelets; the real thing is
+ * a plate on each face of the knot with stone showing between them, so a
+ * knot seen from anywhere shows one or two ovals and a dark side.
+ *
+ * Each one is half sunk into the stone — its centre inside the ellipsoid,
+ * its outer end a tenth proud — so what shows is a lens set in a socket
+ * rather than a bead stuck on.
+ */
+const LAMP_FACES = 3
+const LAMP_INSET = 0.62
+const LAMP_DEPTH = 0.48
+const LAMP_RISE = 0.34
+const LAMP_WIDTH = 0.5
+
+/** How small a knot may be, against the tree's largest, and still be lit. */
+const LAMP_MIN_KNOT = 0.6
+
+/**
+ * The lens every lucernari is cut from, built once for the whole building.
+ *
+ * Coarse on purpose: it is never more than a metre across, it is always
+ * over the film's white point, and the bloom spreads it a good deal wider
+ * than its own outline — so segments spent on its silhouette are segments
+ * spent on something nothing in the frame can resolve.
+ */
+let LAMP_GEOMETRY: THREE.BufferGeometry | null = null
+function lampGeometry(): THREE.BufferGeometry {
+  LAMP_GEOMETRY ??= new THREE.SphereGeometry(1, 20, 10)
+  return LAMP_GEOMETRY
+}
 
 function treeKey(shape: TreeColumnParams): string {
   return [

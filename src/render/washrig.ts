@@ -141,7 +141,7 @@ export class WashRig {
       uWashSoft: { value: 3.5 / resolution },
       /** Depth bias in metres, along the light. */
       uWashBias: { value: 0.22 },
-      uWashGain: { value: 4.5 },
+      uWashGain: { value: 9 },
       /**
        * Mip level the window is read at.
        *

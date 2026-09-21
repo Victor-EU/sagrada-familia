@@ -259,6 +259,17 @@ export const HOLLOW = 0x35302a
  */
 export const GROUND = 0x8e8779
 
+/**
+ * The lit alabaster of a lucernari.
+ *
+ * Warm and barely coloured: these are tungsten behind stone, so what a
+ * photograph catches is a white oval with an amber edge where the alabaster
+ * thickens. Sampled off `in-nave-passion-1330-dec2025`, where a dozen of
+ * them stand along the aisle, the lit plate runs 244 232 206 — a twentieth
+ * saturated at hue 40°, which is a white that has been through stone.
+ */
+export const LAMP = 0xf4e8ce
+
 /** The stones a piece of the building can be cut from. */
 export type StoneName =
   | 'sandstone'
@@ -316,6 +327,15 @@ export type StoneName =
    * building that reads as colour from the street.
    */
   | 'ceramic'
+  /**
+   * The lit alabaster of a lucernari — see `KnotSite` in geometry/branch.ts.
+   *
+   * The one emissive surface in the building, and the only thing in it that
+   * is a light rather than a thing lit. It stays out of `INDOORS` and out of
+   * `MASONRY`: nothing about the room should reach it, because what it
+   * looks like does not depend on what the room is doing.
+   */
+  | 'lamp'
 
 /**
  * Colour and roughness only.
@@ -354,7 +374,33 @@ const RECIPE: Record<StoneName, { color: number; roughness: number }> = {
   shell: { color: FACADE, roughness: 0.88 },
   ceramic: { color: CERAMIC, roughness: 0.28 },
   sheet: { color: 0xeeebe4, roughness: 0.97 },
+  lamp: { color: LAMP, roughness: 0.42 },
 }
+
+/**
+ * How much brighter than white a lucernari burns.
+ *
+ * It has to clear the bloom threshold, which is quoted in multiples of the
+ * film's white point and divided by whatever the eye is open to — indoors
+ * that is about two and a half in the buffer's own units. Under it, a lamp
+ * is a pale oval with a hard edge, which is what a lamp looks like in a
+ * rendering; over it, the spill happens, and the spill is the whole of why
+ * these read as lights in a photograph.
+ *
+ * Not much over, and much less than the first attempt. At 4.2 a nave frame
+ * came back as six hundred blazing rings hung in the canopy like fairy
+ * lights, with a halo round each one the width of the column it stood on —
+ * and their combined spill lifted the whole picture, which is measurable:
+ * the share of the frame under eight per cent luminance stayed at zero with
+ * the stop closed half a stop, and the saturation of every interior frame
+ * fell by half, because a veil of white light is what desaturation is.
+ *
+ * A little over the threshold is all that is wanted. The halo is then a
+ * few pixels wide, the alabaster keeps an edge, and six hundred of them
+ * add up to something the room is lit by rather than something in front of
+ * it.
+ */
+export const LAMP_RADIANCE = 2.0
 
 /**
  * Stones whose colour is written on the geometry rather than on the material.
@@ -388,7 +434,7 @@ export function stoneColour(name: StoneName): number {
 
 function stone(name: StoneName): THREE.MeshStandardMaterial {
   const r = RECIPE[name]
-  return new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color: r.color,
     roughness: r.roughness,
     metalness: 0,
@@ -396,6 +442,15 @@ function stone(name: StoneName): THREE.MeshStandardMaterial {
     // Vault webbing is thin and seen from both sides.
     side: THREE.DoubleSide,
   })
+  if (name === 'lamp') {
+    // Emissive rather than bright albedo, because a lamp has to be bright
+    // in a dark room and in a lit one alike — an albedo is a multiplier on
+    // whatever is arriving, and what is arriving at the top of a column at
+    // four in the afternoon is not much.
+    material.emissive = new THREE.Color(LAMP)
+    material.emissiveIntensity = LAMP_RADIANCE
+  }
+  return material
 }
 
 /**
@@ -465,7 +520,19 @@ const INDOOR_LIGHT = /* glsl */ `
   // shading knows the plan, and it is least true at the crossing, where the
   // transept opens the other axis up too.
   vec2 compass = normalize( vec2( roomNormal.x, roomNormal.z ) + vec2( 1e-5 ) );
-  float fromGlass = lateral * mix( uRoomAlong, uRoomSide, abs( compass.x ) ) * uRoomGlass;
+
+  // And a face turned across the church is not looking at *a* window: it is
+  // looking at the near wall or at the far one. A column standing in the
+  // Passion aisle has the Passion glazing four metres off one flank and the
+  // Nativity glazing forty metres off the other, and its two flanks are lit
+  // in that proportion. Held equal, every shaft in the building was lit the
+  // same from both sides and had no lit side and no shaded side — which is
+  // the one thing that says a column is round. This is the gradient; the
+  // flutes are a ripple riding on it, not a substitute for it.
+  float standing = clamp( vSunWorld.x / uNaveHalf, -1.0, 1.0 );
+  float nearWall = 0.5 + 0.5 * compass.x * standing;
+  float sideGain = mix( uRoomFar, 1.0, nearWall );
+  float fromGlass = lateral * mix( uRoomAlong, uRoomSide * sideGain, abs( compass.x ) ) * uRoomGlass;
 
   // What the windows actually put on this surface, shadowed and patterned —
   // see render/washrig.ts. Where the rig has an answer it is a much better
@@ -473,6 +540,21 @@ const INDOOR_LIGHT = /* glsl */ `
   // are the same light, and the fill is only standing in where the rig
   // cannot see (outside its fit, behind a wall, facing along the nave).
   vec3 washed = sfWash( inverseTransformDirection( normal, viewMatrix ), vSunWorld );
+
+  // And the wash is not the pure colour of the pane it came through.
+  //
+  // The map is the glass, so what the rig returns is the transmittance of
+  // one window at full saturation — and a surface lit by a window is not
+  // lit only by that window. It is lit by the window and by every square
+  // metre of pale stone the window has already landed on, which is most of
+  // what arrives and is nearly neutral. Added raw at the gain the room now
+  // needs, the shaded flank of every column on the Nativity side came back
+  // a saturated bottle green: the colour of the glass rather than the
+  // colour of light that has been in the room.
+  //
+  // Held at its own luminance, so desaturating cannot darken it.
+  washed = mix( vec3( dot( washed, vec3( 0.2126, 0.7152, 0.0722 ) ) ), washed, uWashPurity );
+
   float covered = clamp( dot( washed, vec3( 0.333 ) ) * uWashCover, 0.0, 1.0 );
   fromGlass *= 1.0 - covered;
 
@@ -496,16 +578,20 @@ const INDOOR_LIGHT = /* glsl */ `
   // the model gave every surface in the building one of exactly two colours
   // and the two aisles came out identical — which is the one thing a visitor
   // notices first and the photographs never let you forget.
-  float standing = clamp( vSunWorld.x / uNaveHalf, -1.0, 1.0 );
   float toward = clamp( compass.x * 0.72 + standing * 0.58, -1.0, 1.0 );
   vec3 glass = mix( uGlassPassion, uGlassNativity, smoothstep( -0.45, 0.45, toward ) );
 
   // A sideways face is not looking only at a window. It is looking at a
-  // window and at ninety metres of sandstone, and the sandstone is warm and
-  // enormous. Handed the glass neat, the Nativity half of the nave came out
-  // a green room rather than a gold room with green light in it — which is
-  // the mistake in the other direction from the one before it.
-  glass = mix( uRoomBounce, glass, uGlassShare );
+  // window and at ninety metres of stone, and what a hundred square metres
+  // of sky through leaded glass throws onto a shaft is mostly *grey*: in
+  // every photograph the columns are the most neutral thing in the room —
+  // the granite shaft in in-column-shaft-twist reads 90 87 83, eight per
+  // cent saturated — and the colour lands on the walls beside the windows
+  // and on the canopy overhead. This used to mix the glass with the room's
+  // gold instead, so a sideways face had no neutral in it at all and every
+  // column in the building came out chocolate at seventy per cent while the
+  // vault over it stayed white: the photograph, with the two swapped.
+  glass = mix( vec3( 1.0 ), glass, uGlassShare );
 
   // The two are not mixed toward the room's average, because they are not
   // the same kind of claim. The room bounce is a guess at what colour a room
@@ -632,10 +718,12 @@ uniform float uRoomFloor;
 uniform float uRoomSky;
 uniform float uRoomSide;
 uniform float uRoomAlong;
+uniform float uRoomFar;
 uniform float uRoomGlass;
 uniform float uGlassShare;
 uniform float uNaveHalf;
 uniform float uWashCover;
+uniform float uWashPurity;
 uniform vec3 uGlassNativity;
 uniform vec3 uGlassPassion;
 `
@@ -654,10 +742,14 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomSky: { value: number }
   uRoomSide: { value: number }
   uRoomAlong: { value: number }
+  /** What the far wall's glazing is worth against the near wall's. */
+  uRoomFar: { value: number }
   uRoomGlass: { value: number }
   uGlassShare: { value: number }
   uNaveHalf: { value: number }
   uWashCover: { value: number }
+  /** How much of the glass's own saturation survives the room it crosses. */
+  uWashPurity: { value: number }
   uGlassNativity: { value: THREE.Color }
   uGlassPassion: { value: THREE.Color }
 }
@@ -672,7 +764,31 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
  * recognisable thing about the interior in every photograph of it, and no
  * amount of warm stone under blue sky will produce it.
  */
-export const ROOM_LIGHT = 0xffd8a8
+/**
+ * Deeper and more saturated than it was, and now it can afford to be.
+ *
+ * This colour used to reach every surface in the building — it was what a
+ * sideways face's window light was mixed toward — so it had to be mild or
+ * the whole room went one shade of amber. It now reaches only the faces
+ * that look at the floor and the canopy, which is exactly where the
+ * photographs put the gold, and there it was measurably too weak: the vault
+ * in `in-nave-axial-canopy` runs from 142 112 70 at half a stop over to
+ * 74 46 9 in its depths — a fifth to seven eighths saturated — against a
+ * render that could not get past a quarter.
+ *
+ * Swept against that frame: at 0xffd8a8 the canopy came out 0.24 saturated
+ * and at this value 0.41, with the columns under it moving only from 0.196
+ * to 0.205, which is the whole point. The two are no longer one number.
+ *
+ * Not further, even though the photograph's deepest patch is 0.87. The
+ * canopy here is lit by a *constant* — see `uRoomFloor` — so every extra
+ * point of saturation is spread flat across the whole of it, and past
+ * about four tenths the vault stops reading as pale stone under gold light
+ * and starts reading as a terracotta ceiling. What the photograph has that
+ * this cannot yet have is variation, and that is a missing source rather
+ * than a missing colour.
+ */
+export const ROOM_LIGHT = 0xffc27a
 
 /**
  * The two halves of the room, measured off the photographs.
@@ -712,8 +828,27 @@ export function roomUniforms(): RoomUniforms {
      * is most of what you can see. Under half, and the gold goes back to
      * being something that lands on the stone rather than something the
      * stone is made of.
+     *
+     * Back up, now that this term no longer reaches the columns. It only
+     * ever applied to the faces that look at the floor and the sky — the
+     * vault — and the vault is exactly where the photographs *do* have the
+     * gold: the canopy in every frame of the nave is a warm field over
+     * neutral shafts. At 0.45 it came out white, because the fill under it
+     * was eight times the ambient and the film took anything that bright
+     * to white regardless of hue. The stop is closed now and the colour
+     * survives, so it can be the colour the photographs show.
+     *
+     * And nearly all the way, now that it reaches only the canopy and the
+     * soffits. What it is displacing there is the sky probe, and the sky is
+     * the one thing a vault soffit forty-five metres inside a building
+     * cannot see; leaving a third of it in was leaving a third of the
+     * canopy the colour of Barcelona daylight.
+     *
+     * Four fifths rather than the whole way: the last fifth is what keeps
+     * the canopy from being one flat hue, and a flat saturated ceiling is
+     * a worse picture than a flat pale one.
      */
-    uRoomWarmth: { value: 0.45 },
+    uRoomWarmth: { value: 0.8 },
     /**
      * How much more fill there is indoors than out.
      *
@@ -755,8 +890,45 @@ export function roomUniforms(): RoomUniforms {
      * glass is doing its best work as *sun*, and counting it twice here would
      * put its colour on faces it never reaches.
      */
-    uRoomFloor: { value: 8 },
-    uRoomSky: { value: 1.2 },
+    /**
+     * Four, not eight.
+     *
+     * Eight was set against a column flank getting a sixth of what it gets
+     * now, and it is the term that has no structure in it at all: the wash
+     * rig runs along the two horizontal axes, so a soffit facing straight
+     * down takes nothing from it and is lit by this constant alone. At
+     * eight the canopy was a flat slab of tone seven to eleven times
+     * anything under it, against the two and a half the photographs
+     * measure between vault and column — and flat is exactly what a frame
+     * looking up the nave came back as.
+     *
+     * It is still a constant, and that is now the largest thing wrong with
+     * the interior. Measured on a frame under the crown: switching the
+     * glazing's shadowed rig off changes the vault by nothing whatsoever —
+     * 92 73 54 before and after, to the byte — and ambient occlusion moves
+     * it by four parts in 255 at any radius from three metres to nine. The
+     * wash rig runs along the two horizontal axes and a soffit takes
+     * nothing from a source it faces edge-on; above the clerestory heads
+     * there is no opening for it to see in any case, so every ray it casts
+     * at the nave vault is stopped by the wall below it. The real canopy is
+     * lit from underneath — by the clerestory throwing up and inward, and
+     * by the pavement — and neither of those is in the model. Until one is,
+     * the vault has one tone and nothing will give it modelling.
+     */
+    uRoomFloor: { value: 4 },
+    /**
+     * And up at the canopy, which is not a small source at all.
+     *
+     * 1.2 was set when overhead meant the lucernaris and the clerestory,
+     * both of them small. What an upward-facing surface in this building is
+     * actually looking at is forty-five metres of lit vault covering the
+     * whole plan — the brightest large surface in the room, and the reason
+     * the pavement in every photograph of the nave throws a sheen back up
+     * the aisle. Given a fifth of what the vault gets from the floor, the
+     * floor came back near black under a luminous canopy, which is the
+     * exchange running one way only.
+     */
+    uRoomSky: { value: 2.6 },
     /** Turned across the church, at the glazing a few metres away. */
     uRoomSide: { value: 1.15 },
     /**
@@ -767,8 +939,48 @@ export function roomUniforms(): RoomUniforms {
      * the way round — the two faces turned up and down the nave are darker
      * than the two turned across it, and that difference is what makes a
      * fluted shaft read as round, but neither of them is black.
+     *
+     * And not a seventh of the across figure either, which is what 0.16
+     * was. The flutes of a shaft alternate between these two answers face
+     * by face, so the ratio between them is the depth of the corrugation
+     * the eye sees: at seven to one a twenty-four-sided shaft came back as
+     * bark. In the photographs the flutes are a ripple of ten or fifteen
+     * per cent on a broad gradient from the lit flank to the shaded one —
+     * see `uRoomFar`, which is where that gradient now comes from — and
+     * under three to one is where a shaft with creases in it reads as a
+     * round thing with creases in it.
+     *
+     * And higher again, because the ninety-metres-of-colonnade argument is
+     * wrong about what is at the end of the ninety metres. A column face
+     * turned along the nave is looking at the next column, which is lit, at
+     * the pavement, which is lit, and at the vault, which is the brightest
+     * surface in the building. It is not looking into a tunnel. Held at a
+     * sixth of the across figure, the faces a walker actually sees — the
+     * ones turned up and down the nave, in every frame taken along it —
+     * were seven times darker than the canopy over them, against the two
+     * and a half the photographs measure.
      */
-    uRoomAlong: { value: 0.16 },
+    uRoomAlong: { value: 0.7 },
+    /**
+     * The far wall's glazing, as a share of the near wall's.
+     *
+     * A column in an aisle stands four metres from one wall of glass and
+     * forty from the other, and the flank turned to the far one is lit by
+     * a source a tenth the angle. Not a tenth here, because the room's
+     * bounce fills it from everywhere.
+     *
+     * A half rather than the third the December columns measure, because
+     * this factor is applied to walls as well as to shafts and a wall is
+     * not a shaft. The inner face of the Nativity front faces the whole
+     * length of the church, so it takes the far figure everywhere at once
+     * — at a third, the frame looking out through that doorway came back
+     * with fifty-five per cent of its pixels under eight per cent
+     * luminance. At a half it is twenty-seven, and the two axial frames
+     * down the nave land at 2.1 and 1.5 per cent against the 1.4 and 2.0
+     * their photographs measure, with the contrast ratio at 4.8 against
+     * the photograph's 4.7.
+     */
+    uRoomFar: { value: 0.5 },
     /**
      * How much light the windows are.
      *
@@ -787,9 +999,42 @@ export function roomUniforms(): RoomUniforms {
      * and the reason the stone is gold — and the neutral fill goes back to
      * being small.
      */
-    uRoomGlass: { value: 2.8 },
-    /** How much of a sideways face's light is the window and not the room. */
-    uGlassShare: { value: 0.26 },
+    /**
+     * And then down again by a factor of three, because it had become the
+     * mistake it was written to fix.
+     *
+     * Measured by switching each term off in turn on a frame down the
+     * nave. With this at 2.8, the rest of the lighting model was
+     * decoration: turning the glazing's own shadowed rig off moved the
+     * frame's saturation by two thousandths, taking ambient occlusion from
+     * 0.55 to 0.9 moved the median by one thousandth, and turning the
+     * hemisphere off moved nothing at all. Turning *this* off took the
+     * share of the frame below eight per cent luminance from zero to
+     * twenty-eight, and the contrast ratio from 2.3 to 107.
+     *
+     * One flat, unshadowed, distance-invariant number was the whole of the
+     * light in the building. A room lit by a constant has no shape in it,
+     * and that is the plainest statement of what was wrong with the
+     * interior. The rig that knows where the windows are carries the room
+     * now and this fills in behind it: on the same frame, contrast goes
+     * from 2.3 to 5.8 and saturation from 0.30 to 0.38, with two and a
+     * half per cent of the picture finally dark.
+     */
+    uRoomGlass: { value: 0.9 },
+    /**
+     * How far a sideways face's light is tinted by the window it faces.
+     *
+     * The rest is neutral. A quarter to a third puts a column in the
+     * Passion aisle at fifteen to twenty per cent saturated, which is the
+     * top of the range the photographed shafts occupy, and a column in the
+     * nave centre — lit by both walls — nearer to eight.
+     *
+     * A fifth rather than a third: at a third the two flanks of a shaft
+     * came back one green and one pink, and a two-tone column is as wrong
+     * as a brown one. The tint has to be something you notice about the
+     * light rather than something you notice about the stone.
+     */
+    uGlassShare: { value: 0.22 },
     /** Half the width of the glazed envelope, so a position can be a side. */
     uNaveHalf: { value: 24 },
     /**
@@ -803,7 +1048,10 @@ export function roomUniforms(): RoomUniforms {
      * that arrives round a column. Faded out entirely, the nave goes back to
      * being a cave with bright patches in it.
      */
-    uWashCover: { value: 0.8 },
+    uWashCover: { value: 0.9 },
+    // Three fifths. Enough that a wall beside a window is plainly the
+    // colour of that window and a column ten metres off is plainly not.
+    uWashPurity: { value: 0.6 },
     uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
     uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
@@ -1117,6 +1365,7 @@ const MASONRY_PARS = /* glsl */ `
 uniform vec4 uMasonry;
 uniform vec4 uWeather;
 uniform vec2 uSeam;
+uniform float uMasonryRoom;
 
 /** Distance from x to the nearest line of a grid of this period. */
 float sfToLine( const in float x, const in float period ) {
@@ -1153,6 +1402,32 @@ const MASONRY_SURFACE = /* glsl */ `
 if ( uMasonry.x > 0.0 ) {
   vec3 sfWorld = vSunWorld;
   vec3 sfFace = inverseTransformDirection( normal, viewMatrix );
+
+  /**
+   * And not on the face that is standing in the room.
+   *
+   * Coursing is a claim about a weathered outside wall, and the two stones
+   * that carry it have a face on each side: the clerestory wall and the
+   * terrace lids. Inside, the same shader was drawing four-hundred-
+   * millimetre courses and broken joints on every wall of the nave, and a
+   * nave lined in running bond reads as a brick warehouse — the openings
+   * stop being a stone net and become slots punched in masonry. The real
+   * inner faces are dressed ashlar in large panels, faceted round the
+   * reveals, with joints you have to look for.
+   *
+   * The roof map answers which side of the wall this fragment is on, and
+   * the indirect term is already asking it; the answer is wanted earlier
+   * here, so it is asked again rather than reordered. A tenth is left, so
+   * an inner face is dressed stone rather than plaster.
+   *
+   * The shading normal and not geometryNormal: three has not declared that
+   * one yet this early in the chain — see the note at the foot of this
+   * block, which is the same trap from the other side.
+   */
+  float sfLaid = 1.0;
+  if ( uSeam.x < 0.5 && uMasonryRoom > 0.5 ) {
+    sfLaid = mix( 1.0, 0.1, smoothstep( 0.34, 0.86, sfRoofed( sfWorld, sfFace ) ) );
+  }
 
   // The horizontal axis this face runs along — see the note above.
   float sfAlongFlip = abs( sfFace.x ) > abs( sfFace.z ) ? 1.0 : 0.0;
@@ -1229,6 +1504,15 @@ if ( uMasonry.x > 0.0 ) {
     + uWeather.z * sfSky
     - uWeather.y * sfUnder
     - uWeather.w * sfVertical * smoothstep( 0.42, 0.95, sfRun );
+
+  // Everything the laying does — the joints, the block-to-block tone, the
+  // weather that runs down them — belongs to the outside face and fades
+  // together with it. The albedo is the one thing that does not: a wall is
+  // the same stone on both sides.
+  sfShade *= sfLaid;
+  sfTone *= sfLaid;
+  sfTilt *= sfLaid;
+  sfWeather = mix( 1.0, sfWeather, sfLaid );
 
   diffuseColor.rgb *= ( 1.0 + sfShade * uMasonry.w ) * ( 1.0 + sfTone ) * sfWeather;
   // A joint is cut and a block face is dressed, so the joint is the rougher
@@ -1339,14 +1623,17 @@ export interface MasonryUniforms extends Record<string, THREE.IUniform> {
   uMasonry: { value: THREE.Vector4 }
   uWeather: { value: THREE.Vector4 }
   uSeam: { value: THREE.Vector2 }
+  /** Whether this fabric has a face inside the building, so it can go smooth there. */
+  uMasonryRoom: { value: number }
 }
 
-function masonryUniforms(name: StoneName): MasonryUniforms {
+function masonryUniforms(name: StoneName, indoors: boolean): MasonryUniforms {
   const m = MASONRY[name] ?? NO_MASONRY
   return {
     uMasonry: { value: new THREE.Vector4(m.course, m.block, m.joint, m.tone) },
     uWeather: { value: new THREE.Vector4(m.vary, m.soot, m.wash, m.streak) },
     uSeam: { value: new THREE.Vector2(m.seam ? 1 : 0, m.relief) },
+    uMasonryRoom: { value: indoors ? 1 : 0 },
   }
 }
 
@@ -1370,7 +1657,7 @@ export function stonePatch(
 ): SurfacePatch {
   const indoors = INDOORS.includes(name)
   const fillScale = { uFillScale: { value: FILL_SCALE[name] ?? 1 } }
-  const laid = masonryUniforms(name)
+  const laid = masonryUniforms(name, indoors)
   return {
     uniforms: indoors
       ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale, ...laid }
@@ -1382,7 +1669,7 @@ export function stonePatch(
     surface: MASONRY_SURFACE,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-8' : 'stone-sky-5',
+    key: indoors ? 'stone-room-10' : 'stone-sky-6',
   }
 }
 
@@ -1423,6 +1710,7 @@ export function openQuarry(): Quarry {
     enamel: stone('enamel'),
     hollow: stone('hollow'),
     shell: stone('shell'),
+    lamp: stone('lamp'),
   }
 }
 

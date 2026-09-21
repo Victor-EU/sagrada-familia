@@ -116,8 +116,16 @@ const VAULT_PLEATS = 16
  * photographs the ridges catch a highlight and the valleys hold a thin
  * shadow, and the funnel still reads as one smooth flare from across the
  * nave. Deeper than this and a funnel starts to look like a cast gear.
+ *
+ * Halved. At 0.16 the sixteen pleats of every funnel met the sixteen of
+ * every boss and every tip in a thicket of sharp blades, and a frame looking
+ * up the nave had no flat surface anywhere in its canopy: the eye could not
+ * find the cell. The real vault is a calm field of large pale plates, one
+ * to a bay, with a disc at the centre of each and a few facets round the
+ * rim, and the star pattern on it is mostly joint lines rather than
+ * geometry standing off the surface.
  */
-const VAULT_PLEAT_DEPTH = 0.16
+const VAULT_PLEAT_DEPTH = 0.08
 
 export function flareFor(throat: number, reach: number, depth: number): number {
   const ratio = Math.max(reach / Math.max(throat, 1e-4), 1.0001)

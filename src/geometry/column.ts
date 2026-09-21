@@ -52,6 +52,14 @@ export interface ColumnParams {
   lengthFraction?: number
 }
 
+/** How far a fluted face's normal leans toward the round — see buildColumn. */
+const FLUTE_SOFTEN = 0.5
+
+function smoothstep(x: number, a: number, b: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / Math.max(b - a, 1e-6)))
+  return t * t * (3 - 2 * t)
+}
+
 export const defaultColumn: ColumnParams = {
   order: 12,
   stages: 3,
@@ -446,10 +454,36 @@ export function buildColumn(params: ColumnParams): THREE.BufferGeometry {
       let nx = rA * sa + r * ca
       let ny = -rA * ca + r * sa
       let nz = -r * rZ
-      const len = Math.hypot(nx, ny, nz) || 1
+      let len = Math.hypot(nx, ny, nz) || 1
       nx /= len
       ny /= len
       nz /= len
+
+      // And then, above the plinth, leaned back toward the round.
+      //
+      // The exact normal is right and it was reading wrong. A face of the
+      // star at the foot is a broad flat, and a broad flat with its own
+      // normal is what a stone facet looks like; but once the twist has
+      // doubled the sides the faces are narrow, and sixteen narrow faces
+      // each shaded flat — lit one, dark one, lit one — is a corrugation,
+      // and no photograph of these shafts has one. What they have is a
+      // cylinder's gradient from the lit flank to the shaded flank with the
+      // flutes as a shallow ripple on it, because the light in that room
+      // arrives from a hundred square metres of window and not from a point.
+      // The fill cannot make a gradient out of flat faces on its own, so
+      // the faces lean: half way toward the radial, ramped in over the first
+      // stage, so the star at the foot keeps its edges and the fluted shaft
+      // above it becomes a round thing with creases in it.
+      const soften = FLUTE_SOFTEN * smoothstep(z, stages[0]!.z0, stages[0]!.z1)
+      if (soften > 0) {
+        nx += (ca - nx) * soften
+        ny += (sa - ny) * soften
+        nz *= 1 - soften
+        len = Math.hypot(nx, ny, nz) || 1
+        nx /= len
+        ny /= len
+        nz /= len
+      }
       normals.push(nx, ny, nz)
       uvs.push(col / cols, z / m.height)
     }

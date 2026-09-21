@@ -144,8 +144,22 @@ const render: RenderFlags = {
    * what makes it beautiful is that it is *darker* than the sun and coloured.
    * A little over white keeps the spill and the halo where the sun stands
    * square on a window; the rest of the wall stays glass.
+   *
+   * Back up, because the panes are cut bimodal now — see `paneColor`. What
+   * went wrong at 3.8 was not the gain: it was that every pane was the same
+   * lightness, so every pane crossed white together, and the choice was
+   * between a wall that blazed and a wall that kept its colour. A real
+   * light is a few pale quarries that clip and a majority of deep ones that
+   * do not, and given that split the gain can be what the photographs need
+   * — the pale ones white and haloed, the deep ones at three quarters and
+   * saturated, in the same window.
+   *
+   * Six rather than four, because four left only a fifth of a per cent of
+   * an interior frame over eighty-five per cent luminance where the
+   * photographs run one to seven: the pale quarries came out merely bright,
+   * and no window in the building was the thing the eye cannot look at.
    */
-  glassGain: 1.7,
+  glassGain: 6,
   // Cut hard, and deliberately. A hemisphere light fills a shaded face
   // regardless of whether that face can see any sky, which outdoors is a lie
   // that costs the whole building its modelling: at 0.6 the lit and unlit
@@ -165,7 +179,10 @@ const render: RenderFlags = {
   // Threshold raised with the gain above: at 1.4 a window that no longer
   // overruns white by much was still mostly above the knee, and the bloom
   // put back the smear the gain had just taken out.
-  bloom: { strength: 0.3, radius: 0.75, threshold: 1.75 },
+  // And down again to where a clipped pane and a lamp can cross it: at 1.75
+  // nothing in the interior ever did, and a window with a hard edge is a
+  // window in a rendering.
+  bloom: { strength: 0.3, radius: 0.75, threshold: 1.2 },
   // The air. Every photograph of this interior is a photograph of air, and
   // until now the model had none — see render/shafts.ts.
   shafts: { ...defaultShafts },

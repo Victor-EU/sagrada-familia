@@ -81,17 +81,41 @@ export const defaultShafts: ShaftSettings = {
   // Air you can see is the effect; air you can see *through* is the room.
   // At a third of the old figure the shafts are still there in every frame
   // that has one, and the nave goes back to being ninety metres long.
-  density: 0.006,
+  density: 0.0055,
   // Forward-scattering, but not so much that the effect disappears when the
   // sun is off to one side. Half is about right for dust: at g = 0.72 the
   // lobe is narrow enough that only a frame looking into the sun gets
   // anything, and most of these frames are looking across it.
-  anisotropy: 0.5,
+  //
+  // A third, because half is a twenty-to-one swing and the density was
+  // chosen on frames looking across the sun. The phase peaks at six times
+  // isotropic at g = 0.5 and falls to a third behind, so a frame that turns
+  // to face the sun gets eighteen times the scattering the density was set
+  // for: on the December frame across the nave at half past one, the air in
+  // the left of the picture came back a featureless slab at 178 of 255,
+  // brighter than any stone in the building. At a third the swing is six to
+  // one, the same slab reads 147, and the shafts the effect exists for are
+  // untouched — every frame looking across the sun measures the same to
+  // three decimal places.
+  anisotropy: 0.35,
   // A hundred and ten metres is the length of the church plus its apse. No
   // ray inside the building runs further, and capping it keeps a view out
   // through a door from integrating the horizon.
   range: 110,
-  steps: 32,
+  /**
+   * Forty-eight, up from thirty-two.
+   *
+   * The march starts each ray at its own offset into the first step so that
+   * banding becomes noise, and the offset is worth a whole stride — which
+   * over a hundred-metre ray is three and a half metres of nave. The
+   * reconstruction filter was widened to average that pattern out; the rest
+   * of the answer is to make the stride shorter. Measured as the
+   * high-frequency residual over a crop of the December wall frame, which
+   * is the worst case in the harness: 2.05 at thirty-two steps, 1.94 here,
+   * 1.88 at sixty-four. Two thirds of the remaining gain for half the cost,
+   * and the pass does not register in the frame time at half resolution.
+   */
+  steps: 48,
 }
 
 const COMMON = /* glsl */ `
@@ -285,17 +309,38 @@ void main() {
   vec2 f = fract( grid );
   vec2 base = ( floor( grid ) + 0.5 ) * texel;
 
+  /**
+   * Four by four rather than two by two, and the reason is the dither.
+   *
+   * The march spends a fixed number of samples per ray and starts each one
+   * at its own offset into the first step, so that banding is traded for
+   * noise — but the noise is interleaved gradient noise on the pixel grid,
+   * which is a *pattern*, and a two-tap reconstruction is narrower than the
+   * pattern's own period. What came through was a screen door: a fixed
+   * diagonal weave standing over the apse and the crown in every frame with
+   * a shaft in it, which reads as computed more loudly than the banding it
+   * was put there to hide.
+   *
+   * Widening the reconstruction past the dither's period averages the
+   * pattern out instead of resolving it. It costs twelve more taps of a
+   * quarter-resolution buffer and nothing else — and it blurs nothing that
+   * matters, because scattered air genuinely has no detail at this scale:
+   * what the depth weight protects is the silhouette, and it still does.
+   */
   vec3 sum = vec3( 0.0 );
   float weight = 0.0;
-  for ( int j = 0; j < 2; j ++ ) {
-    for ( int i = 0; i < 2; i ++ ) {
+  for ( int j = -1; j < 3; j ++ ) {
+    for ( int i = -1; i < 3; i ++ ) {
       vec2 offset = vec2( float( i ), float( j ) );
       vec4 tap = texture2D( uScatter, base + offset * texel );
-      float bilinear = abs( float( i ) - 1.0 + f.x ) * abs( float( j ) - 1.0 + f.y );
+      // A tent over the wider footprint: the two inner taps carry the
+      // bilinear weight they always did and the outer ring tails off.
+      vec2 d = abs( offset - f );
+      float tent = max( 0.0, 1.0 - d.x * 0.5 ) * max( 0.0, 1.0 - d.y * 0.5 );
       // A metre of disagreement is nothing; ten is an edge.
       float agree = 1.0 / ( 1.0 + abs( tap.a - here.distance ) );
-      sum += tap.rgb * bilinear * agree;
-      weight += bilinear * agree;
+      sum += tap.rgb * tent * agree;
+      weight += tent * agree;
     }
   }
 

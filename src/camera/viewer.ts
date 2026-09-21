@@ -87,8 +87,26 @@ const INHABIT_SHIFT = 0.5
  * pale — the stone at 70 % and the glass at 62 % and a quarter saturated,
  * because past white the film lets a colour go grey. A stop closed is where
  * the glass keeps its colour and the stone becomes the thing it lands on.
+ *
+ * And half a stop further closed again, measured over five photograph and
+ * render pairs. The photographs of this nave put eleven to nineteen per cent
+ * of the frame under eight per cent luminance and one to seven per cent
+ * over eighty-five; the renders at 0.9 put nothing at all in either — no
+ * pixel in the building ever blew out and none ever went dark, and a frame
+ * in which nothing is allowed to do either is a frame with no wow in it,
+ * whatever it contains. The camera in that room is exposed for the glass,
+ * and the room falls into shadow around it.
+ *
+ * A third of a stop, not two thirds, which is where the first attempt put
+ * it. The eleven-to-nineteen per cent figure comes from the December frames
+ * taken *at* a wall, where half the picture is column seen against its own
+ * window; the axial frames down the nave, shot in the same building, run
+ * one and a half. Closing far enough to satisfy the first darkened the
+ * second past anything any photograph of this interior shows. What buys the
+ * contrast is the glazing being genuinely brighter than the room — see
+ * `glassGain` in main.ts — and not the room being dark.
  */
-const INSIDE_STOP = 0.9
+const INSIDE_STOP = 0.78
 /**
  * Well under the room. A photograph of this building is exposed for the
  * sunlit stone, and the sunlit stone at the old figure was over the film's

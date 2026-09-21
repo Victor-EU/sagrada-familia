@@ -123,6 +123,25 @@ indoors at a tenth of a metre to the texel; there are two now, and the second
 follows the camera at 2.9 cm — four to seven times finer over the only part of
 the building anyone is standing in.
 
+Then the inside, which was the half of the building none of that had looked
+at. It had every piece of machinery a room needs — coloured transmittance
+through the glazing, a shadowed rig for the windows as an area source, lit
+air, occlusion, a film with a grade on it — and it was **lit by one flat
+number** with all of them switched on underneath it: turning the wash rig
+off moved a nave frame's saturation by two thousandths, turning occlusion
+from 0.55 to 0.9 moved its median by one thousandth, and turning off the
+constant took its blacks from nothing to twenty-eight per cent of the
+picture. It had also put the building's colour on the wrong surfaces —
+every column three quarters lit by one amber, at 0.55 to 0.70 saturation
+where a photographed shaft is 0.046 to 0.28, under a canopy that
+photographs as a field of gold and rendered as white plaster. Both are
+fixed, and with them the flutes that read as corrugation, windows whose
+panes all crossed white together, a nave lined in running bond, and the
+lucernaris — the lit ovals on every branching knot, which are the only
+light at column height and were simply not there. See `docs/interior.md`
+for the ten photograph pairs and the ablation table. What is still wrong is
+in there too: the vault is lit by a constant that nothing reaches.
+
 | Built | Where |
 | --- | --- |
 | Hyperboloid generator — surface + straight generators | `src/geometry/hyperboloid.ts` |
@@ -187,6 +206,9 @@ the building anyone is standing in.
 | Figures, canopies, carved growth and cresting — the Nativity front's sculpture | `src/geometry/statuary.ts` |
 | The cover — Gaudí's hanging chains, dropped, settled and turned over while the stone is cut | `src/ui/cover.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
+| The room's colour is in its light, not on its stone | `src/render/materials.ts` |
+| The lucernaris — three lit ovals set into every branching knot | `src/plan/parts.ts`, `src/geometry/branch.ts` |
+| A fluted shaft that reads as round, and a window that is not a grid | `src/geometry/column.ts`, `src/geometry/window.ts` |
 
 ## Running
 
@@ -650,3 +672,47 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   per-material values in `materials.ts` are decorative. The pavement takes the
   sky out of its ambient in the shader instead, which is where the floor's blue
   cast was coming from.
+- **The room's colour was on its stone instead of in its light, and the two
+  great surfaces had theirs exchanged.** A sideways-facing surface had its
+  window light computed as a mix toward `ROOM_LIGHT`, so three quarters of
+  everything lighting every column in the building was one constant amber
+  — whatever colour the glass was, and whether or not any light was
+  arriving through it. The shafts came out at 0.55 to 0.70 saturation
+  against a photograph's 0.046 to 0.28, and the canopy overhead, which
+  every photograph shows as a field of gold, came out white. It is not the
+  albedo and not the film: set every interior stone to grey, the film flat,
+  both glass tints to white, and the sun and the occlusion off, and the
+  columns stay brown and the vault stays white through all of it. A shaft's
+  fill is mixed toward white now and the gold is left to the faces that
+  look at the floor and the canopy. See `docs/interior.md`.
+- **One flat number was the whole of the light indoors.** Switched off in
+  turn on a frame down the nave: the glazing's shadowed wash rig moved the
+  saturation by two thousandths, ambient occlusion from 0.55 to 0.9 moved
+  the median by one thousandth, and the hemisphere moved nothing at all.
+  Turning off `uRoomGlass` — unshadowed, distance-invariant, pattern-free —
+  took the share of the frame below eight per cent luminance from zero to
+  twenty-eight and the contrast ratio from 2.3 to 107. A room lit by a
+  constant has no shape in it. It is a third of what it was and the rig
+  that knows where the windows are carries the room.
+- **The flutes were a corrugation because the fill was.** A face turned
+  along the nave got a seventh of what a face turned across it got, and a
+  twisted shaft alternates between those two answers face by face — so a
+  twenty-four-sided column read as bark. The ratio is under two to one now,
+  a gradient from the near wall to the far one was added underneath it, and
+  the exact crease normals lean half way toward the radial above the plinth.
+- **A window with one lightness cannot both blaze and keep its colour.**
+  Every pane sat at the same level, so every pane crossed the film's white
+  point together and the gain had to be held at 1.7 to stop the wall going
+  white — which meant nothing in the building was ever the brightest thing
+  in it. A tenth of the quarries are near-clear and clip; the rest are deep
+  and keep their hue at the same exposure, and the gain is 6.
+- **The vault is lit by a constant and nothing reaches it.** Switching the
+  wash rig off changes the canopy by nothing whatsoever, to the byte, and
+  occlusion moves it by four parts in 255 at any radius. The rig runs along
+  the two horizontal axes and a soffit faces those edge-on; above the
+  clerestory heads there is no opening for it to see in any case. The real
+  canopy is lit from underneath, by the clerestory throwing up and inward
+  and by the pavement, and neither is in the model — so the canopy has one
+  tone, colour can only be added to it flat, and past four tenths saturation
+  it stops being lit stone and becomes a terracotta ceiling. This is the
+  largest thing still wrong with the interior.
