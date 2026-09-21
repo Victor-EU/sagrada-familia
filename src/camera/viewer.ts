@@ -136,7 +136,26 @@ const INHABIT_SHIFT = 0.5
  * inflated medium. Outdoors is untouched: the sun on the stone never went
  * through any of this.
  */
-const INSIDE_STOP = 0.95
+/**
+ * And a fifth of the way back down, because the room found the light it was
+ * short of.
+ *
+ * The paragraph above reads as a correction and it was half of one. The air
+ * was adding light it had no right to, and it was adding it *in the place
+ * where the room had none* — across the standing faces of four hundred
+ * columns, which took nothing at all from the one term in the model that
+ * stands for light that has bounced more than once. Taking the air away left
+ * that hole open and the stop was opened a third of a stop to cover it.
+ *
+ * The hole is now filled by the thing that should have filled it — see
+ * `uRoomStand` in render/materials.ts — so the cover comes off. Swept on the
+ * same frame and the same photograph as before: `in-vault-wash-dec2025`
+ * measures 0.291 over the centre of the canopy, and the render crosses it at
+ * an eighth of a stop down from 0.95. Outdoors is untouched, here as there:
+ * `OUTSIDE_STOP` is a different number and the fill this pays for is gated
+ * by `sfSheltered`, so no stone standing in the plaza sees any of it.
+ */
+const INSIDE_STOP = 0.867
 /**
  * Well under the room. A photograph of this building is exposed for the
  * sunlit stone, and the sunlit stone at the old figure was over the film's

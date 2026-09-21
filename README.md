@@ -799,7 +799,9 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   nine metres under its own feet. Worth checking what else was keyed to
   up-or-down: `uRoomFloor · max(0,−n.y) + uRoomSky · max(0,n.y)` is zero at
   `n.y = 0` too. Every term standing for "the room" skipped the one
-  orientation the room is mostly made of.
+  orientation the room is mostly made of. *That last sentence then stood
+  here unacted on for four commits — see the bullet at the end of this
+  list.*
 - **The floor's colour is a soffit's, not a shaft's.** Given to a column
   unchanged it put the building's gold straight back onto the one surface
   the photographs insist is neutral, and column saturation went to 0.63 —
@@ -876,3 +878,25 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   it go and a June morning under the *green* glazing came back two thirds
   saturated and hotter than the December frame it was meant to be the
   opposite of. Not the hour's light — the room bounce with the lid off.
+- **A note that says "worth checking" is not a fix.** The bullet above about
+  the floor's form factor ends by observing that the *flat* room term is
+  zero at `n.y = 0` as well. It was, for four commits after that was
+  written. Ablated: switching the whole of the term this README calls "the
+  fill in a corner the floor cannot see" off moved a column four bays deep
+  by one part in a thousand, because a corner is vertical and both halves of
+  the term are cosines against the poles. What it cost was not brightness —
+  painted, every pixel under eight per cent luminance in the landing frame
+  was a column flank, and the photographs put columns at 0.23 of their own
+  frame median against the render's 0.29 — it was the stone's own gold. The
+  granite at the photograph-matched December frame moves from 0.45 saturated
+  and 0.29 warm to 0.55 and 0.38, against a photographed 0.50–0.60 and
+  0.33–0.43, which closes the item two passes had left open. Same arithmetic
+  as the floor, `uRoomStand` at a quarter, zero at both poles so nothing
+  horizontal in the building moves.
+- **Two fixes can be covering the same hole.** The indoor stop was opened
+  0.28 of a stop when the volumetric pass was corrected, on the finding that
+  the air had been adding light the room then lost. Half a correction: the
+  air had been adding it *where the room had none*, across the standing
+  faces of four hundred columns. With the room's own term finally reaching
+  them, the stop comes back down an eighth of a stop onto the same
+  photograph it was fitted against.

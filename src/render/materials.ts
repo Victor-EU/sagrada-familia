@@ -503,9 +503,31 @@ const INDOOR_LIGHT = /* glsl */ `
   // flipped toward the viewer by here, so a vault seen from the floor below
   // correctly reads as facing down.
   vec3 roomNormal = inverseTransformDirection( normal, viewMatrix );
+  float lateral = 1.0 - abs( roomNormal.y );
+
+  // And *which* of them, which is not the cosine against straight up.
+  //
+  // A room is not two lamps at the poles. It is a lower half and an upper
+  // half, and what a surface takes from a half-space is ( 1 -/+ n.y ) / 2:
+  // all of the lower one for a soffit, all of the upper one for a face
+  // turned at the vault, and exactly half of each for anything standing
+  // upright. The cosine gives a standing face *zero of both* — which is the
+  // same mistake this file's own note against sfLoft records, made in the
+  // same line of code, found at the same time and then not fixed here. So
+  // the term that stands for light that has bounced more than once, the one
+  // thing in the model that is supposed to reach a corner no window and no
+  // floor can see, was identically nothing on every vertical surface in the
+  // building. Ablated on the landing frame: switching the whole flat term
+  // off moved a column four bays deep by one part in a thousand.
+  //
+  // Written the way sfLoft writes it, for the same reason: the pole is what
+  // this term was fitted at and is left exactly alone, and uRoomStand is how
+  // much of the half-space a standing face is believed to get. Less than one,
+  // because most of what a column flank faces across the equator is not the
+  // vault or the floor but the next column.
+  float standingShare = uRoomStand * lateral * 0.5;
   float fromFloor = max( 0.0, -roomNormal.y );
   float fromAbove = max( 0.0, roomNormal.y );
-  float lateral = 1.0 - abs( roomNormal.y );
 
   // Sideways is not one answer either. The glazing is in the long walls, so a
   // face turned across the church is looking at a window a few metres away
@@ -715,8 +737,33 @@ const INDOOR_LIGHT = /* glsl */ `
 
   // What is left of the flat term. Small, and for the light that has
   // bounced more than once — the fill in a corner the floor cannot see.
-  float fromRoom = uRoomFloor * fromFloor + uRoomSky * fromAbove;
-  vec3 room = mix( ambient, luminance * uRoomBounce, uRoomWarmth ) * fromRoom;
+  //
+  // The standing share takes the same colour as the two poles, and that was
+  // not obvious. The floor's standing share is pooled hard toward neutral —
+  // see uLoftPool — on the argument that a shaft stands *in* the floor's
+  // plane and sees a hundred metres of it at a grazing angle, both halves of
+  // Vila-Grau's scheme at once, where a soffit hangs over one bay and takes
+  // that bay's colour. The same words fit this term and the argument does
+  // not, because what they are about is the glazing: hearth carries the
+  // window overhead through uLoftTint and the hour through uWashSide, and
+  // there is a direction in it to pool away. uRoomBounce is the colour a
+  // room full of sandstone returns after two bounces and three. It has no
+  // window in it and no hour in it, so pooling it removes the stone's own
+  // gold and nothing else.
+  //
+  // Measured at viewpoint w, against the photograph it is built to match,
+  // on the granite the interior README has been recording as too cold for
+  // two passes — pooled at the floor's own 0.85, half of it, and none:
+  //
+  //   | pooled | shaft sat | shaft warm | wall sat | photograph  |
+  //   | 0.85   | 0.41      | 0.26       | 0.29     | 0.50 - 0.60 |
+  //   | 0.5    | 0.48      | 0.32       | 0.34     |  / 0.33 - 0.43 |
+  //   | 0      | 0.56      | 0.39       | 0.40     |  wall 0.62 / 0.44 |
+  //
+  // Every surface moves toward the photograph as the pooling comes off.
+  vec3 roomTone = mix( ambient, luminance * uRoomBounce, uRoomWarmth );
+  vec3 room = roomTone * ( uRoomFloor * fromFloor + uRoomSky * fromAbove
+    + ( uRoomFloor + uRoomSky ) * standingShare );
   vec3 window = luminance * glass * fromGlass;
 
   // And only where the surface actually stands in the room — see SHELTER.
@@ -832,6 +879,7 @@ uniform float uRoomWarmth;
 uniform float uRoomGain;
 uniform float uRoomFloor;
 uniform float uRoomSky;
+uniform float uRoomStand;
 uniform float uRoomSide;
 uniform float uRoomAlong;
 uniform float uRoomFar;
@@ -860,6 +908,8 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomGain: { value: number }
   uRoomFloor: { value: number }
   uRoomSky: { value: number }
+  /** How much of the room's two halves a face standing upright is given. */
+  uRoomStand: { value: number }
   uRoomSide: { value: number }
   uRoomAlong: { value: number }
   /** What the far wall's glazing is worth against the near wall's. */
@@ -1050,6 +1100,40 @@ export function roomUniforms(): RoomUniforms {
      * exchange running one way only.
      */
     uRoomSky: { value: 2.6 },
+    /**
+     * And how much of either half a surface standing upright is given.
+     *
+     * Not one, which is what the geometry alone would say. Most of what a
+     * column flank faces across the equator is not the floor and not the
+     * vault: it is the next column, four metres away, and the one behind
+     * that. The same discount uLoftStand applies to the floor's horizon, for
+     * the same reason, and it lands in the same place.
+     *
+     * Fitted on the granite, at viewpoint w, against the photograph that
+     * viewpoint is built to match — the surface the interior README has
+     * carried as too cold through two passes, where it is quoted at 0.29
+     * saturated against a photographed 0.50 to 0.60, and 0.18 warm against
+     * 0.33 to 0.43. Two shafts, at the exposure that holds the vault-wash
+     * canopy on its own photograph:
+     *
+     *   | stand | near shaft   | far shaft    | frame contrast |
+     *   | 0     | 0.45 / 0.29  | 0.38 / 0.23  | 4.08           |
+     *   | 0.15  | 0.51 / 0.35  | 0.42 / 0.27  | 3.50           |
+     *   | 0.25  | 0.55 / 0.38  | 0.46 / 0.29  | 3.26           |
+     *   | 0.50  | 0.60 / 0.43  | 0.51 / 0.34  | 2.85           |
+     *
+     * 0.5 puts both shafts inside the band and is too far. This term has no
+     * shadow in it — it is the light that has stopped having a direction —
+     * and a room lit by a constant has no shape in it, which is the failure
+     * this README records under three different names. Priced: every extra
+     * tenth past a quarter costs about three per cent of the frame's
+     * contrast, on frames that already run below the photographs' own. A
+     * quarter is where the granite arrives and the shadows are still there:
+     * across the crossing it holds 4.9 per cent of its frame under eight per
+     * cent luminance, against 6.7 to 12.1 in the two photographs of that
+     * room, where half a unit leaves 0.4.
+     */
+    uRoomStand: { value: 0.25 },
     /** Turned across the church, at the glazing a few metres away. */
     uRoomSide: { value: 1.15 },
     /**

@@ -739,3 +739,198 @@ Putting that right means re-opening `uLoftPool`, `uGlassShare` and
 recalibration of the room's colour that this pass deliberately did not do,
 having found that the recalibration it was warned about — the room's
 *hour* — was a different axis entirely.
+
+*Closed by the pass below, and not by any of those three.* The grey was not
+the problem. The columns were not departing from a wrong grey — they were
+missing the room's own gold outright, because the term that carries it is
+two cosines against the poles and gives a vertical surface nothing. The
+shafts are at 0.55 and 0.38 against the 0.50–0.60 and 0.33–0.43 above, and
+`uLoftPool`, `uGlassShare` and `uWashPurity` are all where they were.
+
+---
+
+# Nothing in this room is a floor or a ceiling
+
+*Fifth pass, 21 September 2026. The complaint that opened it was wrong, and
+the line it accused was guilty of something else.*
+
+The standing complaint was that the interior is short of light away from its
+windows — written down as a landing frame with 38 per cent of its pixels
+under eight per cent luminance, against 11 to 19 in the worst photograph.
+Both halves of that are wrong and the measurement is easy to redo. The frame
+measures 17 per cent, and across the twenty-three interior photographs in
+`reference/` the share under eight per cent runs from 0.1 to **33.6**. Taking
+a horizontal cut through `in-nave-passion-1330-dec2025` at the height of the
+capitals, the columns in it fall to 0.23 of the frame's own median. The
+render's darkest column stood at 0.29. It was not too dark.
+
+What it was, was **flat, cold and black in one specific place**, and the
+place turns out to be the whole of one orientation.
+
+## Every dark pixel in that frame was a column flank
+
+The instrument is a map rather than a number: render the frame, paint
+everything under eight per cent magenta and everything under fifteen cyan,
+and look at what comes up. Not one recess, not one shadow behind a branch.
+The magenta is the near-left shaft from its base to the springing, every
+plinth in the picture, and a cyan stripe down the shaded flank of every
+column in the nave. The building's shadows were all on the same kind of
+surface.
+
+Ablating the four terms that feed an interior surface, on a shaft four bays
+deep in that frame:
+
+| term switched off | shaft luminance |
+| --- | --- |
+| nothing | 0.093 |
+| the floor (`uLoftGain`) | 0.023 |
+| the flat window fill (`uRoomGlass`) | 0.071 |
+| the wash rig (`uWashGain`) | 0.093 |
+| the clerestory throw (`uThrowGain`) | 0.093 |
+| **the flat room term** | **0.092** |
+
+The last row is the one to stop at. `uRoomFloor · max(0,−n.y) + uRoomSky ·
+max(0,n.y)` is the term this document has described three times as *the fill
+in a corner the floor cannot see* — the stand-in for light that has bounced
+more than once, the one thing in the model that is supposed to reach where
+nothing else does. Switching the whole of it off moved that shaft by one part
+in a thousand. It was not small there. It was **zero**, and zero on every
+vertical surface in the building, because both halves of it are cosines
+against the poles and a cosine against the pole is nothing at the equator.
+
+This is not a new finding. It is written down in the third pass above, under
+*The half is split, because half of it is a guess* — "Every term in the model
+that stood for 'the room' skipped the one orientation the room is mostly made
+of." The same line was then fixed in `sfLoft` and left alone here.
+
+## The same arithmetic, in the place it was already written for
+
+What a surface takes from a half-space is `( 1 ∓ n.y ) / 2`: all of the lower
+one for a soffit, all of the upper one for a face turned at the vault, and
+exactly half of each for anything standing upright. Written the way `sfLoft`
+writes it, so that the two poles keep the values they were fitted at and only
+the equator changes:
+
+    standingShare = uRoomStand · ( 1 − |n.y| ) / 2
+    fromFloor     = max( 0, −n.y ) + standingShare
+    fromAbove     = max( 0,  n.y ) + standingShare
+
+`uRoomStand` is 0.25 rather than one, on the same argument that puts
+`uLoftStand` at 0.45: most of what a column flank faces across the equator is
+not the floor and not the vault, it is the next column.
+
+Because it is exactly zero at both poles, no soffit and no pavement in the
+building moves by a byte, which is what makes the change affordable — every
+number in the four passes above was fitted on a horizontal surface.
+
+### The colour it arrives in, and the pooling that was wrong
+
+The floor's standing share is pooled hard toward neutral — see `uLoftPool` —
+on the argument that a shaft stands *in* the floor's plane and sees a hundred
+metres of it at a grazing angle, both halves of Vila-Grau's scheme at once,
+where a soffit hangs over one bay and takes that bay's colour. The same words
+fit this term exactly and the argument does not. What they are about is the
+*glazing*: `hearth` carries the window overhead through `uLoftTint` and the
+hour through `uWashSide`, and there is a direction in it to pool away.
+`uRoomBounce` is the colour a room full of sandstone returns after two
+bounces and three. It has no window in it and no hour in it, so pooling it
+removes the stone's own gold and nothing else. Measured at viewpoint `w`:
+
+| pooled at | shaft sat | shaft warm | wall sat | photograph |
+| --- | --- | --- | --- | --- |
+| 0.85, the floor's own | 0.41 | 0.26 | 0.29 | shaft 0.50–0.60 |
+| 0.5 | 0.48 | 0.32 | 0.34 | shaft warm 0.33–0.43 |
+| **0** | **0.56** | **0.39** | **0.40** | wall 0.62 / 0.44 |
+
+Every surface moves toward the photograph as the pooling comes off.
+
+### And the weight is fitted on the granite, not on the shadows
+
+Which is the whole of the judgement in this pass. The term has no shadow in
+it — it is the light that has stopped having a direction — and a room lit by
+a constant has no shape in it, which is the failure this document records
+under three different names. So it is fitted where it is owed and stopped
+there. Viewpoint `w` is built to match `in-nave-passion-1330-dec2025` frame
+for frame, and the granite in it is the surface the *Still open* above has
+been quoting as too cold for two passes. At the exposure that holds the
+vault-wash canopy on its own photograph:
+
+| `uRoomStand` | near shaft | far shaft | frame contrast |
+| --- | --- | --- | --- |
+| 0 | 0.45 / 0.29 | 0.38 / 0.23 | 4.08 |
+| 0.15 | 0.51 / 0.35 | 0.42 / 0.27 | 3.50 |
+| **0.25** | **0.55 / 0.38** | **0.46 / 0.29** | **3.26** |
+| 0.50 | 0.60 / 0.43 | 0.51 / 0.34 | 2.85 |
+| photograph | 0.50–0.60 / 0.33–0.43 | same | 12.11 |
+
+Half a unit puts both shafts inside the band and is too far: across the
+crossing it leaves 0.4 per cent of the frame under eight per cent luminance
+where the two photographs of that room have 6.7 and 12.1. A quarter is where
+the near shaft arrives in the band and the shadows are still there — 4.2 per
+cent on that frame — and every tenth past it costs about three per cent of
+the frame's contrast, on frames that already run below the photographs' own.
+
+## And the indoor stop comes back down
+
+The fourth commit before this one opened the indoor stop by 0.28 of a stop,
+on the finding that the volumetric pass had been adding light it had no right
+to and that taking it away left the room short. That was half a correction.
+The air was not only adding light: it was adding it *in the place where the
+room had none* — across the standing faces of four hundred columns — so the
+stop was opened to cover a hole the air had been covering.
+
+The hole is now filled by the term that is for it, so the cover comes off.
+Swept on the same frame and the same photograph: `in-vault-wash-dec2025`
+measures 0.291 over the centre of the canopy, and the render crosses it at
+`INSIDE_STOP` 0.867, an eighth of a stop down from 0.95.
+
+## What it bought
+
+Viewpoint `w`, per surface, against the photograph it is built to match:
+
+| | before | after | photograph |
+| --- | --- | --- | --- |
+| Near granite shaft, saturation | 0.45 | **0.55** | 0.50–0.60 |
+| Near granite shaft, warmth | 0.29 | **0.38** | 0.33–0.43 |
+| Far granite shaft, saturation | 0.38 | **0.46** | 0.50–0.60 |
+| Far granite shaft, warmth | 0.23 | **0.29** | 0.33–0.43 |
+| Wall, saturation | 0.27 | **0.37** | 0.62 |
+| Wall, warmth | 0.15 | **0.23** | 0.44 |
+| Vault, saturation | 0.58 | 0.59 | 0.69 |
+| Frame contrast | 4.15 | 3.26 | 12.11 |
+
+And on the frame the complaint was about, the one the flight lands in:
+
+| landing frame | before | after |
+| --- | --- | --- |
+| Under eight per cent luminance | 18.2 % | **2.3 %** |
+| Blackest shaft ÷ frame median | 0.29 | **0.39** |
+| That shaft, saturation / warmth | 0.51 / 0.34 | **0.67 / 0.51** |
+| Vault ÷ column | 1.34 | 1.29 |
+
+Every exterior viewpoint is unchanged to three decimal places on every
+instrument — the term is gated by `sfSheltered`, and the stop it is paid for
+with is the indoor one.
+
+### Cost
+
+One scalar, one multiply-add per fragment on surfaces that already compute
+`lateral`, no texture fetch, no map rebuilt. And about a fifth of the frame's
+contrast on every interior view, which is the real price and is paid in the
+one currency this document keeps saying not to spend.
+
+### Still open
+
+**The contrast.** Interior frames now run 2.3 to 6.9 on p95 ÷ p05 where the
+interior photographs run 2.6 to 34.6 with a median of 6.3. This pass took a
+fifth of what was left. The fill is not where the rest of it went: at
+viewpoint `w` the render's fifth percentile sits at 0.59 of its median
+against the photograph's 0.22, and the left third of that frame is a blank
+sandstone wall where the photograph has four storeys of glazing. The
+building's own windows are what the photographs get their range from, and
+this model has fewer and smaller ones than the building does.
+
+**The wall.** The one surface that did not come far enough: 0.37 saturated
+and 0.23 warm against a photographed 0.62 and 0.44. A wall beside a window
+is the surface the wash rig is *for*, which makes it the next thing to
+measure rather than the next thing to guess at.

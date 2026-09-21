@@ -282,19 +282,29 @@ something is built on the far side of it.
 
 ## Left standing, and why
 
-**The room is too dark away from its windows, and one number cannot fix it.**
-With the air no longer lighting the nave, the landing frame puts 38 % of its
-pixels under eight per cent luminance, against 11–19 % in the *worst* of the
-photographs and 1.5 % in the axial ones; the canopy on an axial noon frame
-measures 0.244 against the photograph's 0.403. The interior fill has a gain
-of its own and it is the right lever — but swept against both criteria at
-once it cannot satisfy them: at 1.3 the crushed shadows go (38 % down to
-3.3 %) and the calibrated December frame overshoots its photograph by fifteen
-per cent, at 1.6 by twenty-eight. The two disagree because the *ratio* of
-direct window light to indirect fill is wrong indoors, not its level, and
-rebalancing that is a round against all ten pairs in `interior.md` rather
-than a constant. The measurements are here so that round does not have to
-start by making them again.
+~~**The room is too dark away from its windows, and one number cannot fix
+it.**~~ **Answered, and the complaint was wrong.** *Struck 21 September
+2026 — see the fifth pass in `interior.md`.* The 38 per cent figure does not
+reproduce: that frame measures 17, and the share under eight per cent across
+the twenty-three interior photographs runs from 0.1 to 33.6, not 11 to 19.
+Cut horizontally through `in-nave-passion-1330-dec2025` and its columns fall
+to 0.23 of the frame's own median, where the render's darkest stood at 0.29.
+The room was not short of light.
+
+What was true was the *cause* this item guessed at. Painting every pixel
+under eight per cent found them all on one kind of surface — the shaded flank
+of a column, every plinth, and nothing else — and the reason is that the flat
+term standing for light that has bounced more than once is two cosines
+against the poles, so it is identically zero on everything vertical in the
+building. Switching the whole of it off moved a shaft four bays deep by one
+part in a thousand. What that cost was not brightness but the stone's own
+colour: the granite at the photograph-matched December frame stood at 0.45
+saturated and 0.29 warm against a photographed 0.50–0.60 and 0.33–0.43, which
+is the item `interior.md` had been carrying open for two passes. Giving a
+standing face its half of each half-space — the same arithmetic `sfLoft`
+already uses — puts it at 0.55 and 0.38, and the indoor stop comes back down
+an eighth of a stop, because the air this review took out had been covering
+the same hole.
 
 **The flight still passes the Nativity statuary at four metres.** Sampled,
 it crosses x = 36.6 about 1.8 s in, a few metres off the front, and the
