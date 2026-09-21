@@ -272,3 +272,215 @@ minute-accurate sun. And the canopy takes the floor's light but not the
 clerestory's: light entering a window and travelling up-and-inward off a
 sunlit aisle roof is real, and is not modelled. Both are smaller than what
 was fixed.
+
+---
+
+# The floor is a plane, and the clerestory throws up
+
+*Third pass, 21 September 2026, against the two items left open above.*
+
+## The columns were dark because the floor could not reach them
+
+The instrument for "too dark" cannot be the column's own brightness,
+because that moves with the exposure. It is the column's brightness
+**divided by the frame's median**, which does not:
+
+| | photograph | render, before |
+| --- | --- | --- |
+| Pale shaft, `in-nave-axial-canopy` | 1.15 | — |
+| Left porphyry shaft, same frame | 0.98 | — |
+| Right porphyry shaft, same frame | 0.86 | — |
+| All column stone, under the crown | — | 0.81 |
+| All column stone, down the nave | — | 0.61 |
+
+A quarter to a third short, on every interior viewpoint, and the saturation
+too high to match — 0.42 where the photographs give 0.32 to 0.35.
+
+The cause was one line in the pass written the round before. `sfLoft`
+weighted the floor's light by `max(0, −n.y)`: the cosine against straight
+down. That is the right answer for a lamp directly underneath and the wrong
+one for a floor, and the difference is not small. What a surface takes from
+an **infinite plane below it** is
+
+    ( 1 − n.y ) / 2
+
+— all of it for a soffit, which sees nothing else; exactly **half** for
+anything standing upright, which has floor across half its sky; none for a
+face turned at the vault. The old term gave a vertical surface *zero*. So
+the largest, palest, best-lit surface in the building lit the vault and lit
+nothing that stood on it, and four hundred columns were left with the
+windows alone.
+
+Worth checking what else was keyed to up-or-down while this was being
+looked at: `uRoomFloor · max(0,−n.y) + uRoomSky · max(0,n.y)`, the flat
+term for light that has bounced more than once, is **also** zero at
+`n.y = 0`. Every term in the model that stood for "the room" skipped the
+one orientation the room is mostly made of.
+
+### The half is split, because half of it is a guess
+
+    facing = max( 0, −n.y ) + uLoftStand · ( 1 − |n.y| ) / 2
+
+The two sum to the infinite plane exactly. The first is the floor directly
+beneath, which this map answers precisely. The second is the rest of the
+plane out to the horizon — most of what a standing face is lit by, and the
+part a nine-tap kernel nine metres across can say the least about, because
+at forty metres the floor of this room is behind a colonnade and the kernel
+has no way to know. `uLoftStand` is 0.45: the horizon discounted, the floor
+underfoot not.
+
+A standing face also asks a **different question** from a soffit. Straight
+down from a shaft is the shaft's own footprint, which the map correctly
+reports as blocked — by the column. So the lookup steps three metres out
+along the face's own heading, and takes its nine taps three metres apart
+rather than four and a half, because a shaft is lit by the aisle it faces
+and not by the next bay in every direction. Both are zero for a soffit,
+which has no heading, so the canopy is untouched.
+
+Stepping out three metres inside a kernel nine metres wide is no step at
+all — measured, it moved the frame by two per cent. Tying the spread to the
+same number is what makes the step mean anything.
+
+### And the floor's colour is not the same for both
+
+The floor's light carries the room's gold and a quarter of whichever half
+of the glazing is overhead. Given to a column unchanged, that puts the
+building's colour straight back onto the one surface the photographs insist
+is neutral — the same inversion this document opens with, arriving by a new
+route. Measured: column saturation went from 0.43 to 0.63, worse than
+before the first pass.
+
+A soffit hangs over one bay and takes that bay's colour. A shaft stands
+*in* the floor's plane, so what it sees is a hundred metres of pavement at
+a grazing angle — both halves of Vila-Grau's scheme at once, and the far
+end of the nave as well — and the average of all of it is very nearly grey.
+`uLoftPool` at 0.85 pools a standing face's floor light toward its own
+luminance on that argument, and leaves a soffit's alone.
+
+### And the constant it replaces had to give the light back
+
+`uRoomGlass`, the flat lateral fill, was at 0.8 — a number fitted when the
+floor could not reach a column at all, so most of what it was worth on a
+shaft was never the window. Left there, the room was lit twice: the frame
+went half a stop up and its contrast from 5.8 to 2.9, which is the failure
+this document already records twice under other names. It is now 0.3, which
+is what is left once the pavement is a term of its own. What that 0.3 still
+does is the near-wall-to-far-wall gradient, which is this term's alone.
+
+One thing that was tried and reverted: folding the floor's visibility into
+`covered`, the factor that fades the flat fill where the rig supersedes it.
+That reads well and is wrong. The fill and the rig are two accounts of the
+same light, so one replaces the other; the floor and the window are two
+different lights that add. Told otherwise, the fill went to nothing on
+every surface in the building and took the shaft gradient with it —
+`uRoomGlass` switched off changed the frame by 0.1 per cent.
+
+## The canopy was lit from below, and the clerestory is also below it
+
+The second item. The canopy had the floor and nothing else, so every facet
+of a twenty-facet fan came back the same tone: the floor's light does not
+know which way a soffit faces beyond `n.y`, and neither does the flat fill,
+and neither does the probe. Colour applied to that is paint, which is
+exactly what "past four tenths it becomes a terracotta ceiling" describes.
+
+The fix is the wash rig with its heading **tilted up**, which the round
+before had rejected — rightly, for the wrong reason. Tilting the *existing*
+pair robs the columns. Adding a second pair costs two more renders per
+rebuild and takes nothing from anything.
+
+### Fifteen degrees, measured rather than chosen
+
+The first build of this was set at thirty-eight degrees, from the glazing's
+bounding boxes and an assumed vault height, and contributed **nothing at
+eighty times its gain**. Casting rays up through the model and writing down
+what they hit gives the real figures:
+
+| | |
+| --- | --- |
+| Central-vessel clerestory | x = ±8.1, y 33 → 41 |
+| Nave vault soffits | y ≈ 36 → 42, across x ∈ [−8, 8] |
+| Aisle roof outside | y = 31.7, from x = 10 outward |
+
+The clerestory is not below what it lights. It is level with it, and the
+light crosses the sixteen metres between the two walls climbing only a few.
+Steeper than about twenty degrees and the ray leaves the vault behind and
+lands on the terrace above it; shallower than about ten and it arrives
+under the springing, or has to come up through the aisle roof to get in.
+Fifteen enters the upper half of the clerestory, crosses to the far
+soffits, and on the way out clears the aisle roof by five metres.
+
+### What the hour does to it
+
+The rest of this rig does not know where the sun is, on purpose: a window
+is a hundred square metres of *sky*, and the sky is there all day. The
+tilted pair is the one place that will not do, and the photographs say so
+flatly. At half past one in December the canopy over the Passion wall is
+gold from one end to the other, and there is not a square metre of green on
+it — while the model, throwing equally from both clerestories, put
+mint-green blooms across the whole vault. What the sunlit side has and the
+shaded side has not is the aisle roof underneath it.
+
+So each tilted pass carries a weight — a dot product between the sun and
+the wall it enters through, floored at `THROW_SHADE` = 0.1, because a
+shaded clerestory still has the whole northern sky in front of it. No map
+is rebuilt when the hour moves; only the weight on two of them.
+
+### What it bought, and what it cost
+
+Measured on identical frames with the terms switched in and out:
+
+| under the crown | before | after | photograph |
+| --- | --- | --- | --- |
+| Column ÷ frame median | 0.81 | **0.90** | 0.86 – 1.15 |
+| Column saturation | 0.417 | **0.321** | 0.32 – 0.35 |
+| Vault ÷ column | 1.86 | **1.47** | 1.24 – 1.65 |
+| Frame median | 0.192 | 0.231 | 0.12 – 0.46 |
+| Frame contrast, p95 ÷ p5 | 5.8 | 4.2 | 5.3 – 37.7 |
+
+| down the nave | before | after |
+| --- | --- | --- |
+| Column ÷ frame median | 0.61 | **0.73** |
+| Column saturation | 0.387 | **0.320** |
+| Vault ÷ column | 2.53 | **1.97** |
+
+Three instruments into the photographs' range on the axial frame, and the
+two column figures improved on every interior viewpoint. The frame is a
+quarter-stop brighter and its contrast is down by a quarter — the two are
+the same fact, since p95 ÷ p5 falls when fill is added, and at a matched
+median the contrast comes back to 5.1. The median stays inside the band the
+photographs occupy, so the exposure was left where the December frames put
+it.
+
+Exterior frames are unchanged to three decimal places on every viewpoint
+tested — the fill these terms feed is gated by `sfSheltered`, so a stone
+standing outside never sees any of it. The rig still renders once per
+rebuild, four passes now instead of two. The added per-fragment cost is
+below the noise floor of a timing loop on this machine.
+
+### What the throw is actually worth
+
+Not brightness: about five per cent of the canopy's mean. What it is for is
+that the canopy had no *direction* in it, and now a facet can face the
+clerestory or turn away from it. That is the difference between the two
+frames of the vault wash in `reference/.shots` — one is a single terracotta
+tone with the volumetric shafts crossing it, the other has form.
+
+Two things were got wrong on the way there and are worth recording.
+Exempting the throw from the wash's desaturation, on the argument that a
+soffit forty metres up has no pale neighbour to mix its window with: it
+does, it is the floor, and the exemption turned facets teal on a frame
+whose photograph is gold throughout. And driving the gain by the vault's
+p99 ÷ median spread until it matched the photographs' 2.1 — which reached
+the number at a gain that makes the canopy a printed stencil of the window
+rather than a wash. The measurement was right and the population was wrong.
+
+### Still open
+
+One thing, and it is the same fault one level out. The **horizontal** pair
+is still blind to the hour, so at half past one in December the shaded
+Nativity glazing washes column flanks and vault facets as strongly as the
+blazing Passion glazing opposite, and they come back cooler than any
+photograph of that hour shows. The tilted pair now has a weight for exactly
+this. Giving the flat pair the same one is a line of code and a
+recalibration of the whole room, because that rig carries most of the
+interior's light.

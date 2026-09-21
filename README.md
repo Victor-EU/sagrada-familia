@@ -152,6 +152,26 @@ pass straight up, and a soffit now asks it how much of the pavement it can
 see. The vault gains half as much light again, a branch darkens the vault
 above it, and the star plates read for the first time.
 
+That pass then turned out to be weighted wrongly, and in a way that
+explained the last complaint anyone had about the interior — that the
+columns are too dark. It weighted the floor by the cosine against straight
+down, which is the answer for a *lamp* underneath. What a surface takes
+from a *plane* below it is `(1 − n.y) / 2`: all of it for a soffit, half
+for anything standing upright, and the old term gave a vertical surface
+zero. So the largest, palest, best-lit surface in the building lit the
+vault and lit nothing that stood on it. Corrected, and with the flat fill
+it had been standing in for taken down to match, a column measures 0.90 of
+the frame's median where the photographs give 0.86 to 1.15 and the render
+gave 0.81, at 0.32 saturation against a photographed 0.32 to 0.35. The
+canopy meanwhile got the **clerestory**: the same rig tilted fifteen
+degrees above horizontal — measured off the model, not chosen — which is
+the only line that enters at the clerestory head, crosses to the far
+soffits and clears the aisle roof behind it. It is the one source up there
+that a facet can face or turn away from, and it is weighted by which
+clerestory has the sun behind it, because a canopy photographed at half
+past one in December is gold from end to end and the model was putting
+mint-green blooms across it.
+
 | Built | Where |
 | --- | --- |
 | Hyperboloid generator — surface + straight generators | `src/geometry/hyperboloid.ts` |
@@ -220,6 +240,8 @@ above it, and the star plates read for the first time.
 | The lucernaris — three lit ovals set into every branching knot | `src/plan/parts.ts`, `src/geometry/branch.ts` |
 | A fluted shaft that reads as round, and a window that is not a grid | `src/geometry/column.ts`, `src/geometry/window.ts` |
 | The light from below: how much pavement each soffit can see | `src/render/washrig.ts` |
+| The floor as a plane, so it reaches a shaft and not only a soffit | `src/render/washrig.ts` |
+| The clerestory throwing up and inward, weighted by which side has the sun | `src/render/washrig.ts`, `src/render/scene.ts` |
 
 ## Running
 
@@ -743,3 +765,56 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   canopy saturation that read as a terracotta ceiling while the vault was
   one flat tone reads as gold light on pale stone now that the floor casts
   shadows on it. Nothing about the colour changed.
+- **A floor is a plane, not a lamp underneath.** The pass above weighted it
+  by `max(0, −n.y)`, which is zero for every vertical surface in the
+  building — so the columns took nothing at all from it. The form factor
+  to an infinite plane below is `(1 − n.y) / 2`: unchanged for a soffit,
+  one half for a shaft. It is split in two where the confidence splits,
+  because nine taps across nine metres cannot see that the far floor of
+  this room is behind a colonnade, and a standing face asks about three
+  metres of floor three metres out along its own heading rather than the
+  nine metres under its own feet. Worth checking what else was keyed to
+  up-or-down: `uRoomFloor · max(0,−n.y) + uRoomSky · max(0,n.y)` is zero at
+  `n.y = 0` too. Every term standing for "the room" skipped the one
+  orientation the room is mostly made of.
+- **The floor's colour is a soffit's, not a shaft's.** Given to a column
+  unchanged it put the building's gold straight back onto the one surface
+  the photographs insist is neutral, and column saturation went to 0.63 —
+  worse than before any of this started. A soffit hangs over one bay and
+  takes its colour; a shaft stands in the floor's own plane and sees a
+  hundred metres of pavement at a grazing angle, both halves of the glazing
+  at once, which averages to grey. Pooled at 0.85 for a standing face and
+  not at all for a soffit.
+- **A new source means the constant it replaces has to give the light
+  back.** `uRoomGlass` was fitted when the floor could not reach a column,
+  so most of what it was worth on a shaft was never the window. Left at
+  0.8, the room was lit twice: half a stop brighter and the contrast from
+  5.8 to 2.9. At 0.3 the picture holds and what the term still does is the
+  near-wall-to-far-wall gradient, which is its own. Folding the floor into
+  `covered` instead — the factor that fades the fill where the rig
+  supersedes it — reads well and is wrong: the fill and the rig are two
+  accounts of the same light, the floor and the window are two lights that
+  add. Tried; `uRoomGlass` switched off then changed the frame by a tenth
+  of a per cent.
+- **The clerestory is level with what it lights, not under it.** The first
+  build of the tilted pass was aimed at thirty-eight degrees off the
+  glazing's bounding boxes and an assumed vault height, and contributed
+  nothing at eighty times its gain. Casting rays up through the model gives
+  the clerestory at y 33–41, the nave soffits at 36–42 and the aisle roof
+  at 31.7 — so the light crosses sixteen metres of nave climbing four.
+  Fifteen degrees threads all three; twenty lands on the terrace above the
+  vault.
+- **One pass in the glazing's rig has to know the hour.** The rest does not,
+  on purpose — a window is a hundred square metres of sky and the sky is
+  there all day. But a clerestory with a sunlit aisle roof under it and one
+  in shade are not the same window, and thrown equally the model put
+  mint-green blooms across a canopy the photograph shows gold from one end
+  to the other. A dot product against the wall each pass enters through,
+  floored at a tenth. No map is rebuilt; only the weight on two of them.
+- **The mean is the wrong instrument for a bloom.** The tilted pass is worth
+  about five per cent of the canopy's mean, which is not what it is for:
+  the canopy had no *direction* in it, so a twenty-facet fan came back as
+  twenty copies of one tone. Driving its gain by the vault's p99 ÷ median
+  spread until it matched a photograph's 2.1 reached the number at a
+  setting that prints the window on the ceiling instead of throwing light
+  at it. The measurement was right and the population was wrong.

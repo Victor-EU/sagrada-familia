@@ -31,13 +31,21 @@ import { LAYER_GLASS, LAYER_SKYLINE } from './sunrig.ts'
  *    disc. A wide tap kernel stands in for that: cheap, and wrong only in
  *    that the penumbra does not grow with distance.
  *
- * Two directions and not more. The nave is a long room glazed on its two long
- * sides, and light arriving along its axis has ninety metres of colonnade to
- * get through; the apse and the fronts are handled by the same two maps badly
- * and by nothing else at all, which is the right trade for one pass.
+ * Two horizontal directions and not more. The nave is a long room glazed on
+ * its two long sides, and light arriving along its axis has ninety metres of
+ * colonnade to get through; the apse and the fronts are handled by the same
+ * two maps badly and by nothing else at all, which is the right trade for one
+ * pass.
  *
- * Nothing here moves. The building is static and so is the direction, so the
- * four renders happen once per rebuild and never again — this is the cheapest
+ * And two more of them tilted up, because a horizontal pass cannot see a
+ * soffit. The clerestory is a window like any other; what makes it different
+ * is that everything it lights is *above* it, so the light leaves it going up
+ * and inward and lands on the canopy. That is the same rig with the heading
+ * tilted — see THROW_TILT — and it is the only source in the model that
+ * reaches the vault carrying the colour of a particular window.
+ *
+ * Nothing here moves. The building is static and so are the directions, so
+ * the renders happen once per rebuild and never again — this is the cheapest
  * light in the project at runtime and the most expensive to have left out.
  */
 
@@ -49,8 +57,83 @@ import { LAYER_GLASS, LAYER_SKYLINE } from './sunrig.ts'
  */
 const SOFT_METRES = 1.1
 
-/** Which way the light travels. +x is the Passion wall's light heading in. */
-const HEADING = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0)] as const
+/**
+ * How far above horizontal the clerestory throws, in radians.
+ *
+ * Measured off the model, by casting rays up through it and writing down
+ * what they hit. The central vessel is glazed at x = +/- 8.1 from 33 m up to
+ * 41; its vault soffits run from about 36 to about 42 across the sixteen
+ * metres between those two walls; and the aisle roof outside stands at 31.7
+ * from x = 10 outward. So the clerestory is not *below* what it lights, it is
+ * level with it, and the light crosses the vessel climbing only a few metres
+ * in sixteen.
+ *
+ * Fifteen degrees is the line that threads all three. Steeper and the ray
+ * leaves the vault behind and lands on the terrace above it — the first
+ * build of this pass was set at thirty-eight on an assumed vault height and
+ * contributed, measured, nothing at all at eighty times its gain. Shallower
+ * and it arrives under the springing. At fifteen it enters the upper half of
+ * the clerestory, crosses to the far soffits, and on the way out clears the
+ * aisle roof by five metres and sees sky.
+ *
+ * One angle, not a sweep, for the same reason the rig runs two horizontal
+ * directions and not eight: this is a static pass, and what it buys is a
+ * shadowed, patterned, coloured source where the canopy had a constant.
+ */
+const THROW_TILT = THREE.MathUtils.degToRad(15)
+
+/**
+ * How wide the clerestory is as a source, in metres at the model.
+ *
+ * Wider than a window and narrower than the floor. The opening is eight
+ * metres of glass seen from fifteen away, so it subtends most of a right
+ * angle and throws a broad band rather than a lancet — but the stone above
+ * it still casts an edge, and blurring past about three metres takes that
+ * edge out along with everything the branches do.
+ */
+const THROW_METRES = 3
+
+/**
+ * What the clerestory on the shaded side of the building is still worth.
+ *
+ * The rest of this rig does not know where the sun is, on purpose: a window
+ * is a hundred square metres of *sky*, the sky is there all day, and a map
+ * that had to be rebuilt every time the hour moved would not be free. The
+ * tilted pair is the one place that will not do, and the photographs say so
+ * flatly. At half past one in December the canopy over the Passion wall is
+ * gold from one end to the other and there is not a square metre of green
+ * anywhere on it — while the model, throwing equally from both clerestories,
+ * put mint-green blooms across the whole vault. What the sunlit side has and
+ * the shaded side has not is the aisle roof underneath it: a hundred metres
+ * of lit stone throwing up into the glass, which is the difference between a
+ * window and a bright window.
+ *
+ * A tenth, and not nothing: the shaded clerestory still has the whole
+ * northern sky in front of it. A quarter was the first try and left the
+ * shaded side painting vault facets its own colour on frames where it is a
+ * few per cent of what is arriving — direct sun on pale stone against north
+ * sky is an order of magnitude, not a factor of four.
+ *
+ * This is a weight on a map that is already built, so the hour moves it for
+ * the cost of a dot product on the CPU and nothing at all on the GPU.
+ */
+const THROW_SHADE = 0.1
+
+/**
+ * Which way the light travels. +x is the Passion wall's light heading in.
+ *
+ * Four now, in two pairs. The first two run horizontally and light the room;
+ * the second two run the same two ways but tilted up, and light the canopy —
+ * see THROW_TILT. Everything below is written against the heading, so a
+ * tilted pass is the same four renders read the same way and needs no
+ * special case anywhere.
+ */
+const HEADING = [
+  new THREE.Vector3(1, 0, 0),
+  new THREE.Vector3(-1, 0, 0),
+  new THREE.Vector3(Math.cos(THROW_TILT), Math.sin(THROW_TILT), 0),
+  new THREE.Vector3(-Math.cos(THROW_TILT), Math.sin(THROW_TILT), 0),
+] as const
 
 /**
  * How wide the floor is as a source, in metres at the model.
@@ -61,6 +144,29 @@ const HEADING = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0)] as con
  * on the vault above it is a broad darkening and not a shadow with an edge.
  */
 const LOFT_METRES = 4.5
+
+/**
+ * The patch of floor a standing face asks about: how far out along its own
+ * heading, and how wide, in metres at the model.
+ *
+ * Straight down from a column shaft is the shaft's own footprint, and the
+ * map answers, correctly, that the floor there is blocked — by the column.
+ * Which is not the question. A shaft is not lit by the flagstones it stands
+ * on, it is lit by the aisle it faces, so the lookup steps out along the
+ * face's own heading before it asks. Far enough to clear the thickest
+ * column in the building and no further: past that a shaft starts reporting
+ * on the next bay along.
+ *
+ * The same number sets the kernel, because stepping out three metres inside
+ * a kernel nine metres wide is no step at all — measured, it moved the
+ * frame by two per cent, which is what a displacement a third of the blur
+ * it sits in is worth. A standing face asks about three metres of floor
+ * three metres away; a soffit asks about the nine metres beneath it.
+ *
+ * Both are zero for a soffit, which faces straight down and has no heading,
+ * so the canopy is untouched and stays lit by LOFT_METRES of floor.
+ */
+const LOFT_REACH = 3
 
 /**
  * Floors, and the plaza they stand on.
@@ -89,10 +195,27 @@ export interface WashUniforms extends Record<string, THREE.IUniform> {
   uWashBias: { value: number }
   uWashGain: { value: number }
   uWashBlur: { value: number }
+  /** The clerestory, throwing up and inward — the same four maps, tilted. */
+  uThrowMatrixA: { value: THREE.Matrix4 }
+  uThrowMatrixB: { value: THREE.Matrix4 }
+  uThrowDepthA: { value: THREE.Texture | null }
+  uThrowDepthB: { value: THREE.Texture | null }
+  uThrowTintA: { value: THREE.Texture | null }
+  uThrowTintB: { value: THREE.Texture | null }
+  uThrowDirA: { value: THREE.Vector3 }
+  uThrowDirB: { value: THREE.Vector3 }
+  uThrowSoft: { value: number }
+  uThrowBias: { value: number }
+  uThrowGain: { value: number }
+  uThrowBlur: { value: number }
+  /** What each tilted side is worth at this hour — see THROW_SHADE. */
+  uThrowSide: { value: THREE.Vector2 }
   /** The light from below: world → the up-looking map's clip space. */
   uLoftMatrix: { value: THREE.Matrix4 }
   uLoftDepth: { value: THREE.Texture | null }
   uLoftSoft: { value: number }
+  uLoftReach: { value: number }
+  uLoftStand: { value: number }
   uLoftBias: { value: number }
   uLoftGain: { value: number }
 }
@@ -123,7 +246,7 @@ export class WashRig {
   private quad: FullScreenQuad | null = null
 
   constructor(readonly resolution = 1024) {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < HEADING.length; i++) {
       const depthTexture = new THREE.DepthTexture(resolution, resolution)
       depthTexture.type = THREE.UnsignedIntType
       depthTexture.minFilter = THREE.NearestFilter
@@ -200,10 +323,87 @@ export class WashRig {
        */
       uWashBlur: { value: 4 },
 
+      uThrowMatrixA: { value: new THREE.Matrix4() },
+      uThrowMatrixB: { value: new THREE.Matrix4() },
+      uThrowDepthA: { value: this.sides[2]!.depth.depthTexture },
+      uThrowDepthB: { value: this.sides[3]!.depth.depthTexture },
+      uThrowTintA: { value: this.sides[2]!.colour.texture },
+      uThrowTintB: { value: this.sides[3]!.colour.texture },
+      uThrowDirA: { value: HEADING[2].clone() },
+      uThrowDirB: { value: HEADING[3].clone() },
+      /** Tap spacing, in texture units — set from THROW_METRES on render. */
+      uThrowSoft: { value: 3 / resolution },
+      /**
+       * Depth bias in metres, along the light.
+       *
+       * Larger than the horizontal pass's. A tilted map runs its depth
+       * gradient across the vault's soffits at a glancing angle, and the
+       * canopy is the one surface in the building made of hyperboloids that
+       * are nearly tangent to it — so the acne this bias exists to stop is
+       * worse here than anywhere.
+       */
+      uThrowBias: { value: 0.5 },
+      /**
+       * How much light the clerestory is.
+       *
+       * Large against the horizontal pass's nine, and it has to be: this
+       * light arrives at fifteen degrees, so the cosine at a soffit is a
+       * quarter where the floor's is one, and it arrives through a window
+       * that occupies a hundredth of the map rather than a wall of them.
+       * Turned down to the same figure as the flat pair it moved the vault
+       * by nothing measurable. Most of it is off at any hour besides, since
+       * only one clerestory has the sun behind it — see THROW_SHADE.
+       *
+       * What it buys is not brightness. Over the whole canopy it is worth
+       * about five per cent of the mean, which is not the reason for it;
+       * what it is for is that the canopy had no *direction* in it at all.
+       * Every other term that reaches a soffit — the floor, the flat fill,
+       * the probe — is the same wherever the soffit faces, so a fan of
+       * twenty facets came back as twenty copies of one tone, and adding
+       * colour to that only made it a painted ceiling. This is the one
+       * source up there that a facet can face or turn away from.
+       *
+       * Pushed past about a hundred and twenty it stops being light and
+       * starts being paint: the facets turned at the far clerestory go
+       * flatly the colour of its glass, which no photograph of this
+       * building shows.
+       */
+      uThrowGain: { value: 90 },
+      /**
+       * Mip level the clerestory is read at.
+       *
+       * One higher than the horizontal pass, not lower, which is the
+       * opposite of where this started. That pass is read by surfaces a few
+       * metres from their window and wants a lancet's width of blur. This
+       * one is read by a vault fifteen metres away and across at a glancing
+       * angle, where a lancet's width of pattern arrives as a stencil of
+       * hard-edged blotches — the window printed on the ceiling rather than
+       * thrown onto it.
+       */
+      uThrowBlur: { value: 5 },
+      uThrowSide: { value: new THREE.Vector2(1, 1) },
+
       uLoftMatrix: { value: new THREE.Matrix4() },
       uLoftDepth: { value: loftDepth },
       /** Tap spacing, in texture units — set from LOFT_METRES on render. */
       uLoftSoft: { value: 4.5 / resolution },
+      /**
+       * How far out along its own heading a face asks about the floor, in
+       * texture units — set from LOFT_REACH on render.
+       */
+      uLoftReach: { value: 3 / resolution },
+      /**
+       * How much of the floor's horizon a standing face is credited with.
+       *
+       * One would be an infinite plane with nothing on it. This room has
+       * four hundred columns on it, and a shaft at eye height sees the far
+       * half of that floor through all of them — where a soffit forty-five
+       * metres up looks down on the lot. The map cannot tell the two apart:
+       * its kernel is nine metres across and the occlusion in question is at
+       * forty. So the horizon is discounted and the floor underfoot is not,
+       * which is also the direction the error runs.
+       */
+      uLoftStand: { value: 0.45 },
       /** Depth bias in metres, straight down toward the source. */
       uLoftBias: { value: 0.3 },
       /**
@@ -240,6 +440,24 @@ export class WashRig {
     this.valid = false
   }
 
+  /**
+   * Which clerestory has the sun behind it — see THROW_SHADE.
+   *
+   * Nothing is re-rendered. The maps say where the glass is and what colour
+   * it is, which the hour does not change; this says how much light is
+   * standing outside each of them, which it does.
+   */
+  setSun(direction: THREE.Vector3): void {
+    const side = this.uniforms.uThrowSide.value
+    for (let i = 2; i < HEADING.length; i++) {
+      // The wall this pass enters through faces back against the heading.
+      const heading = HEADING[i]!
+      const toward = -(direction.x * heading.x + direction.z * heading.z)
+      const lit = THREE.MathUtils.smoothstep(toward, -0.15, 0.55)
+      side.setComponent(i - 2, THREE.MathUtils.lerp(THROW_SHADE, 1, lit))
+    }
+  }
+
   /** Force the next `render` to run, after geometry has changed under it. */
   invalidate(): void {
     this.valid = false
@@ -250,15 +468,17 @@ export class WashRig {
   }
 
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
-    // Per axis, not a bounding sphere. The light runs along x, so what the
-    // frustum has to hold is the model's shadow on the y–z plane — and a
-    // sphere big enough to contain a long thin building wastes most of the
-    // map on the air around its corners.
+    // Per axis, not a bounding sphere. What the frustum has to hold is the
+    // model's shadow on the plane across the heading — and a sphere big
+    // enough to contain a long thin building wastes most of the map on the
+    // air around its corners.
     this.bounds.getCenter(this.centre)
-    const size = this.bounds.getSize(new THREE.Vector3())
-    const halfAcross = Math.max(size.z / 2, 1) * 1.02
-    const halfUp = Math.max(size.y / 2, 1) * 1.02
-    const depth = Math.max(size.x, 1) * 1.02
+    const half = this.bounds.getSize(new THREE.Vector3()).multiplyScalar(0.5)
+    // How far the box reaches along any one direction. Written out rather
+    // than read off an axis because two of the four headings are tilted, and
+    // for those the building's height is part of its width.
+    const reach = (axis: THREE.Vector3) =>
+      half.x * Math.abs(axis.x) + half.y * Math.abs(axis.y) + half.z * Math.abs(axis.z)
 
     const previousTarget = renderer.getRenderTarget()
     const previousClear = renderer.getClearColor(new THREE.Color())
@@ -267,12 +487,26 @@ export class WashRig {
     const previousBackground = scene.background
     scene.background = null
 
-    // Softness in metres rather than in texels, so the source stays the same
-    // size whatever the building's extent does to the fit.
-    this.uniforms.uWashSoft.value = SOFT_METRES / (2 * Math.max(halfAcross, halfUp))
-    const standoff = depth / 2 + 5
+    const across = new THREE.Vector3(0, 0, 1)
+    const up = new THREE.Vector3()
     for (const [i, side] of this.sides.entries()) {
       const heading = HEADING[i]!
+      // The camera's own up: across the heading, in the plane the heading
+      // is tilted in. Kept pointing at the sky, or the two tilted maps would
+      // come out upside down against the two flat ones and be unreadable
+      // side by side in the debug view.
+      up.set(-heading.y, heading.x, 0).normalize()
+      if (up.y < 0) up.negate()
+      const halfAcross = Math.max(reach(across), 1) * 1.02
+      const halfUp = Math.max(reach(up), 1) * 1.02
+      const depth = Math.max(2 * reach(heading), 1) * 1.02
+
+      // Softness in metres rather than in texels, so the source stays the
+      // same size whatever the building's extent does to the fit.
+      const soft = (i < 2 ? SOFT_METRES : THROW_METRES) / (2 * Math.max(halfAcross, halfUp))
+      if (i < 2) this.uniforms.uWashSoft.value = soft
+      else this.uniforms.uThrowSoft.value = soft
+
       const camera = side.camera
       camera.left = -halfAcross
       camera.right = halfAcross
@@ -281,8 +515,8 @@ export class WashRig {
       camera.near = 0.1
       camera.far = depth + 10
       // Stand off against the heading and look along it.
-      camera.position.copy(this.centre).addScaledVector(heading, -standoff)
-      camera.up.set(0, 1, 0)
+      camera.position.copy(this.centre).addScaledVector(heading, -(depth / 2 + 5))
+      camera.up.copy(up)
       camera.lookAt(this.centre)
       camera.updateMatrixWorld(true)
       camera.updateProjectionMatrix()
@@ -309,7 +543,12 @@ export class WashRig {
       renderer.clear(true, true, true)
       renderer.render(scene, camera)
 
-      const matrix = i === 0 ? this.uniforms.uWashMatrixA : this.uniforms.uWashMatrixB
+      const matrix = [
+        this.uniforms.uWashMatrixA,
+        this.uniforms.uWashMatrixB,
+        this.uniforms.uThrowMatrixA,
+        this.uniforms.uThrowMatrixB,
+      ][i]!
       matrix.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     }
 
@@ -370,6 +609,7 @@ export class WashRig {
     const spanX = camera.right - camera.left
     const spanZ = camera.top - camera.bottom
     this.uniforms.uLoftSoft.value = LOFT_METRES / Math.max(spanX, spanZ)
+    this.uniforms.uLoftReach.value = LOFT_REACH / Math.max(spanX, spanZ)
 
     const hidden: THREE.Object3D[] = []
     scene.traverse((node) => {
@@ -396,14 +636,18 @@ export class WashRig {
   }
 
   /**
-   * Draw one of the four maps over the frame, for looking at.
+   * Draw one of the rig's maps over the frame, for looking at.
    *
-   * `which` is 0 or 1 for the tint of that side, 2 or 3 for its depth.
+   * `which` counts the four sides — the two flat, then the two tilted — and
+   * then counts them again for their depth: 0 to 3 for a tint, 4 to 7 for
+   * the occlusion behind it.
    */
   debugShow(renderer: THREE.WebGLRenderer, which: number): void {
-    const side = this.sides[which % 2]!
+    const side = this.sides[which % this.sides.length]!
     const texture =
-      which < 2 ? side.colour.texture : (side.depth.depthTexture as unknown as THREE.Texture)
+      which < this.sides.length
+        ? side.colour.texture
+        : (side.depth.depthTexture as unknown as THREE.Texture)
     if (!this.quad) {
       this.quad = new FullScreenQuad(
         new THREE.MeshBasicMaterial({ depthTest: false, depthWrite: false, toneMapped: false }),
@@ -439,9 +683,24 @@ uniform float uWashSoft;
 uniform float uWashBias;
 uniform float uWashGain;
 uniform float uWashBlur;
+uniform mat4 uThrowMatrixA;
+uniform mat4 uThrowMatrixB;
+uniform sampler2D uThrowDepthA;
+uniform sampler2D uThrowDepthB;
+uniform sampler2D uThrowTintA;
+uniform sampler2D uThrowTintB;
+uniform vec3 uThrowDirA;
+uniform vec3 uThrowDirB;
+uniform float uThrowSoft;
+uniform float uThrowBias;
+uniform float uThrowGain;
+uniform float uThrowBlur;
+uniform vec2 uThrowSide;
 uniform mat4 uLoftMatrix;
 uniform sampler2D uLoftDepth;
 uniform float uLoftSoft;
+uniform float uLoftReach;
+uniform float uLoftStand;
 uniform float uLoftBias;
 uniform float uLoftGain;
 
@@ -459,6 +718,9 @@ vec3 sfWashFrom(
   const in sampler2D tintMap,
   const in mat4 matrix,
   const in vec3 heading,
+  const in float soft,
+  const in float bias,
+  const in float blur,
   const in vec3 shadingNormal,
   const in vec3 world
 ) {
@@ -466,7 +728,7 @@ vec3 sfWashFrom(
   float facing = dot( shadingNormal, -heading );
   if ( facing <= 0.0 ) return vec3( 0.0 );
 
-  vec4 clip = matrix * vec4( world - heading * uWashBias, 1.0 );
+  vec4 clip = matrix * vec4( world - heading * bias, 1.0 );
   vec3 coord = clip.xyz / clip.w * 0.5 + 0.5;
   if ( coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0 ) {
     return vec3( 0.0 );
@@ -475,7 +737,7 @@ vec3 sfWashFrom(
   // Only glass in front of this point may be the window it is lit by. Behind
   // it there is a wall, and a wall is not a light.
 
-  vec2 o = vec2( uWashSoft, 0.0 );
+  vec2 o = vec2( soft, 0.0 );
   float lit =
     step( coord.z, texture2D( depthMap, coord.xy ).x ) +
     step( coord.z, texture2D( depthMap, coord.xy + o.xy ).x ) +
@@ -486,7 +748,7 @@ vec3 sfWashFrom(
 
   // Black here means no glass on this ray, which is the same statement as
   // no window — so the map needs no companion depth test to say it.
-  vec3 tint = textureLod( tintMap, coord.xy, uWashBlur ).rgb;
+  vec3 tint = textureLod( tintMap, coord.xy, blur ).rgb;
 
   return ( lit * 0.2 ) * tint * facing;
 }
@@ -494,8 +756,42 @@ vec3 sfWashFrom(
 /** Both glazed sides, in world space. */
 vec3 sfWash( const in vec3 shadingNormal, const in vec3 world ) {
   return uWashGain * (
-    sfWashFrom( uWashDepthA, uWashTintA, uWashMatrixA, uWashDirA, shadingNormal, world ) +
-    sfWashFrom( uWashDepthB, uWashTintB, uWashMatrixB, uWashDirB, shadingNormal, world )
+    sfWashFrom(
+      uWashDepthA, uWashTintA, uWashMatrixA, uWashDirA,
+      uWashSoft, uWashBias, uWashBlur, shadingNormal, world
+    ) +
+    sfWashFrom(
+      uWashDepthB, uWashTintB, uWashMatrixB, uWashDirB,
+      uWashSoft, uWashBias, uWashBlur, shadingNormal, world
+    )
+  );
+}
+
+/**
+ * The clerestory, throwing up and inward — the canopy's second source.
+ *
+ * The same read as sfWash, along a heading tilted thirty-eight degrees above
+ * horizontal, which is the only line that gets in at the clerestory head,
+ * out over the aisle roof behind it, and onto the vault. A soffit is edge-on
+ * to the horizontal pair and takes nothing from them; tilted, the dot product
+ * turns positive for anything whose face has a downward component, which is
+ * the whole canopy and the top of every shaft under it.
+ *
+ * Where the floor's light is one broad tone from underneath, this arrives
+ * from a particular window and carries its colour and its pattern — the gold
+ * band running along one flank of a vault while the other flank stays pale is
+ * this, and it is not something a term with no direction in it can produce.
+ */
+vec3 sfThrow( const in vec3 shadingNormal, const in vec3 world ) {
+  return uThrowGain * (
+    uThrowSide.x * sfWashFrom(
+      uThrowDepthA, uThrowTintA, uThrowMatrixA, uThrowDirA,
+      uThrowSoft, uThrowBias, uThrowBlur, shadingNormal, world
+    ) +
+    uThrowSide.y * sfWashFrom(
+      uThrowDepthB, uThrowTintB, uThrowMatrixB, uThrowDirB,
+      uThrowSoft, uThrowBias, uThrowBlur, shadingNormal, world
+    )
   );
 }
 
@@ -509,25 +805,51 @@ vec3 sfWash( const in vec3 shadingNormal, const in vec3 world ) {
  * cross at the window's spacing gives a hard-edged shadow of a branch,
  * which is what a point source does and is nothing like a floor.
  *
- * Only downward-facing surfaces, which is not a simplification: a floor
- * cannot light anything that is not looking at it, and the cosine is the
- * whole of the term.
+ * And it is a plane, not a lamp underneath. What a surface takes from an
+ * infinite plane below it is ( 1 - n.y ) / 2 — all of it for a soffit, which
+ * sees nothing else; exactly half for anything standing upright, which has
+ * floor across half its sky; none for a face turned at the vault. The cosine
+ * against straight down is the answer for a *point* directly beneath, and
+ * for every vertical surface in the building that answer is zero. Which is
+ * how the columns came to take nothing at all from the largest, palest,
+ * best-lit surface in the room while the vault above them took all of it.
  */
 float sfLoft( const in vec3 shadingNormal, const in vec3 world ) {
-  float facing = max( 0.0, - shadingNormal.y );
+  // ( 1 - n.y ) / 2, split where the confidence splits. The first term is
+  // the floor directly beneath — a cosine against straight down, which is
+  // what this map is an exact answer for. The second is the rest of the
+  // plane, out to the horizon, which is what a standing face is mostly lit
+  // by and what nine taps across nine metres can say the least about: at
+  // forty metres the floor of this room is behind a colonnade, and the
+  // kernel has no way to know. Held at one the two sum to the infinite
+  // plane exactly; uLoftStand is how much of that horizon is believed.
+  float facing = max( 0.0, - shadingNormal.y )
+    + uLoftStand * ( 1.0 - abs( shadingNormal.y ) ) * 0.5;
   if ( facing <= 0.0 ) return 0.0;
 
   // Toward the source, which is straight down.
   vec4 clip = uLoftMatrix * vec4( world - vec3( 0.0, uLoftBias, 0.0 ), 1.0 );
   vec3 coord = clip.xyz / clip.w * 0.5 + 0.5;
+
+  // And a standing face asks a different question from a soffit — see
+  // LOFT_REACH. It asks about the floor it faces, three metres out along
+  // its own heading and three metres across, where a soffit asks about the
+  // nine metres directly beneath it. Asked the soffit's question, a shaft
+  // reports on the floor under its own feet, which its own footprint
+  // blocks, and on the next bay in every direction, which it cannot see.
+  // The map's u runs with world x and its v with world z, so the step out
+  // is the heading itself; a soffit has no heading and does not move.
+  float upright = 1.0 - abs( shadingNormal.y );
+  coord.xy += shadingNormal.xz * uLoftReach;
   if ( coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0 ) {
     return 0.0;
   }
 
+  float spread = mix( uLoftSoft, uLoftReach, upright );
   float lit = 0.0;
   for ( int j = -1; j <= 1; j ++ ) {
     for ( int i = -1; i <= 1; i ++ ) {
-      vec2 tap = coord.xy + vec2( float( i ), float( j ) ) * uLoftSoft;
+      vec2 tap = coord.xy + vec2( float( i ), float( j ) ) * spread;
       lit += step( coord.z, texture2D( uLoftDepth, tap ).x );
     }
   }

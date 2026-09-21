@@ -539,7 +539,13 @@ const INDOOR_LIGHT = /* glsl */ `
   // one than the fill above, so the fill is faded out in proportion: the two
   // are the same light, and the fill is only standing in where the rig
   // cannot see (outside its fit, behind a wall, facing along the nave).
-  vec3 washed = sfWash( inverseTransformDirection( normal, viewMatrix ), vSunWorld );
+  //
+  // And the clerestory with it — the same rig tilted up, which is the only
+  // window in the model whose light reaches the canopy. See sfThrow. The two
+  // are added before anything else touches them because they are the same
+  // claim: this is what a window put here, shadowed and coloured, and it is
+  // better than the fill wherever it has an answer at all.
+  vec3 washed = sfWash( roomNormal, vSunWorld ) + sfThrow( roomNormal, vSunWorld );
 
   // And the wash is not the pure colour of the pane it came through.
   //
@@ -552,9 +558,28 @@ const INDOOR_LIGHT = /* glsl */ `
   // a saturated bottle green: the colour of the glass rather than the
   // colour of light that has been in the room.
   //
+  // The clerestory goes through this too, and the first build of it did not.
+  // The argument for exempting it looked sound — a soffit forty metres up
+  // has no pale neighbour to mix its window with, so it should take that
+  // window's colour whole — and the pictures said otherwise at once. The
+  // canopy's neighbour is the floor, which is most of what lights it and is
+  // not blue; so a vault facet turned toward the Nativity clerestory at half
+  // past one in December came back teal, on a frame whose photograph is gold
+  // from one end to the other.
+  //
   // Held at its own luminance, so desaturating cannot darken it.
   washed = mix( vec3( dot( washed, vec3( 0.2126, 0.7152, 0.0722 ) ) ), washed, uWashPurity );
 
+  // How much of the floor this face can see — see sfLoft in washrig.ts. Read
+  // here rather than where it is used, because it is wanted twice.
+  float floorSeen = sfLoft( roomNormal, vSunWorld );
+
+  // The fill fades where the *rig* has an answer, and only there. Not where
+  // the floor does: the floor and the window are two different lights that
+  // add, where the fill and the rig are two accounts of the same one. Told
+  // otherwise — measured — the fill went to nothing on every surface in the
+  // building, and with it the near-wall-to-far-wall gradient that is the one
+  // thing saying a column is round.
   float covered = clamp( dot( washed, vec3( 0.333 ) ) * uWashCover, 0.0, 1.0 );
   fromGlass *= 1.0 - covered;
 
@@ -611,11 +636,34 @@ const INDOOR_LIGHT = /* glsl */ `
   vec3 hearth = mix( ambient, luminance * uRoomBounce, uRoomWarmth )
     * mix( vec3( 1.0 ), glassRaw, uLoftTint );
 
-  // The light from below, with its shadows — see sfLoft in washrig.ts. This
-  // is what lights the canopy, and until it existed the canopy was lit by a
-  // constant: a soffit faces the two horizontal wash directions edge-on and
-  // took nothing at all from them.
-  vec3 lofted = hearth * sfLoft( roomNormal, vSunWorld );
+  // And how much of the floor a face sees decides how coloured that light
+  // is, not only how much of it there is.
+  //
+  // A soffit hangs over one bay. Most of what it sees is the pavement
+  // directly beneath it, lit through the window of that bay, and it takes
+  // that bay's colour — which is why the canopy in every photograph of this
+  // building is gold under the Passion side and green under the Nativity.
+  // A shaft does not: it stands in the floor's plane, so what it sees is a
+  // hundred metres of pavement at a grazing angle, both halves of
+  // Vila-Grau's scheme at once and the far end of the nave as well, and the
+  // average of all of it is very nearly grey. The photographs are emphatic
+  // about this — the columns are the most neutral thing in the room, eight
+  // per cent saturated in in-column-shaft-twist, standing under a canopy at
+  // fifty. Given the soffit's colour, a shaft came out the colour of a
+  // terracotta pot.
+  //
+  // Held at its own luminance, so pooling cannot darken it.
+  float pooled = ( 1.0 + roomNormal.y ) * uLoftPool;
+  vec3 hearthHere = mix(
+    hearth,
+    vec3( dot( hearth, vec3( 0.2126, 0.7152, 0.0722 ) ) ),
+    clamp( pooled, 0.0, 1.0 )
+  );
+
+  // The light from below, with its shadows. This is what lights the canopy,
+  // and until it existed the canopy was lit by a constant: a soffit faces
+  // the two horizontal wash directions edge-on and took nothing from them.
+  vec3 lofted = hearthHere * floorSeen;
 
   // What is left of the flat term. Small, and for the light that has
   // bounced more than once — the fill in a corner the floor cannot see.
@@ -745,6 +793,7 @@ uniform float uNaveHalf;
 uniform float uWashCover;
 uniform float uWashPurity;
 uniform float uLoftTint;
+uniform float uLoftPool;
 uniform vec3 uGlassNativity;
 uniform vec3 uGlassPassion;
 `
@@ -773,6 +822,7 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uWashPurity: { value: number }
   /** How far the floor's bounce is tinted by the glazing above it. */
   uLoftTint: { value: number }
+  uLoftPool: { value: number }
   uGlassNativity: { value: THREE.Color }
   uGlassPassion: { value: THREE.Color }
 }
@@ -1039,10 +1089,17 @@ export function roomUniforms(): RoomUniforms {
      * from 2.3 to 5.8 and saturation from 0.30 to 0.38, with two and a
      * half per cent of the picture finally dark.
      *
-     * A shade lower again now that the floor's own light is built and
-     * reaches the lower half of the room as well as the canopy.
+     * And down again, hard, from eight tenths to three, now that the floor
+     * reaches a standing surface as well as a soffit — see sfLoft. Most of
+     * what this number was worth on a column was never the window at all:
+     * it was the pavement, arriving with no direction, no shadow and no
+     * falloff because there was nothing else for it to arrive as. Given a
+     * term of its own the constant has to give the same light back, or the
+     * room is lit twice and the picture goes flat. What is left is the
+     * near-wall-to-far-wall gradient, which is this term's own and nothing
+     * else's.
      */
-    uRoomGlass: { value: 0.8 },
+    uRoomGlass: { value: 0.3 },
     /**
      * How far a sideways face's light is tinted by the window it faces.
      *
@@ -1089,6 +1146,17 @@ export function roomUniforms(): RoomUniforms {
     // saturated terracotta, which is the glazing's colour and not the
     // floor's.
     uLoftTint: { value: 0.25 },
+    /**
+     * How completely a standing face averages the room's floor to grey.
+     *
+     * Nearly completely. A shaft is in the floor's own plane, so the nearest
+     * pavement it sees is edge-on and worth almost nothing, and what it is
+     * actually lit by is the far half of the building — both sides of the
+     * glazing at once, which is what Vila-Grau's scheme averages to, which
+     * is grey. A soffit is at the other end of the same argument and keeps
+     * all of its bay's colour.
+     */
+    uLoftPool: { value: 0.85 },
     uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
     uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
@@ -1706,7 +1774,7 @@ export function stonePatch(
     surface: MASONRY_SURFACE,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-11' : 'stone-sky-6',
+    key: indoors ? 'stone-room-12' : 'stone-sky-6',
   }
 }
 
