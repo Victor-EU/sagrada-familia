@@ -31,6 +31,7 @@ import {
   sunDirection,
   type SolarPosition,
 } from './light/sun.ts'
+import { Cover } from './ui/cover.ts'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#view')!
 const overlayImg = document.querySelector<HTMLImageElement>('#overlay')!
@@ -48,6 +49,12 @@ const introEl = document.querySelector<HTMLDivElement>('#intro')!
  * true. One frame's grace here and they are on screen for the whole of it.
  */
 performance.mark('boot')
+// The cover first: the chains drop and settle while the thread is still
+// free, then the drawing is set turning — a CSS transition, which the frame
+// below lets take hold before the build takes the thread for good.
+const cover = new Cover(document.querySelector<HTMLDivElement>('#cover')!)
+await cover.settle()
+cover.turn()
 await new Promise<void>((resolve) => {
   // Two frames, not one: the first callback runs before that frame is
   // painted, and it is the frame after that which is certain to have been.
@@ -613,6 +620,7 @@ function frame(): void {
     painted = true
     performance.mark('first-frame')
     introEl.classList.add('built')
+    cover.reveal()
     window.setTimeout(() => introEl.classList.add('gone'), 7000)
     controls.begin()
     const at = (name: string): number =>
