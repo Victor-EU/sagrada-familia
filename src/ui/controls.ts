@@ -181,8 +181,8 @@ export class Controls {
    * in the world, and in an orbit the world is what moves.
    */
   update(): void {
-    // The dial is not the only thing that moves the sun — a shared link and
-    // the parameter panel both set the hour directly — so the reading is
+    // The dial is not the only thing that moves the sun — the parameter
+    // panel sets the hour directly — so the reading is
     // refreshed from the sun rather than remembered from the last drag.
     this.showHour()
     const inside = this.viewer.mode === 'inhabit'

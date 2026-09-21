@@ -78,15 +78,11 @@ export interface ParamContext {
   applySun(): void
   /** Jump to a curated viewpoint by index. */
   goTo(index: number): void
-  /** Put a link to exactly this frame and hour on the clipboard. */
-  copyLink(): void
 }
 
 export function buildPanel(ctx: ParamContext): Pane {
   const pane = new Pane({ title: 'Sagrada Família' })
   const store = new PresetStore()
-
-  pane.addButton({ title: 'Copy link to this moment (L)' }).on('click', () => ctx.copyLink())
 
   const views = pane.addFolder({ title: 'Viewpoints' })
   for (const [index, viewpoint] of VIEWPOINTS.entries()) {

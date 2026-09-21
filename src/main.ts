@@ -20,7 +20,6 @@ import { PhotoOverlay } from './dev/overlay.ts'
 import { censusFrame, censusLight, type FrameCensus, type LightCensus } from './dev/probe.ts'
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
-import { ShareLink } from './share.ts'
 import { Controls } from './ui/controls.ts'
 import {
   BUILDING_BEARING_DEG,
@@ -378,26 +377,6 @@ function goTo(index: number): void {
   if (viewpoint) applyViewpoint(viewpoint, viewer, sun, applySun)
 }
 
-/**
- * The address bar is the save format.
- *
- * Nothing about this building's light is authored, so a moment of it is
- * entirely described by where the camera stands and what the clock says —
- * see share.ts.
- */
-const link = new ShareLink(
-  () => ({ camera: viewer.getState(), day: sun.dayOfYear, hour: sun.hour }),
-  (moment) => {
-    viewer.setState(moment.camera)
-    sun.dayOfYear = moment.day
-    sun.hour = moment.hour
-    applySun()
-    controls.showHour()
-    panel?.refresh()
-  },
-)
-link.bind()
-
 type Panel = ReturnType<typeof buildPanel>
 let panel: Panel | null = null
 
@@ -406,7 +385,6 @@ function openPanel(): Panel {
   panel ??= buildPanel({
     plan, hyper, view, render, sun, cam: viewer, overlay,
     rebuild, applyView, applyRender, applySun, goTo,
-    copyLink: () => void link.copy(),
   })
   return panel
 }
@@ -465,10 +443,6 @@ window.addEventListener('keydown', (event) => {
     case 'P':
       setDev(!dev)
       return
-    case 'l':
-    case 'L':
-      void link.copy()
-      return
   }
 
   // The curated views are the regression harness rather than anything a
@@ -484,10 +458,8 @@ applyRender()
 applySun()
 setDev(dev)
 
-// A link decides where we open — someone was sent a moment and should land in
-// it. Otherwise the building, from across the plaza, straight away.
-if (link.restore()) controls.showHour()
-else viewer.home()
+// The building, from across the plaza, straight away.
+viewer.home()
 
 // Dev convenience: drive the harness from the console and from automated
 // checks. Never referenced by the app itself.
@@ -660,7 +632,6 @@ function frame(): void {
   }
 
   const now = performance.now()
-  link.update(now)
   if (now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position

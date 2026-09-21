@@ -105,13 +105,12 @@ balls, lamp posts to say how big the building is, and a pond that reflects.
 The Nativity front got the two things it reads by from across the square and
 had neither of: the bridge between its middle towers, and the cypress.
 
-Phase 5's bar is *someone can send a link to a specific moment of light*, and
-it was met first: the address bar is the save format, because nothing about this
-building's light is authored and a moment is therefore only a camera, a day and
-an hour. Before that it built the **air**, which had been the one high-value
-item on the beauty list since phase 0 and the last one unbuilt — light that
-lands on surfaces but never fills the space is not what any photograph of this
-interior shows. And after it, the **way in**. A building whose walls hold from
+Phase 5 built the **air** first, which had been the one high-value item on
+the beauty list since phase 0 and the last one unbuilt — light that lands on
+surfaces but never fills the space is not what any photograph of this interior
+shows. (It had also put a link to a moment of light in the address bar; that was
+taken out again, because a shared link should open the building the way it
+opens for everyone.) And after it, the **way in**. A building whose walls hold from
 both sides and whose ground outside is a disc you cannot stand on is a building
 you can only enter by flying over the parapet, which is the one thing a visitor
 to a cathedral never does. There are eight doorways now, set out by the fronts
@@ -247,7 +246,6 @@ to within one per cent.
 | Three more at the lens the photographs use: twenty-four millimetres, eye height, up | `src/dev/viewpoints.ts` |
 | Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
 | Two-thumb touch controls, with a stick that appears under the thumb | `src/camera/touch.ts` |
-| The address bar as the save format — a link to a moment of light | `src/share.ts` |
 | Envelope: a rectangle for the nave, a disc for the apse, a terrace you can climb | `src/camera/envelope.ts` |
 | Doors — a window with no glass in it, placed by the front in front of it | `src/plan/clerestory.ts`, `src/plan/church.ts` |
 | A podium you can climb: the skirt as a flight of steps round the footprint | `src/plan/floor.ts` |
@@ -309,7 +307,6 @@ screen says, and changes when it changes.
 | Anywhere | |
 | --- | --- |
 | the scrubber | the hour of the day, and the whole model relit for it |
-| L | copy a link to exactly this frame and hour |
 | P | the parameter panel and the readouts (also `?dev` in the address) |
 | O, X, `[` `]` | the reference photo, difference blend, its opacity — with the panel |
 | drop an image | load it as a reference |

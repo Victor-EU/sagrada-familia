@@ -1559,9 +1559,9 @@ export class Viewer {
   }
 
   /**
-   * Put the camera somewhere outright — a shared link, a curated view, a
-   * preset. The relation follows from where it lands, which is the same rule
-   * the exposure uses, and means a link into the nave arrives as a walker.
+   * Put the camera somewhere outright — a curated view, a preset. The
+   * relation follows from where it lands, which is the same rule the exposure
+   * uses, and means a preset in the nave arrives as a walker.
    */
   setState(state: CameraState): void {
     this.legs = []
