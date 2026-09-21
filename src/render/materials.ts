@@ -603,7 +603,22 @@ const INDOOR_LIGHT = /* glsl */ `
   // the model gave every surface in the building one of exactly two colours
   // and the two aisles came out identical — which is the one thing a visitor
   // notices first and the photographs never let you forget.
-  float toward = clamp( compass.x * 0.72 + standing * 0.58, -1.0, 1.0 );
+  //
+  // And *when*, which is the third of the three and was the last to arrive.
+  // Which way a face points and where it stands are both fixed; which half
+  // of the glazing has the sun standing outside it is not, and at half past
+  // one in December the Nativity side is in its own shadow while the Passion
+  // wall opposite is a hundred metres of lit glass. A room told only the
+  // first two lights a column flank turned east with east's green at that
+  // hour — and the photograph of that flank at that hour is gold, 80 55 35,
+  // thirty-nine per cent warm. It is not lit by the window it faces. It is
+  // lit by a room that is full of the other window.
+  //
+  // See uWashTilt: −1 all Passion, +1 all Nativity, and zero at the hour
+  // this room was fitted at, so the fitting still stands.
+  float toward = clamp(
+    compass.x * 0.72 + standing * 0.58 + uWashTilt * uRoomHour, -1.0, 1.0
+  );
   vec3 glassRaw = mix( uGlassPassion, uGlassNativity, smoothstep( -0.45, 0.45, toward ) );
   vec3 glass = glassRaw;
 
@@ -652,13 +667,46 @@ const INDOOR_LIGHT = /* glsl */ `
   // fifty. Given the soffit's colour, a shaft came out the colour of a
   // terracotta pot.
   //
+  // But *which* average, and the answer had been a constant.
+  //
+  // What the argument above actually says is that a shaft sees both halves
+  // of the scheme at once — and that holds while both of them are lit. At
+  // half past one in December one is in its own shadow, the hundred metres
+  // of pavement is gold from end to end, and averaging it is averaging gold
+  // with gold. So the target is the two window colours mixed in the
+  // proportion the hour gives them — see uWashSide.
+  //
+  // As a *departure* from the even hour's proportion, not as the colour
+  // itself. The two glazings are (3.04, 0.49, 0.02) and (0.41, 1.20, 0.72)
+  // at unit luminance and their plain mean is two thirds warm, so the grey
+  // this pools to today is not what they average to in absolute terms — it
+  // is a fitted constant that a great deal downstream was fitted against.
+  // Dividing through by the even mix keeps that constant exactly where it
+  // is and leaves only what the clock did, which is the whole change.
+  //
+  // First try, and it was wrong: relax the *pooling* when the hour is
+  // one-sided, on the argument that there is then only one half to average.
+  // The argument is sound and the mechanism is not, because the pooling is
+  // holding back two different things at once — the far half's window colour
+  // and the pavement's own sandstone. Let it go and a June morning under the
+  // green glazing came back at two thirds saturated and hotter than the
+  // December frame it was supposed to be the opposite of: not the hour's
+  // light at all, just uRoomBounce with the lid off.
+  vec3 hourly = mix( uGlassPassion, uGlassNativity,
+    uWashSide.y / ( uWashSide.x + uWashSide.y ) );
+  // The max is for a glazing recoloured to nothing in some channel: both of
+  // these are normalised to unit *luminance*, which says nothing about any
+  // one of the three, and a zero here would put a NaN on every indoor stone.
+  vec3 tide = 2.0 * hourly / max( uGlassPassion + uGlassNativity, vec3( 1e-4 ) );
+  // Both mixes are of unit-luminance colours, but their ratio is not one, so
+  // it is put back — or pooling would darken the thing it recolours.
+  tide /= dot( tide, vec3( 0.2126, 0.7152, 0.0722 ) );
+
   // Held at its own luminance, so pooling cannot darken it.
   float pooled = ( 1.0 + roomNormal.y ) * uLoftPool;
-  vec3 hearthHere = mix(
-    hearth,
-    vec3( dot( hearth, vec3( 0.2126, 0.7152, 0.0722 ) ) ),
-    clamp( pooled, 0.0, 1.0 )
-  );
+  vec3 average = dot( hearth, vec3( 0.2126, 0.7152, 0.0722 ) )
+    * mix( vec3( 1.0 ), tide, uRoomTilt );
+  vec3 hearthHere = mix( hearth, average, clamp( pooled, 0.0, 1.0 ) );
 
   // The light from below, with its shadows. This is what lights the canopy,
   // and until it existed the canopy was lit by a constant: a soffit faces
@@ -794,6 +842,8 @@ uniform float uWashCover;
 uniform float uWashPurity;
 uniform float uLoftTint;
 uniform float uLoftPool;
+uniform float uRoomHour;
+uniform float uRoomTilt;
 uniform vec3 uGlassNativity;
 uniform vec3 uGlassPassion;
 `
@@ -823,6 +873,8 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   /** How far the floor's bounce is tinted by the glazing above it. */
   uLoftTint: { value: number }
   uLoftPool: { value: number }
+  uRoomHour: { value: number }
+  uRoomTilt: { value: number }
   uGlassNativity: { value: THREE.Color }
   uGlassPassion: { value: THREE.Color }
 }
@@ -1157,6 +1209,54 @@ export function roomUniforms(): RoomUniforms {
      * all of its bay's colour.
      */
     uLoftPool: { value: 0.85 },
+    /**
+     * How much the hour is worth in deciding which window a face is lit by.
+     *
+     * The crossfade beside it runs on a smoothstep whose edges are at plus
+     * and minus 0.45, so this is exactly the width of the crossfade itself:
+     * the hour alone can carry a face that has no strong opinion all the way
+     * to one window, and cannot move one that is pressed against the other.
+     * A column standing four metres off the Nativity glass is the one thing
+     * in the building that stays green at a Passion hour, and it should be.
+     *
+     * Worth about a hundredth of warmth on a shaft and two on a vault
+     * facet — small, because the flat fill it steers is a fifth of what
+     * lights a column and uGlassShare dilutes its colour to a seventh of
+     * that. It is here because it is the true statement and it is free, not
+     * because it carries the pass. What carries the pass is uRoomTilt.
+     */
+    uRoomHour: { value: 0.45 },
+    /**
+     * How far the floor's pooled colour follows the hour.
+     *
+     * Four fifths rather than all of it, and the fifth that is missing is
+     * the honest part. The departure is symmetric by construction — it is
+     * the hour's mix of the two glazings *divided by* the even hour's mix —
+     * while the building is not: the Passion amber is (3.04, 0.49, 0.02) at
+     * unit luminance and the Nativity mint is (0.41, 1.20, 0.72), so the one
+     * is nearly monochromatic and the other is barely tinted. Dividing
+     * through by their mean is what keeps the even hour exactly where it was
+     * fitted, and it is also what flattens that asymmetry out.
+     *
+     * So the weight that takes the departure whole overshoots the cool side
+     * before it arrives at the warm one. Measured on the granite shafts,
+     * against photographs of both hours:
+     *
+     * | uRoomTilt | Dec 13:30 | photo | Jun 09:00 | photo |
+     * | --- | --- | --- | --- | --- |
+     * | 0 | 0.11 | | 0.09 | |
+     * | 0.6 | 0.16 | | −0.02 | |
+     * | **0.8** | **0.18** | 0.33–0.43 | **−0.06** | −0.04–0.11 |
+     * | 1.0 | 0.20 | | −0.09 | |
+     *
+     * — warmth as (R−B)/(R+B) on the screen, which is where the JPEG lives
+     * too. Four fifths is where the cool side stops overshooting. The warm
+     * side is left short by something no weight here can reach: this pools
+     * to a *departure from grey*, and the grey it departs from is itself
+     * wrong — the two glazings average to two thirds warm, not to grey. That
+     * is a recalibration of the room's whole colour and not of its hour.
+     */
+    uRoomTilt: { value: 0.8 },
     uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
     uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
@@ -1774,7 +1874,7 @@ export function stonePatch(
     surface: MASONRY_SURFACE,
     indirect: indoors ? SHELTER : OUTDOOR_INDIRECT,
     light: indoors ? INDOOR_LIGHT : undefined,
-    key: indoors ? 'stone-room-12' : 'stone-sky-6',
+    key: indoors ? 'stone-room-13' : 'stone-sky-6',
   }
 }
 

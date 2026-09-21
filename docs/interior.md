@@ -484,3 +484,258 @@ photograph of that hour shows. The tilted pair now has a weight for exactly
 this. Giving the flat pair the same one is a line of code and a
 recalibration of the whole room, because that rig carries most of the
 interior's light.
+
+
+---
+
+# The room did not know what time it was
+
+*Fourth pass, 21 September 2026, against the item left open above.*
+
+The item was one line, and the line turned out to be worth one per cent.
+What was worth the rest was two terms nobody had accused of anything.
+
+## What the photograph of that hour actually says
+
+Before touching the code: measure the frame the complaint is about.
+`in-nave-passion-1330-dec2025` is the Passion wall from across the nave at
+13:29 on 18 December, and viewpoint `w` is built to match it. Warmth here
+is **(R − B) ÷ (R + B)** on the screen, which is where a JPEG lives and
+where the tone-mapped render lands, so the two are the same number.
+
+| patch in the photograph | sampled | warm | saturation |
+| --- | --- | --- | --- |
+| Column shaft, far left | 86 52 34 | 0.43 | 0.60 |
+| Column shaft, tall centre-left | 80 55 35 | 0.39 | 0.56 |
+| Column shaft, right of centre | 61 50 30 | 0.33 | 0.50 |
+| Wall left of the windows | 81 51 31 | 0.44 | 0.62 |
+| Wall between two windows | 125 78 30 | 0.61 | 0.76 |
+| Vault webbing, top centre | 99 58 31 | 0.53 | 0.69 |
+| Vault sail, top left | 125 111 96 | **0.13** | **0.23** |
+
+Worth dwelling on the last row, because the first read of that photograph
+by eye was wrong. The foreground columns in it *look* grey — and they are
+not. They are gold at 0.39, and they read grey because they sit against a
+wall at 0.61 and a window at 1.0. Exactly one thing in that frame is
+actually neutral, and it is the vault sail in the top left corner, which is
+lit by the clerestory and the skylights and not by the wall at all.
+
+Against which the render, same camera, same minute:
+
+| | render | photograph |
+| --- | --- | --- |
+| Granite shafts, warm / sat | 0.11 / 0.19 | 0.33–0.43 / 0.50–0.60 |
+| Wall, warm / sat | 0.12 / 0.21 | 0.44 / 0.62 |
+| Vault, warm / sat | 0.34 / 0.50 | 0.53 / 0.69 |
+
+The vault is the one surface in range, and the vault is the one surface
+that got a sun-weighted source in the pass before this one. That is the
+whole thesis of this pass in a single row of a table.
+
+## And the hour did nothing at all
+
+Same camera, three hours, spanning the sun from one side of the church to
+the other. The columns:
+
+| | sun·x | warm | saturation |
+| --- | --- | --- | --- |
+| 21 June, 09:00 — Nativity blazing | +0.70 | 0.089 | 0.17 |
+| 18 December, 10:30 — neither | −0.21 | 0.150 | 0.26 |
+| 18 December, 13:30 — Passion blazing | −0.76 | 0.106 | 0.19 |
+
+Not a trend: a scatter. The building's columns were the same colour at
+every hour of every day, and what little they did move went the wrong way.
+
+## The line that was asked for, and what it was worth
+
+`sfWash` reads two horizontal passes, one entering through each long wall.
+Giving them the weight the tilted pair already had is four lines — see
+`WASH_SHADE` in `src/render/washrig.ts` — and two decisions.
+
+**Two fifths, not the clerestory's tenth.** What the sunlit clerestory has
+that the shaded one has not is the aisle roof beneath it: a hundred metres
+of lit stone throwing up into the glass, a second multiplier on top of the
+sun. A nave window has no such thing. Its two states are direct sun on the
+glass and north sky through it, which on a vertical surface at these
+altitudes is about four to one.
+
+**And the pair is normalised to a mean of one**, which the tilted pair is
+not. The hour moves light between the two long walls; it does not take it
+out of the room. On a clear day exactly one of them has the sun on it, so
+the clock changes the share and not the total. There is one moment when
+neither is lit — the sun square on the south-east, along the nave, in the
+morning — and that is the moment the Glory front is blazing instead, and
+this rig has no heading for the Glory front. Holding the pair at its total
+is then the least wrong thing available, and it has the practical virtue
+that the even hour comes out exactly as it was fitted.
+
+Measured at viewpoint `w`, half past one in December, on the columns:
+
+    warm 0.1061 -> 0.1080
+
+Nothing. Switching side A off entirely changed the granite by 0.0001.
+
+## Because the rig is not what lights a column
+
+The reason is in `uWashCover`'s own comment, written two passes ago and not
+followed through: the rig *can only light what has an unobstructed line to
+a window across the church, and most of a colonnade does not*. Ablate the
+four terms that feed an interior surface, at that viewpoint, on the granite
+shafts:
+
+| term switched off | luminance | warm | saturation |
+| --- | --- | --- | --- |
+| nothing | 0.302 | 0.11 | 0.19 |
+| the **floor** (`uLoftGain`) | **0.149** | 0.20 | 0.34 |
+| the flat fill (`uRoomGlass`) | 0.245 | 0.15 | 0.25 |
+| the flat room constant | 0.297 | 0.10 | 0.18 |
+| the **wash rig** (`uWashGain`) | 0.298 | 0.11 | 0.20 |
+
+The floor is **half** the light on a column shaft. The flat fill is a
+fifth. The wash rig — the thing the fix was aimed at, and the thing that
+does carry most of the light on a *wall* facing a window across an open
+span — is one per cent. Both of the terms that matter were blind to the
+hour, and both of them are where the hour had to go.
+
+## Which half of the glazing has the sun on it
+
+One number, written once by the rig that already knows: `uWashTilt`, −1 all
+Passion, +1 all Nativity, 0 when neither wall has it. Both weights live
+between `WASH_SHADE` and one, so their difference over that span is exactly
+−1 to +1 and needs no magic number at the far end.
+
+**The fill's colour takes it** — `uRoomHour`. A face was told which way it
+points and where it stands, and those are the two fixed things; which
+window has the sun behind it is the third and it is the one that moves.
+Worth 0.45, which is exactly the half-width of the crossfade's own
+smoothstep: the hour alone can carry a face that has no strong opinion all
+the way to one window, and cannot move one that is pressed against the
+other. A column four metres off the Nativity glass is the one thing in the
+building that stays green at a Passion hour, and it should be.
+
+**And the floor's pooled colour takes it** — `uRoomTilt`, which is the one
+that carries this pass. The floor light a *standing* face gets is pooled to
+grey, on the argument that a shaft is in the floor's own plane and what it
+sees is a hundred metres of pavement lit through both halves of Vila-Grau's
+scheme at once, and the average of them is grey. The argument is right and
+it has an unstated premise: *while both halves are lit*. At half past one
+in December one of them is in its own shadow and that hundred metres is
+gold from end to end, so averaging it is averaging gold with gold.
+
+So the pooling target stops being a constant grey and becomes the two
+window colours mixed in the proportion the hour gives them — divided
+through by the proportion the even hour gives them, so that what is left is
+only what the clock did.
+
+That division is not tidiness, it is the whole reason the change is
+affordable. The two glazings are (3.04, 0.49, 0.02) and (0.41, 1.20, 0.72)
+at unit luminance; their plain mean is two thirds warm, nothing like the
+grey this pools to today. Adopting it outright would have relit the
+building at every hour in order to fix one.
+
+### The mechanism that was tried first and was wrong
+
+Relax the *pooling itself* when the hour is one-sided — if there is only
+one half to average, do not average. Sound argument, wrong mechanism: the
+pooling is holding back two different things at once, the far half's window
+colour and the pavement's own sandstone. Let it go and a June morning under
+the *green* glazing came back two thirds saturated and hotter than the
+December frame it was meant to be the opposite of. Not the hour's light at
+all — `uRoomBounce` with the lid off.
+
+### Four fifths, and the fifth that is missing
+
+The departure is symmetric by construction and the building is not: the
+Passion amber is nearly monochromatic and the Nativity mint is barely
+tinted, and dividing by their mean is exactly what flattens that out. So a
+weight that takes the departure whole overshoots the cool side before it
+arrives at the warm one:
+
+| `uRoomTilt` | Dec 13:30 | photograph | Jun 09:00 | photograph |
+| --- | --- | --- | --- | --- |
+| 0 | 0.11 | | 0.09 | |
+| 0.6 | 0.16 | | −0.02 | |
+| **0.8** | **0.18** | 0.33–0.43 | **−0.06** | −0.04 to 0.11 |
+| 1.0 | 0.20 | | −0.09 | |
+
+Four fifths is where the cool side stops overshooting. The warm side stays
+short, and it stays short for a reason no weight here can reach — see
+*Still open*.
+
+## What it bought
+
+Every interior frame, before and after, at the viewpoint's own hour. Warmth
+is the whole frame, so it includes the glazing, which is fair only because
+the framing is identical on both sides of the arrow.
+
+| | hour | warm | saturation | median |
+| --- | --- | --- | --- | --- |
+| `1` under the crown | Passion | 0.228 → **0.336** | 0.363 → 0.496 | 0.231 → 0.234 |
+| `2` Passion, four o'clock | Passion | 0.269 → **0.346** | 0.411 → 0.503 | 0.290 → 0.285 |
+| `5` | Passion | 0.344 → **0.416** | 0.509 → 0.584 | 0.269 → 0.276 |
+| `7` down the nave | Passion | 0.197 → **0.270** | 0.328 → 0.420 | 0.277 → 0.277 |
+| `8` | Passion | 0.251 → **0.330** | 0.390 → 0.483 | 0.236 → 0.241 |
+| `v` the wash on the vault | Passion | 0.302 → **0.376** | 0.454 → 0.540 | 0.291 → 0.294 |
+| `w` Passion wall, 13:30 Dec | Passion | 0.151 → **0.219** | 0.252 → 0.346 | 0.332 → 0.335 |
+| `3` | Nativity | 0.090 → **0.044** | 0.316 → 0.349 | 0.318 → 0.317 |
+| `9` | Nativity | 0.128 → **0.070** | 0.245 → 0.224 | 0.247 → 0.246 |
+| `0` | Nativity | 0.157 → **0.096** | 0.278 → 0.297 | 0.289 → 0.289 |
+| `d` out the Nativity door | Nativity | 0.379 → **0.302** | 0.492 → 0.459 | 0.193 → 0.177 |
+| `n` `g` `t` `u` `m` `6` | — | unchanged to ±0.001 | unchanged | unchanged |
+
+Every Passion hour warms, every Nativity hour cools, every exterior is
+untouched, and the exposure does not move: eleven of the twelve interiors
+hold their median to within a per cent. The twelfth is `d`, down eight per
+cent, which is a frame looking out through a doorway at a Nativity hour —
+the mint is the same luminance as the amber it replaces going in, and not
+quite the same coming out of the film.
+
+And per surface, at the frame the complaint was about:
+
+| viewpoint `w`, 13:30 December | before | after | photograph |
+| --- | --- | --- | --- |
+| Granite shafts, warm | 0.106 | **0.179** | 0.33–0.43 |
+| Granite shafts, saturation | 0.188 | **0.294** | 0.50–0.60 |
+| Wall, warm | 0.121 | **0.186** | 0.44 |
+| Wall, saturation | 0.212 | **0.308** | 0.62 |
+| Vault, warm | 0.338 | **0.406** | 0.53 |
+| Vault, saturation | 0.495 | **0.571** | 0.69 |
+| Granite luminance | 0.3048 | 0.3045 | — |
+
+Every surface moves toward the photograph, none of them past it, and the
+stone is exactly as bright as it was.
+
+The hour that was flat is no longer flat either. Same camera, the three
+hours from the scatter above:
+
+| | warm, before | warm, after |
+| --- | --- | --- |
+| 21 June 09:00, Nativity blazing | 0.089 | **−0.056** |
+| 18 December 13:30, Passion blazing | 0.106 | **+0.179** |
+
+### Cost
+
+Four scalars and a two-component vector, all set on the CPU from one dot
+product per heading when the hour moves, and none of them rebuilding a map.
+In the shader: one add inside an existing `clamp`, and a three-channel
+ratio with a luminance normalise. No new texture fetch anywhere, and no
+change at all to any surface outside — the terms are gated by
+`sfSheltered`, so a stone standing in the plaza never reaches them.
+
+### Still open
+
+The columns are warm now and they are still not warm **enough** — 0.18
+against a photographed 0.33 to 0.43, and 0.29 saturated against 0.50 to
+0.60. That gap is not the hour any more, and no weight added in this pass
+can close it, because everything here is a *departure from grey* and the
+grey it departs from is itself wrong. Vila-Grau's two halves do not average
+to grey. They average to (1.73, 0.85, 0.37) — two thirds warm — and the
+room pools its floor light to a neutral because a neutral was what the last
+fit needed when the floor's own sandstone gold was the only other thing on
+offer.
+
+Putting that right means re-opening `uLoftPool`, `uGlassShare` and
+`uWashPurity` together, against the photographs, at a fixed hour. It is the
+recalibration of the room's colour that this pass deliberately did not do,
+having found that the recalibration it was warned about — the room's
+*hour* — was a different axis entirely.

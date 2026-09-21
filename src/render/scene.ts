@@ -404,7 +404,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       .multiplyScalar(state.sunIntensity)
     glass.uniforms.uSunDirection.value.copy(sunDirection)
     // The one part of the glazing's rig that the hour moves — see
-    // THROW_SHADE. No map is rebuilt; only the weight on two of them.
+    // WASH_SHADE. No map is rebuilt; only the weight on each of the four.
     wash.setSun(sunDirection)
     dirty = true
   }

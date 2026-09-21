@@ -172,6 +172,27 @@ clerestory has the sun behind it, because a canopy photographed at half
 past one in December is gold from end to end and the model was putting
 mint-green blooms across it.
 
+Which left the rest of the room not knowing what time it was. Same camera,
+three hours spanning the sun from one side of the church to the other, and
+the columns came back 0.089, 0.150 and 0.106 warm — a scatter, not a trend,
+on a building whose two halves are glazed amber and mint on purpose. The
+fix that was obvious was to weight the two horizontal wash passes by which
+wall has the sun on it, as the clerestory already is. Measured, that was
+worth **one per cent**: ablate the terms feeding a column shaft and the
+floor is half of what lights it, the flat fill is a fifth, and the wash rig
+— which does carry a wall facing a window across an open span — is nothing
+at all, because most of a colonnade has no line to a window. So the hour
+went where the light is: into the colour the flat fill crossfades between
+the two glazings, and into the grey the floor's light pools to for anything
+standing upright. That grey is what Vila-Grau's two halves average to
+*while both of them are lit*; with one in shadow the hundred metres of
+pavement a shaft sees is gold end to end, and averaging it is averaging
+gold with gold. Written as a departure from the even hour, so the hour
+everything was fitted at is untouched: every Passion frame warms by 0.02 to
+0.11, every Nativity frame cools by 0.05 to 0.08, every exterior is
+unchanged to a thousandth, and eleven of twelve interiors hold their median
+to within one per cent.
+
 | Built | Where |
 | --- | --- |
 | Hyperboloid generator — surface + straight generators | `src/geometry/hyperboloid.ts` |
@@ -242,6 +263,8 @@ mint-green blooms across it.
 | The light from below: how much pavement each soffit can see | `src/render/washrig.ts` |
 | The floor as a plane, so it reaches a shaft and not only a soffit | `src/render/washrig.ts` |
 | The clerestory throwing up and inward, weighted by which side has the sun | `src/render/washrig.ts`, `src/render/scene.ts` |
+| Which half of the glazing has the sun on it, as one signed number | `src/render/washrig.ts` |
+| The room's own colour following the hour, not only the plan | `src/render/materials.ts` |
 
 ## Running
 
@@ -818,3 +841,38 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   spread until it matched a photograph's 2.1 reached the number at a
   setting that prints the window on the ceiling instead of throwing light
   at it. The measurement was right and the population was wrong.
+- **The line you are asked for is not always the line that carries it.** The
+  item left open after the pass above was that the two horizontal wash
+  passes were blind to the hour, on the reasoning that the rig carries most
+  of the interior's light. It does — on a wall facing a window across an
+  open span. Ablate the terms feeding a *column* shaft and the floor is half
+  of what lights it, the flat fill is a fifth, and the rig is one per cent,
+  for the reason `uWashCover` already gave: it can only light what has an
+  unobstructed line to a window, and most of a colonnade does not. Weighting
+  the pair moved a column by 0.002. The weight was still right; it was just
+  not the fix.
+- **A photograph read by eye is not a measurement.** The foreground columns
+  in `in-nave-passion-1330-dec2025` look grey, which is the whole reason the
+  complaint was phrased as "cooler than the photograph". Sampled, they are
+  86 52 34 — gold at 0.43 warm, 0.60 saturated — and they read grey because
+  they stand against a wall at 0.61 and a window at 1.0. Exactly one thing
+  in that frame is neutral, the vault sail in the top-left corner, and it is
+  lit by the clerestory rather than by the wall.
+- **Grey is not a primitive; it is what two halves average to.** A shaft's
+  floor light is pooled to a neutral because a column in the floor's own
+  plane sees a hundred metres of pavement lit through both halves of
+  Vila-Grau's scheme at once. True while both are lit. At half past one in
+  December one is in its own shadow and that hundred metres is gold end to
+  end, so the pooling target becomes the two window colours in the
+  proportion the hour gives them — divided by the proportion the even hour
+  gives them, so the fitted hour is untouched and only the clock's part
+  remains. Every Passion frame warms, every Nativity frame cools, every
+  exterior is unchanged to a thousandth.
+- **Relaxing a term is not the same as steering it.** The first mechanism
+  tried was to weaken the pooling itself when the hour is one-sided — if
+  there is only one half to average, do not average. The argument is sound
+  and the mechanism is not: the pooling holds back two different things at
+  once, the far half's window colour and the pavement's own sandstone. Let
+  it go and a June morning under the *green* glazing came back two thirds
+  saturated and hotter than the December frame it was meant to be the
+  opposite of. Not the hour's light — the room bounce with the lid off.

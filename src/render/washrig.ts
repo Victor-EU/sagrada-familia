@@ -58,6 +58,56 @@ import { LAYER_GLASS, LAYER_SKYLINE } from './sunrig.ts'
 const SOFT_METRES = 1.1
 
 /**
+ * What the long wall in shade is worth against the one with the sun on it.
+ *
+ * The tilted pair got this first and the flat pair did not, on the argument
+ * that a window is a hundred square metres of *sky* and the sky is there all
+ * day. Half true, and it is why this number is not the tilted pair's tenth.
+ * But at half past one in December the Nativity glazing is in its own
+ * shadow while the wall opposite is a hundred metres of lit glass, and a
+ * pair that took half of each was lighting every wall and vault facet it
+ * reaches with the mean of Vila-Grau's two halves at every hour of the day.
+ *
+ * Which is a smaller correction than it sounds, and the honest place to say
+ * so is here. Measured by ablation, this rig is one per cent of what lights
+ * a *column*: it can only reach what has an unobstructed line to a window
+ * across the church, and most of a colonnade does not — see `uWashCover`.
+ * What it does carry is a wall or a soffit facing a window across an open
+ * span, and on those the weight is worth having. The room's own hour is
+ * somewhere else entirely, in `uWashTilt` and what reads it.
+ *
+ * Two fifths, against the clerestory's tenth, and the difference is not a
+ * hedge. What the sunlit clerestory has that the shaded one has not is the
+ * aisle roof beneath it: a hundred metres of lit stone throwing up into the
+ * glass, a second multiplier on top of the sun, and that is what makes it an
+ * order of magnitude up there. A nave window has no such thing. Its two
+ * states are direct sun on the glass and north sky through it, which on a
+ * vertical surface at these altitudes is about four to one — so the shaded
+ * wall keeps rather more than a tenth, and keeps it coloured.
+ *
+ * ## And the pair is normalised, which the tilted pair is not
+ *
+ * The hour moves light between the two long walls. It does not take it out
+ * of the room. On any clear day exactly one of them has the sun on it, so
+ * what the clock changes is the share and not the total — and this rig
+ * carries most of the interior's light, so a weight that dimmed the sum
+ * would have to be bought straight back on `uWashGain`, which would then
+ * overbrighten the one hour the room was calibrated at.
+ *
+ * There is a moment when neither wall is lit: the sun square on the
+ * south-east, along the nave, mid-morning. That is the moment the Glory
+ * front is blazing instead, and this rig has no heading for the Glory front.
+ * Holding the pair at its calibrated total is then the least wrong thing
+ * available — the light really is coming in, just through a wall the rig
+ * cannot see, and the alternative is a room that goes dark at the hour the
+ * building is at its brightest.
+ *
+ * So the symmetric hour comes out exactly as it was built, and nothing
+ * downstream needs re-fitting. What the clock now does is tilt the pair.
+ */
+const WASH_SHADE = 0.4
+
+/**
  * How far above horizontal the clerestory throws, in radians.
  *
  * Measured off the model, by casting rays up through it and writing down
@@ -195,6 +245,15 @@ export interface WashUniforms extends Record<string, THREE.IUniform> {
   uWashBias: { value: number }
   uWashGain: { value: number }
   uWashBlur: { value: number }
+  /** What each long wall is worth at this hour — see WASH_SHADE. */
+  uWashSide: { value: THREE.Vector2 }
+  /**
+   * The same statement as one signed number: −1 all Passion, +1 all
+   * Nativity, 0 when neither wall has the sun. The room's own terms read
+   * this rather than the pair, because what they want to know is not how
+   * bright a window is but which half of the building the light is in.
+   */
+  uWashTilt: { value: number }
   /** The clerestory, throwing up and inward — the same four maps, tilted. */
   uThrowMatrixA: { value: THREE.Matrix4 }
   uThrowMatrixB: { value: THREE.Matrix4 }
@@ -322,6 +381,8 @@ export class WashRig {
        * disappears with it.
        */
       uWashBlur: { value: 4 },
+      uWashSide: { value: new THREE.Vector2(1, 1) },
+      uWashTilt: { value: 0 },
 
       uThrowMatrixA: { value: new THREE.Matrix4() },
       uThrowMatrixB: { value: new THREE.Matrix4() },
@@ -441,21 +502,42 @@ export class WashRig {
   }
 
   /**
-   * Which clerestory has the sun behind it — see THROW_SHADE.
+   * Which side of the building has the sun behind its glass.
    *
    * Nothing is re-rendered. The maps say where the glass is and what colour
    * it is, which the hour does not change; this says how much light is
-   * standing outside each of them, which it does.
+   * standing outside each of them, which it does. Four weights, a dot
+   * product each, and the whole of what the clock costs this rig.
+   *
+   * The two pairs are weighted differently on purpose — see WASH_SHADE for
+   * why the long walls keep two fifths where the clerestory keeps a tenth,
+   * and why the flat pair is renormalised afterwards and the tilted pair is
+   * not.
    */
   setSun(direction: THREE.Vector3): void {
-    const side = this.uniforms.uThrowSide.value
-    for (let i = 2; i < HEADING.length; i++) {
-      // The wall this pass enters through faces back against the heading.
-      const heading = HEADING[i]!
+    /** How much sun is standing outside the wall this pass enters through. */
+    const litness = (heading: THREE.Vector3): number => {
+      // That wall faces back against the heading, so it has the sun on it
+      // when the sun lies the way the light travels. Height does not come
+      // into it: a wall at noon in June is lit, steeply.
       const toward = -(direction.x * heading.x + direction.z * heading.z)
-      const lit = THREE.MathUtils.smoothstep(toward, -0.15, 0.55)
-      side.setComponent(i - 2, THREE.MathUtils.lerp(THROW_SHADE, 1, lit))
+      return THREE.MathUtils.smoothstep(toward, -0.15, 0.55)
     }
+
+    const throwSide = this.uniforms.uThrowSide.value
+    for (let i = 2; i < HEADING.length; i++) {
+      const lit = litness(HEADING[i]!)
+      throwSide.setComponent(i - 2, THREE.MathUtils.lerp(THROW_SHADE, 1, lit))
+    }
+
+    const a = THREE.MathUtils.lerp(WASH_SHADE, 1, litness(HEADING[0]))
+    const b = THREE.MathUtils.lerp(WASH_SHADE, 1, litness(HEADING[1]))
+    // Held at a mean of one, so the hour tilts this pair without dimming it.
+    this.uniforms.uWashSide.value.set(a, b).multiplyScalar(2 / (a + b))
+    // And the tilt itself, on its own scale: both weights live between
+    // WASH_SHADE and one, so their difference over that span is exactly −1
+    // to +1 and needs no magic number at the far end to read it.
+    this.uniforms.uWashTilt.value = (b - a) / (1 - WASH_SHADE)
   }
 
   /** Force the next `render` to run, after geometry has changed under it. */
@@ -683,6 +765,8 @@ uniform float uWashSoft;
 uniform float uWashBias;
 uniform float uWashGain;
 uniform float uWashBlur;
+uniform vec2 uWashSide;
+uniform float uWashTilt;
 uniform mat4 uThrowMatrixA;
 uniform mat4 uThrowMatrixB;
 uniform sampler2D uThrowDepthA;
@@ -753,14 +837,23 @@ vec3 sfWashFrom(
   return ( lit * 0.2 ) * tint * facing;
 }
 
-/** Both glazed sides, in world space. */
+/**
+ * Both glazed sides, in world space, each worth what the hour makes it.
+ *
+ * The weights are the only thing here the clock touches, they average to one
+ * — see WASH_SHADE — and their whole effect is that the two walls stop being
+ * interchangeable. Which matters because they are not the same colour: the
+ * Passion side is glazed amber and red and the Nativity side green and blue,
+ * and a sum that always took half of each gave the same mixture to every
+ * surface in the building at every hour of the day.
+ */
 vec3 sfWash( const in vec3 shadingNormal, const in vec3 world ) {
   return uWashGain * (
-    sfWashFrom(
+    uWashSide.x * sfWashFrom(
       uWashDepthA, uWashTintA, uWashMatrixA, uWashDirA,
       uWashSoft, uWashBias, uWashBlur, shadingNormal, world
     ) +
-    sfWashFrom(
+    uWashSide.y * sfWashFrom(
       uWashDepthB, uWashTintB, uWashMatrixB, uWashDirB,
       uWashSoft, uWashBias, uWashBlur, shadingNormal, world
     )
@@ -770,12 +863,13 @@ vec3 sfWash( const in vec3 shadingNormal, const in vec3 world ) {
 /**
  * The clerestory, throwing up and inward — the canopy's second source.
  *
- * The same read as sfWash, along a heading tilted thirty-eight degrees above
- * horizontal, which is the only line that gets in at the clerestory head,
- * out over the aisle roof behind it, and onto the vault. A soffit is edge-on
- * to the horizontal pair and takes nothing from them; tilted, the dot product
- * turns positive for anything whose face has a downward component, which is
- * the whole canopy and the top of every shaft under it.
+ * The same read as sfWash, along a heading tilted fifteen degrees above
+ * horizontal — see THROW_TILT — which is the only line that gets in at the
+ * clerestory head, out over the aisle roof behind it, and onto the vault.
+ * A soffit is edge-on to the horizontal pair and takes nothing from them;
+ * tilted, the dot product turns positive for anything whose face has a
+ * downward component, which is the whole canopy and the top of every shaft
+ * under it.
  *
  * Where the floor's light is one broad tone from underneath, this arrives
  * from a particular window and carries its colour and its pattern — the gold
