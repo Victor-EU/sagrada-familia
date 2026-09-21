@@ -638,7 +638,13 @@ function frame(): void {
     performance.mark('first-frame')
     introEl.classList.add('built')
     cover.reveal()
-    window.setTimeout(() => introEl.classList.add('gone'), 7000)
+    // The corner button rides above the attribution while the attribution is
+    // on screen and settles into its own place when it goes — see
+    // `body:not(.named)` in style.css.
+    window.setTimeout(() => {
+      introEl.classList.add('gone')
+      document.body.classList.add('named')
+    }, 7000)
     controls.begin()
     const at = (name: string): number =>
       Math.round(performance.getEntriesByName(name, 'mark')[0]?.startTime ?? 0)

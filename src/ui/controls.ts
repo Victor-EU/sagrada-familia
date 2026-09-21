@@ -17,9 +17,12 @@ import type { Relation, Viewer } from '../camera/viewer.ts'
  *  - the **way out**, for the same reason in reverse;
  *  - a **line of controls** that says what the cursor does *here*, and
  *    changes when what it does changes;
- *  - the **hour**, because every photograph of this interior is a photograph
- *    of light at a particular time of day, and the one thing worth handing
- *    somebody is the ability to move it.
+ *  - the **clock**, because every photograph of this interior is a photograph
+ *    of light at a particular moment, and the one thing worth handing
+ *    somebody is the ability to move it. An hour on a scrubber, and a day on
+ *    a press — this building's two glazings face the summer sunrise and the
+ *    winter sunset, so a model with no winter in it is missing half its
+ *    argument.
  */
 export interface SunSetting {
   dayOfYear: number
@@ -29,6 +32,29 @@ export interface SunSetting {
 /** Where the day starts and ends on the scrubber, Barcelona wall clock. */
 const FIRST_HOUR = 6
 const LAST_HOUR = 21
+
+/**
+ * The four days worth standing in this building on.
+ *
+ * The hour has been a control since phase five and the day has only ever been
+ * reachable by editing the link, which means that in practice nobody has ever
+ * seen this building in winter. That is the half of the sun that matters most
+ * here: Barcelona's solstices are 47 degrees apart in altitude, the Nativity
+ * glazing faces the summer sunrise and the Passion glazing the winter sunset,
+ * and the two are the whole argument of the plan. Four dates rather than a
+ * second scrubber, because no one wants the fourteenth of August — they want
+ * midsummer, midwinter, and the two days the sun rises due east.
+ */
+const DAYS = [80, 172, 264, 355]
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** A day number as a date, so the control says a date and not an ordinal. */
+function dayName(dayOfYear: number): string {
+  const when = new Date(Date.UTC(2001, 0, 1))
+  when.setUTCDate(Math.round(dayOfYear))
+  return `${when.getUTCDate()} ${MONTHS[when.getUTCMonth()]}`
+}
 
 /** How far over a door the way-in marker floats. */
 const MARKER_HEIGHT = 8
@@ -41,6 +67,7 @@ export class Controls {
   private readonly clock: HTMLElement
   private readonly dial: HTMLInputElement
   private readonly hourLabel: HTMLElement
+  private readonly dayButton: HTMLButtonElement
 
   private readonly point = new THREE.Vector3()
   private hintTimer = 0
@@ -77,6 +104,18 @@ export class Controls {
     this.hint = el('div', 'hint-line')
 
     this.clock = el('div', 'clock')
+    this.dayButton = el('button', 'day') as HTMLButtonElement
+    this.dayButton.type = 'button'
+    this.dayButton.title = 'Midsummer, midwinter, and the two equinoxes'
+    this.dayButton.addEventListener('click', () => {
+      // On round the four. From anywhere else — a link can carry any day of
+      // the year — the next one after wherever it stands.
+      const here = this.sun.dayOfYear
+      this.sun.dayOfYear = DAYS.find((d) => d > here) ?? DAYS[0]!
+      this.dayButton.blur()
+      this.applySun()
+      this.showHour()
+    })
     this.hourLabel = el('span', 'hour')
     this.dial = document.createElement('input')
     this.dial.type = 'range'
@@ -89,7 +128,13 @@ export class Controls {
       this.applySun()
       this.showHour()
     })
-    this.clock.append(this.hourLabel, this.dial)
+    // A range keeps the focus after a drag, and a focused input swallows the
+    // keys: every letter goes to the field instead of the building, so the
+    // one control a visitor is most likely to touch first was also the one
+    // that silently stopped W A S D from walking. The buttons already give
+    // the focus back the moment they are done with it; so does this.
+    this.dial.addEventListener('change', () => this.dial.blur())
+    this.clock.append(this.dayButton, this.hourLabel, this.dial)
 
     this.root.append(this.way, this.out, this.hint, this.clock)
     this.host.append(this.root)
@@ -122,6 +167,7 @@ export class Controls {
 
   /** Put the hour the sun is actually at back on the dial. */
   showHour(): void {
+    this.dayButton.textContent = dayName(this.sun.dayOfYear)
     const h = Math.floor(this.sun.hour)
     const m = Math.round((this.sun.hour - h) * 60)
     this.hourLabel.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`

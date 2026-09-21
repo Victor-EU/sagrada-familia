@@ -106,7 +106,37 @@ const INHABIT_SHIFT = 0.5
  * contrast is the glazing being genuinely brighter than the room — see
  * `glassGain` in main.ts — and not the room being dark.
  */
-const INSIDE_STOP = 0.78
+/**
+ * And back up again, because a fifth of the room's light was never the
+ * room's.
+ *
+ * Every number above was measured with a volumetric pass that added light
+ * without limit and took none away — see the march in render/shafts.ts. The
+ * air was not a veil over the picture, it was a lamp in it: on the two frames
+ * the indoor stop is judged against, switching the corrected pass in for the
+ * old one drops the vault-wash frame's median from 0.277 to 0.218 and the
+ * Passion wall's from 0.361 to 0.249. A third of the light on those frames
+ * was coming from the mistake.
+ *
+ * So the stop was fitted against a room a fifth of whose light is now gone.
+ * Swept again on the same frame and the same photograph:
+ * `in-vault-wash-dec2025` measures 0.290 over the centre of the canopy, the
+ * render used to sit just over it at 0.303, and now sits at 0.250. It crosses
+ * the photograph again a fifth of a stop up, which is where this is — 0.95,
+ * against 0.78, a difference of 0.28 of a stop.
+ *
+ * The share of the Passion frame over eighty-five per cent does *not* come
+ * back to where it was, and should not: it stood at 5.1 % and now stands at
+ * 1.2 %, inside the one-to-seven the photographs give, and the four points
+ * that went were blown *air* rather than blown glass. A window that is the
+ * thing the eye cannot look at is the effect; the air in front of it going
+ * white with it was the bug.
+ *
+ * Everything above is still true, and all of it was measured through the
+ * inflated medium. Outdoors is untouched: the sun on the stone never went
+ * through any of this.
+ */
+const INSIDE_STOP = 0.95
 /**
  * Well under the room. A photograph of this building is exposed for the
  * sunlit stone, and the sunlit stone at the old figure was over the film's
@@ -302,6 +332,20 @@ export class Viewer {
     centre: new THREE.Vector3(0, 87, -19),
     radii: new THREE.Vector3(46, 92, 66),
   }
+  /**
+   * Whether the last pick found pavement rather than the building.
+   *
+   * Set by `along`, which already knows — it chose between the two — and read
+   * by the wheel, which is the one caller for which the difference decides
+   * anything. A drag may perfectly well turn about a point on the ground; a
+   * zoom toward one is how an orbit ends up looking at grass.
+   */
+  private hitGround = false
+  /** The last place the orbit stood that was certainly not in the room. */
+  private readonly outside = new THREE.Vector3()
+  private wasOutside = false
+  /** The massif grown by its clearance, for asking where the stone starts. */
+  private readonly roomier = new THREE.Vector3()
 
   // Inhabiting.
   private readonly velocity = new THREE.Vector3()
@@ -421,10 +465,29 @@ export class Viewer {
     const i = Math.round((x - s.centre[0]) / s.pitch)
     const j = Math.round((z - s.centre[1]) / s.pitch)
     if (!s.open.has(`${i},${j}`)) return s.roofs
+    const dx = x - (s.centre[0] + i * s.pitch)
+    const dz = z - (s.centre[1] + j * s.pitch)
+    /**
+     * An edge is only worth climbing if something is built on the far side.
+     *
+     * The ramp used to start at every edge of an open cell, which assumed
+     * the thing on the other side of it was the Eixample. Three of the four
+     * cells around the temple are open ground — Plaça de Gaudí, Plaça de la
+     * Sagrada Família and the esplanade — and the temple's own block is a
+     * hundred and thirteen metres across against a twenty-six metre feather,
+     * so the ramp reached well inside the plaza the church stands in. A
+     * camera at a transept door, which is eight metres from that block's
+     * edge with open park beyond it, was lifted twenty-two metres into the
+     * air to clear roofs that are two blocks away: step outside and you came
+     * out level with the clerestory.
+     */
+    const climb = (di: number, dj: number, to: number): number =>
+      s.open.has(`${i + di},${j + dj}`) ? Number.POSITIVE_INFINITY : to
     const inset = Math.min(
-      s.half - Math.abs(x - (s.centre[0] + i * s.pitch)),
-      s.half - Math.abs(z - (s.centre[1] + j * s.pitch)),
+      climb(Math.sign(dx), 0, s.half - Math.abs(dx)),
+      climb(0, Math.sign(dz), s.half - Math.abs(dz)),
     )
+    if (!Number.isFinite(inset)) return pavement
     const t = THREE.MathUtils.clamp(inset / CLEARING_FEATHER, 0, 1)
     return THREE.MathUtils.lerp(s.roofs, pavement, t)
   }
@@ -731,17 +794,25 @@ export class Viewer {
     const stage = mouth.clone().addScaledVector(n, DOOR_STANDOFF)
     stage.y = (e.floorAt(stage.x, stage.z) ?? this.plazaY) + EYE_HEIGHT + 1.2
 
-    // Back off to a standing view of the front you have just come out of.
-    const away = mouth.clone().addScaledVector(n, this.massif.radii.z * 2.6)
-    away.y = this.plazaY + 6
-    const lookUp = mouth.clone().setY(stage.y + 34)
-    const atDoor = aimAt(stage, lookUp, this.widen(INHABIT_FOV), INHABIT_SHIFT)
-    const arrival = aimAt(away, this.heart, this.widen(REGARD_FOV), REGARD_SHIFT)
+    // Standing on the step, with the front over you. It used to go on from
+    // here — a second leg out to two and a half times the building's own
+    // depth and six metres up, which is two hundred metres of plaza and an
+    // orbit looking at the whole church from across the city. That is a fine
+    // place to be and it is not what the button says: *step outside* promises
+    // the top of the flight with the door at your back, which is where anyone
+    // who has ever left a cathedral has stood. The orbit is one wheel tick
+    // away, and now it is the viewer who decides how far back to go.
+    //
+    // Standing height, not the flight's hovering `stage.y`: this is a place
+    // to be, not a waypoint to pass through.
+    stage.y = (e.floorAt(stage.x, stage.z) ?? this.plazaY) + EYE_HEIGHT
+    // Up the front, but not so far up that the door goes out of frame — at
+    // sixteen metres out, eight metres up is a little over a quarter turn
+    // from level, which holds the portal and the towers over it together.
+    const lookUp = mouth.clone().setY(stage.y + 8)
+    const arrival = aimAt(stage, lookUp, this.widen(REGARD_FOV), REGARD_SHIFT)
 
-    this.legs = [
-      leg(here, stage, this.aim(), atDoor, 1.5),
-      leg(stage, away, atDoor, arrival, 2.3),
-    ]
+    this.legs = [leg(here, stage, this.aim(), arrival, 1.8)]
     this.legAt = 0
     this.baseFov = REGARD_FOV
     this.setRelation('regard')
@@ -905,10 +976,44 @@ export class Viewer {
     if (distance < 1e-4) return
     const wanted = THREE.MathUtils.clamp(
       distance * Math.exp(amount),
-      MIN_DISTANCE,
+      Math.max(MIN_DISTANCE, this.clearOf(this.offset, distance)),
       MAX_DISTANCE,
     )
     p.copy(this.pivot).addScaledVector(this.offset, wanted / distance)
+  }
+
+  /**
+   * How near the pivot this line of sight may come before it is in the stone.
+   *
+   * `hold` already keeps the orbit outside the massif and a few metres clear
+   * of it, and it does so *softly* — a second of floating back out, so that
+   * flying the keys in close reads as the building declining to be stood
+   * inside rather than as the camera being snatched away. The wheel outruns
+   * it. A tick is a fraction of the distance to the pivot, and the pivot is
+   * half way into the building, so ticks compound: six of them on a porch
+   * crossed sixty metres of stone in well under the second the recovery
+   * needs.
+   *
+   * The limit is not a new one — it is the same surface `hold` recovers to,
+   * asked for along the line the camera is actually travelling, so the wheel
+   * stops exactly where the orbit would have put it anyway. Nothing about how
+   * close you may get to the building changes; what changes is that you no
+   * longer arrive there through it.
+   *
+   * Zero when the line misses the massif altogether, which is every view that
+   * is not pointed at the building.
+   */
+  private clearOf(offset: THREE.Vector3, distance: number): number {
+    const m = this.massif
+    const clear: Massif = {
+      centre: m.centre,
+      radii: this.roomier.copy(m.radii).addScalar(MASSIF_CLEAR),
+    }
+    // Outward from the pivot, which is where the camera is going when it
+    // comes closer: the far root is where that ray leaves the solid.
+    this.dir.copy(offset).divideScalar(distance)
+    const pair = roots(this.pivot, this.dir, clear)
+    return pair === null ? 0 : Math.max(pair[1], 0)
   }
 
   /**
@@ -951,6 +1056,7 @@ export class Viewer {
     }
 
     p.y = Math.max(p.y, this.lowestAt(p.x, p.z))
+    this.keepOut(p)
 
     this.step.copy(this.pivot).sub(p)
     if (this.wasFacing.lengthSq() > 1e-8 && this.step.lengthSq() > 1e-8) {
@@ -959,6 +1065,43 @@ export class Viewer {
         rise(this.step) - rise(this.wasFacing),
       )
     }
+  }
+
+  /**
+   * The room is a wall, not a suggestion.
+   *
+   * The ellipsoid above is a *soft* floor on purpose — flying the keys in
+   * close is allowed to break it, and the orbit floats you back out over
+   * about a second, which reads as the building declining to be stood inside.
+   * The wheel wins that race. It is applied as a fraction of the distance to
+   * the pivot, so a pick on a porch and six ticks is a factor of four each
+   * time: measured, that put the camera 0.85 m above the floor of the
+   * transept, still in orbit, looking up at the canopy from ankle height —
+   * through a wall it never opened, by a route no visitor to a cathedral has.
+   *
+   * A recovery cannot fix that, because the thing to recover from already
+   * happened. So the inside is a hard stop, and it is stated the way the
+   * walker's own hold states it — you were outside a moment ago, and the
+   * building has not moved, so outside is where you still are. Nothing here
+   * traps a camera that began indoors: it has to have been out to be put
+   * back.
+   *
+   * There is still exactly one way in, and it has a door in it.
+   */
+  private keepOut(p: THREE.Vector3): void {
+    const e = this.envelope
+    const indoors = e !== null && e.inside(p.x, p.z) && p.y < e.ceiling
+    if (!indoors) {
+      this.outside.copy(p)
+      this.wasOutside = true
+      return
+    }
+    if (!this.wasOutside) return
+    p.copy(this.outside)
+    // And drop whatever was still pushing, or the wheel spends the next
+    // second shoving a camera that is not going anywhere.
+    this.pending.zoom = 0
+    this.velocity.set(0, 0, 0)
   }
 
   // ---------------------------------------------------------------- walk ---
@@ -1176,6 +1319,7 @@ export class Viewer {
       }
     }
     if (best === null || best > PICK_REACH) return null
+    this.hitGround = ground
     const hit = origin.clone().addScaledVector(direction, best)
     // Half pulled back toward the middle of the building, when it is the
     // building that was hit. Anywhere a turn is centred stays exactly where
@@ -1328,7 +1472,13 @@ export class Viewer {
         if (this.legs.length > 0) return
         if (this.relation === 'regard') {
           const hit = this.pick(event.clientX, event.clientY)
-          if (hit) this.pivot.copy(hit)
+          // Only the building re-centres the turn. A wheel tick over the gap
+          // between two towers finds the park a hundred metres short of them,
+          // and zooming toward *that* is how six ticks end with the camera at
+          // head height in the grass, pitched down, with the cathedral behind
+          // it. The turn may be centred anywhere; the zoom has to be going
+          // somewhere, and the only thing worth going toward here is stone.
+          if (hit && !this.hitGround) this.pivot.copy(hit)
           this.zoom(event.deltaY * 0.0016)
         } else {
           // Inside, the wheel walks you up the nave, which is most of what

@@ -125,7 +125,8 @@ body.dev #hud, body.dev #hint { display: block; }
    The interface.
 
    Four things, drawn over the render, taking no pixel away from it: the way
-   in, the way out, a line saying what the cursor does here, and the hour.
+   in, the way out, a line saying what the cursor does here, and the clock —
+   an hour on a scrubber and a day on a press.
    The colours are the building's own — warm sandstone ink on a near-black
    scrim — so the interface reads as part of the same object rather than as a
    browser sitting in front of one.
@@ -310,6 +311,7 @@ body.dev #hud, body.dev #hint { display: block; }
   position: absolute;
   left: 30px;
   bottom: 28px;
+  transition: bottom 900ms cubic-bezier(0.4, 0, 0.2, 1), opacity 240ms ease;
   appearance: none;
   padding: 9px 18px;
   border-radius: 999px;
@@ -325,6 +327,14 @@ body.dev #hud, body.dev #hint { display: block; }
   transition: opacity 400ms ease, visibility 400ms, border-color 160ms ease;
 }
 .ui.inside .out, .ui.stranded .out { opacity: 1; visibility: visible; }
+/* Out of the quote's way while the quote is on screen.
+   Both live in the bottom left corner: the attribution is two lines tall and
+   the button sits across the second of them, so on every load that opens
+   without a door in shot — which is every link into the interior — the one
+   control in the corner was printed over Gaudí's name. It rides up for the
+   seven seconds the title holds and comes down when it goes, rather than
+   either of them being hidden. */
+body:not(.named) .out { bottom: 104px; }
 .ui.travelling .out { opacity: 0; visibility: hidden; }
 .out:hover { border-color: var(--gold); }
 
@@ -361,6 +371,28 @@ body.dev #hud, body.dev #hint { display: block; }
   border-radius: 999px;
   background: var(--scrim);
   pointer-events: auto;
+}
+/* The day. Four of them, on a press — see DAYS in ui/controls.ts. It sits
+   inside the same pill as the hour because it is the same quantity: where
+   the sun is. */
+.clock .day {
+  appearance: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 230, 210, 0.22);
+  background: none;
+  color: #b8a894;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  min-width: 5.2em;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.clock .day:hover {
+  color: var(--warm);
+  border-color: var(--gold);
 }
 .clock .hour {
   color: var(--warm);
@@ -410,6 +442,9 @@ body.dev #hud, body.dev #hint { display: block; }
   #intro .quote { left: 18px; bottom: 96px; }
   .hint-line { display: none; }
   .out { left: 18px; bottom: 74px; }
+  /* The quote stands higher here, because the clock takes the full width of
+     the bottom — so the button has further to climb to clear it. */
+  body:not(.named) .out { bottom: 154px; }
   .clock { right: 18px; left: 18px; bottom: 20px; justify-content: space-between; }
   .clock input[type="range"] { flex: 1; width: auto; }
 }

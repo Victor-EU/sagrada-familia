@@ -17,7 +17,7 @@ import type { SunUniforms } from './sunrig.ts'
  *
  * The whole effect is one integral along the view ray:
  *
- *     L = σ · p(θ) · ∫ visible(x) · tint(x) · E☉ dx
+ *     L = p(θ) · ∫ σ · e^(−στ) · visible(x) · tint(x) · E☉ dx  +  e^(−σT) · L_behind
  *
  * and every term on the right already exists. `visible` is the sun rig's
  * occlusion depth map — the one the surfaces already test against, in which
@@ -33,10 +33,15 @@ import type { SunUniforms } from './sunrig.ts'
  *  - **Single scattering.** Light bends into the ray once and is then assumed
  *    to reach the camera. Multiple scattering in a room this size is a slow
  *    uniform lift, which the ambient term is already standing in for.
- *  - **No extinction.** At the density that looks right, a hundred metres of
- *    air absorbs a couple of per cent. Taking it out keeps the plaster the
- *    white it was tuned to be, and saves carrying transmittance along the
- *    march.
+ *  - **One coefficient.** What the medium scatters toward the eye is exactly
+ *    what it takes out of everything behind it: no absorption, no separate
+ *    scattering albedo. This started out with no extinction at all, on the
+ *    reasoning that a hundred metres of air at this density absorbs a couple
+ *    of per cent and taking it out saved carrying transmittance along the
+ *    march. The two per cent was the right number for the wrong quantity —
+ *    it is what the *air* removes, and says nothing about what the air adds,
+ *    which was unbounded in the path length and could exceed the sun that lit
+ *    it. See the march.
  *  - **Uniform density, indoors.** Real interiors are dustier near the floor
  *    and near an open door, and that is a texture — a thing to be
  *    photo-matched rather than invented. But the medium does stop at the
@@ -138,6 +143,19 @@ struct ViewRay {
   float distance;
 };
 
+/** How far this pixel's ray runs before it meets something, capped. */
+float spanThrough( const in vec2 uv ) {
+  vec4 far = uProjectionInverse * vec4( uv * 2.0 - 1.0, 1.0, 1.0 );
+  vec3 viewDir = far.xyz / far.w;
+  float raw = texture2D( uDepth, uv ).x;
+  // Nothing in the way. The air still goes on, and cutting it off at the
+  // silhouette would draw a hard edge around every tower.
+  if ( raw >= 1.0 ) return uRange;
+  float ndc = raw * 2.0 - 1.0;
+  float viewZ = ( 2.0 * uNear * uFar ) / ( uFar + uNear - ndc * ( uFar - uNear ) );
+  return min( length( viewDir * ( viewZ / max( -viewDir.z, 1e-6 ) ) ), uRange );
+}
+
 ViewRay rayThrough( const in vec2 uv ) {
   // The far-plane point for this pixel. Taking it through the inverse
   // projection rather than building a frustum by hand is what makes the ray
@@ -147,21 +165,9 @@ ViewRay rayThrough( const in vec2 uv ) {
   vec4 far = uProjectionInverse * vec4( uv * 2.0 - 1.0, 1.0, 1.0 );
   vec3 viewDir = far.xyz / far.w;
 
-  float raw = texture2D( uDepth, uv ).x;
-  float span;
-  if ( raw >= 1.0 ) {
-    // Nothing in the way. The air still goes on, and cutting it off at the
-    // silhouette would draw a hard edge around every tower.
-    span = uRange;
-  } else {
-    float ndc = raw * 2.0 - 1.0;
-    float viewZ = ( 2.0 * uNear * uFar ) / ( uFar + uNear - ndc * ( uFar - uNear ) );
-    span = min( length( viewDir * ( viewZ / max( -viewDir.z, 1e-6 ) ) ), uRange );
-  }
-
   ViewRay ray;
   ray.direction = normalize( ( uCameraWorld * vec4( viewDir, 0.0 ) ).xyz );
-  ray.distance = span;
+  ray.distance = spanThrough( uv );
   return ray;
 }
 `
@@ -252,7 +258,8 @@ float dither( const in vec2 pixel ) {
 void main() {
   ViewRay ray = rayThrough( vUv );
   if ( ray.distance <= 0.0 ) {
-    gl_FragColor = vec4( 0.0, 0.0, 0.0, uRange );
+    // No air, and nothing taken out of what is behind it.
+    gl_FragColor = vec4( 0.0, 0.0, 0.0, 1.0 );
     return;
   }
 
@@ -262,23 +269,89 @@ void main() {
   // column does not integrate the inside of it.
   float t = 0.5 + dither( gl_FragCoord.xy ) * stride;
 
+  /**
+   * Single scattering, and this time with the medium taking part.
+   *
+   * What was here summed the lit air along the ray and multiplied by the path
+   * length — so the air added light in proportion to how far the ray ran and
+   * was never dimmed, occluded or exhausted by anything. Two consequences,
+   * both of them measured on the frame beside the Passion glazing at ten to
+   * eight in the evening, which is the worst case in the harness because it
+   * is the one frame looking straight into a low sun through coloured glass:
+   *
+   *  - the air could be brighter than the light that lit it, without limit.
+   *    Fifteen per cent of that frame came back over eighty-five per cent
+   *    luminance, and a granite shaft four metres from the camera measured
+   *    239 238 235 — white, at two per cent saturation, with the stone's own
+   *    colour and shading gone from it entirely. Ablating the pass put the
+   *    same shaft back at 118 123 130, so the picture in front of it was
+   *    nine tenths air;
+   *  - and it was **added**, never subtracted. Air that scatters light toward
+   *    the eye is air that takes the same light out of everything behind it,
+   *    and a medium that only ever adds is a medium that makes every frame
+   *    brighter the further you can see through it.
+   *
+   * One coefficient does both, because it is one coefficient in the physics:
+   * what the medium removes from the beam is what it puts into every other
+   * direction. So each step takes 1 - exp(-sigma ds) out of what is still
+   * coming through, scatters that fraction toward the eye, and hands the rest
+   * on. The sum of those weights is 1 - exp(-sigma T), which approaches one
+   * and never passes it — the air can now be at most the light it scatters,
+   * however long the nave is. The transmittance left at the end goes to the
+   * compose step, where the scene behind it is dimmed by exactly what the air
+   * took.
+   *
+   * The density and the phase are untouched. This is not a quieter medium; it
+   * is the same medium made to obey a budget.
+   */
   vec3 sum = vec3( 0.0 );
+  float through = 1.0;
   for ( int i = 0; i < ${MAX_STEPS}; i ++ ) {
     if ( float( i ) >= steps || t >= ray.distance ) break;
     vec3 p = uCameraPos + ray.direction * t;
     float air = indoors( p );
     // Outdoors there is nothing to light, and the sun lookup is the
     // expensive part of the step.
-    if ( air > 0.0 ) sum += airborneSunlight( p ) * air;
+    if ( air > 0.0 ) {
+      float taken = 1.0 - exp( - uDensity * air * stride );
+      sum += airborneSunlight( p ) * taken * through;
+      through *= 1.0 - taken;
+    }
     t += stride;
   }
 
-  vec3 scatter = sum * stride * uDensity *
+  /**
+   * A quarter, and it is the piece that was missing.
+   *
+   * phase is normalised so that an even medium returns one rather than the
+   * physical 1/4pi, which is the right dial to hold — but it means the number
+   * coming out of it is 4pi times a probability density, and the sum above is
+   * a *fraction of the beam*. Multiplying the two without putting the 4pi
+   * back scatters 4pi times more light toward the eye than the medium ever
+   * took out of the beam: a medium as bright as thick fog and as transparent
+   * as clear air, which is why no amount of extinction above could bound it.
+   *
+   * And a quarter rather than a twelfth, because uSunRadiance is not the
+   * irradiance. It is what a Lambertian surface here multiplies its albedo
+   * and its cosine by directly — see sunlightAt in sunrig.ts, which has no
+   * 1/pi in it — so the irradiance it stands for is pi times itself, and
+   * 4pi over pi is four. Integrate the result over the sphere and it comes
+   * back to sigma times the irradiance exactly, which is what a medium that
+   * absorbs nothing must do.
+   *
+   * The measured effect is to divide the air by four on a frame looking
+   * square into the sun, and to leave a frame looking across it where the
+   * density was tuned. Four metres of air in front of a granite shaft is now
+   * a haze over the stone rather than a replacement for it.
+   */
+  vec3 scatter = sum * 0.25 *
     phase( dot( ray.direction, uSunDirWorld ), uAnisotropy ) * uSunRadiance;
 
-  // Alpha carries how far this ray ran, which is what the upsample compares
-  // against so it can refuse to smear far air over a near edge.
-  gl_FragColor = vec4( scatter, ray.distance );
+  // Alpha carries what is left of the scene behind this air. How far the ray
+  // ran — which the upsample used to read from here — is recovered from the
+  // depth buffer instead, which is where the march read it in the first
+  // place, so the two still agree exactly.
+  gl_FragColor = vec4( scatter, through );
 }
 `
 
@@ -328,23 +401,34 @@ void main() {
    * what the depth weight protects is the silhouette, and it still does.
    */
   vec3 sum = vec3( 0.0 );
+  float clear = 0.0;
   float weight = 0.0;
   for ( int j = -1; j < 3; j ++ ) {
     for ( int i = -1; i < 3; i ++ ) {
       vec2 offset = vec2( float( i ), float( j ) );
-      vec4 tap = texture2D( uScatter, base + offset * texel );
+      vec2 at = base + offset * texel;
+      vec4 tap = texture2D( uScatter, at );
       // A tent over the wider footprint: the two inner taps carry the
       // bilinear weight they always did and the outer ring tails off.
       vec2 d = abs( offset - f );
       float tent = max( 0.0, 1.0 - d.x * 0.5 ) * max( 0.0, 1.0 - d.y * 0.5 );
-      // A metre of disagreement is nothing; ten is an edge.
-      float agree = 1.0 / ( 1.0 + abs( tap.a - here.distance ) );
+      // A metre of disagreement is nothing; ten is an edge. The tap's own
+      // span comes from the depth buffer the march read it from, now that
+      // alpha is carrying the transmittance instead.
+      float agree = 1.0 / ( 1.0 + abs( spanThrough( at ) - here.distance ) );
       sum += tap.rgb * tent * agree;
+      clear += tap.a * tent * agree;
       weight += tent * agree;
     }
   }
 
-  gl_FragColor = vec4( scene.rgb + uMix * sum / max( weight, 1e-4 ), scene.a );
+  float norm = 1.0 / max( weight, 1e-4 );
+  // What the air took out of the scene, and what it put back in its place.
+  // Mixed rather than applied outright so that turning the medium down turns
+  // the whole of it down — a pass that dimmed the scene by air it was no
+  // longer drawing would darken every frame it had been switched off in.
+  float dim = mix( 1.0, clear * norm, uMix );
+  gl_FragColor = vec4( scene.rgb * dim + uMix * sum * norm, scene.a );
 }
 `
 
