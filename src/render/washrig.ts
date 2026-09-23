@@ -108,6 +108,36 @@ const SOFT_METRES = 1.1
 const WASH_SHADE = 0.4
 
 /**
+ * SUN_ON_GLASS — and the one thing the weights above are built not to say.
+ *
+ * Both pairs are weights on where the sun is *round* the building, held at
+ * a total, so at half past one in December — the sun eleven degrees off
+ * square on the Passion glazing and twenty-four up — the room took in
+ * exactly what it takes at noon in June, when the same wall has it at a
+ * fifth of the cosine. The photographs are not held at a total. The
+ * author's own camera metered the central vault at EV 6.3 at twenty past
+ * one and the Passion wall at 7.7 six minutes later, and the aisle vault
+ * the wall throws onto at 9.6 at five to three: the light through that
+ * glass is two and three stops over the room it is in. That is what makes
+ * those frames what they are, a room gone dark round a wall on fire; the
+ * canopy frames of July have nothing like it, and are pale.
+ *
+ * So `uWashSun` is the sun on each wall and nothing else: the cosine of it
+ * on the glazing's face, as a share of the noon sun, so twilight takes it
+ * off with the light — 0.7 on the Passion glass on the December
+ * afternoon, 0.4 on a July one, a tenth on the Nativity side at a June
+ * noon. It lights the glass itself (uSunGlow in geometry/glass.ts) and
+ * warms what stands in the room (uRoomSunWarmth in render/materials.ts),
+ * and the eye closes down on the result — see render/meter.ts.
+ *
+ * Not the maps. Tried as a share of the wash and the throw handed back at
+ * the glass's own colour, it lit the faces turned to the glass, which from
+ * anywhere a photograph stands are the faces turned away from the camera:
+ * at three times the wash it moved no December frame in the third decimal,
+ * and turned a June morning's canopy green.
+ */
+
+/**
  * How far above horizontal the clerestory throws, in radians.
  *
  * Measured off the model, by casting rays up through it and writing down
@@ -254,6 +284,8 @@ export interface WashUniforms extends Record<string, THREE.IUniform> {
    * bright a window is but which half of the building the light is in.
    */
   uWashTilt: { value: number }
+  /** The sun standing on each wall, not normalised away — see SUN_ON_GLASS. */
+  uWashSun: { value: THREE.Vector2 }
   /** The clerestory, throwing up and inward — the same four maps, tilted. */
   uThrowMatrixA: { value: THREE.Matrix4 }
   uThrowMatrixB: { value: THREE.Matrix4 }
@@ -383,6 +415,7 @@ export class WashRig {
       uWashBlur: { value: 4 },
       uWashSide: { value: new THREE.Vector2(1, 1) },
       uWashTilt: { value: 0 },
+      uWashSun: { value: new THREE.Vector2() },
 
       uThrowMatrixA: { value: new THREE.Matrix4() },
       uThrowMatrixB: { value: new THREE.Matrix4() },
@@ -514,15 +547,22 @@ export class WashRig {
    * and why the flat pair is renormalised afterwards and the tilted pair is
    * not.
    */
-  setSun(direction: THREE.Vector3): void {
-    /** How much sun is standing outside the wall this pass enters through. */
-    const litness = (heading: THREE.Vector3): number => {
+  setSun(direction: THREE.Vector3, strength = 1): void {
+    /** The cosine of the sun on the wall this pass enters through. */
+    const toward = (heading: THREE.Vector3): number =>
       // That wall faces back against the heading, so it has the sun on it
-      // when the sun lies the way the light travels. Height does not come
-      // into it: a wall at noon in June is lit, steeply.
-      const toward = -(direction.x * heading.x + direction.z * heading.z)
-      return THREE.MathUtils.smoothstep(toward, -0.15, 0.55)
-    }
+      // when the sun lies the way the light travels.
+      -(direction.x * heading.x + direction.z * heading.z)
+    /** How much sun is standing outside the wall this pass enters through. */
+    const litness = (heading: THREE.Vector3): number =>
+      // Height does not come into it: a wall at noon in June is lit, steeply.
+      THREE.MathUtils.smoothstep(toward(heading), -0.15, 0.55)
+
+    // And here height does come into it — see SUN_ON_GLASS.
+    this.uniforms.uWashSun.value.set(
+      Math.max(0, toward(HEADING[0])) * strength,
+      Math.max(0, toward(HEADING[1])) * strength,
+    )
 
     const throwSide = this.uniforms.uThrowSide.value
     for (let i = 2; i < HEADING.length; i++) {
@@ -767,6 +807,7 @@ uniform float uWashGain;
 uniform float uWashBlur;
 uniform vec2 uWashSide;
 uniform float uWashTilt;
+uniform vec2 uWashSun;
 uniform mat4 uThrowMatrixA;
 uniform mat4 uThrowMatrixB;
 uniform sampler2D uThrowDepthA;

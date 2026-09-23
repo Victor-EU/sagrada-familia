@@ -29,7 +29,7 @@ import { FilmPass, type FilmLook } from './film.ts'
 import { MeterPass } from './meter.ts'
 import { ShaftPass, type ShaftSettings } from './shafts.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
-import { Sky } from '../light/sky.ts'
+import { SUN_NOON, Sky } from '../light/sky.ts'
 import { EYE_HEIGHT } from '../camera/envelope.ts'
 import { CANOPY_HEART, CANOPY_RADIUS, buildCity, defaultCity, type City } from '../plan/city.ts'
 import { PAVING_PATCH, pavingUniforms, type PavingUniforms } from '../plan/floor.ts'
@@ -408,7 +408,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     glass.uniforms.uSunDirection.value.copy(sunDirection)
     // The one part of the glazing's rig that the hour moves — see
     // WASH_SHADE. No map is rebuilt; only the weight on each of the four.
-    wash.setSun(sunDirection)
+    // As a share of the noon sun, so twilight takes the direct light off the
+    // glass with it — see SUN_ON_GLASS in render/washrig.ts.
+    const strength = state.sunIntensity / SUN_NOON
+    wash.setSun(sunDirection, strength)
+    glass.uniforms.uSunStrength.value = strength
     dirty = true
   }
 

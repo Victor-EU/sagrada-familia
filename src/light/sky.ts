@@ -74,6 +74,9 @@ void main() {
 }
 `
 
+/** The sun's intensity high in a clear sky, before the last degrees of air take it down. */
+export const SUN_NOON = 4.2
+
 /** Linear-space palettes, blended by sun altitude. */
 const PALETTE = {
   // Barcelona in clear weather is a much deeper blue overhead than the first
@@ -224,7 +227,7 @@ export class Sky {
     const horizon = u.uHorizon.value
     return {
       sunColor: new THREE.Color(sun.x, sun.y, sun.z),
-      sunIntensity: 4.2 * reach * thickness,
+      sunIntensity: SUN_NOON * reach * thickness,
       hazeColor: new THREE.Color(horizon.x, horizon.y, horizon.z),
     }
   }

@@ -64,8 +64,12 @@ export const defaultGlassPanel: GlassPanelParams = {
 const SWEEP: Record<GlassSide, { low: number; high: number }> = {
   // Green through teal to deep blue.
   nativity: { low: 0.36, high: 0.62 },
-  // Crimson through orange to gold. Runs forward through the wrap at 0.
-  passion: { low: -0.03, high: 0.14 },
+  // Crimson through orange to gold. Runs forward through the wrap at 0 —
+  // or did: twelve degrees up from where it started, which put the lit
+  // Passion glass salmon and crimson in every frame where the photographs
+  // have it gold and orange. Over four pairs the bright saturated pixels
+  // came out at 11 – 26° against the photographs' 27 – 32°.
+  passion: { low: 0.005, high: 0.175 },
 }
 
 /**
@@ -246,6 +250,8 @@ uniform float uFront;
 uniform float uBlaze;
 uniform float uFocus;
 uniform float uShadeGlow;
+uniform float uSunGlow;
+uniform float uSunStrength;
 uniform vec3 uCentre;
 varying vec3 vPaneColor;
 varying vec3 vPaneNormal;
@@ -303,7 +309,8 @@ void main() {
   // ten in the morning the reverse. Every photograph of this nave has both
   // walls lit at once, the sunward one brighter; the shaded one is sky
   // through glass, which is most of the light in the building.
-  float lit = uGlow * mix( uShadeGlow, 1.0, backlit ) + uBlaze * solar * backlit;
+  float lit = uGlow * mix( uShadeGlow, 1.0, backlit ) + uBlaze * solar * backlit
+    + uSunGlow * uSunStrength * abs( towardSun ) * backlit;
   float gain = mix( front, lit, roomSide );
 
   gl_FragColor = vec4( vPaneColor * gain, 1.0 );
@@ -323,6 +330,10 @@ export interface GlassMaterial extends THREE.ShaderMaterial {
     uShadeGlow: { value: number }
     /** The middle of the building, which is the side of a pane the room is on. */
     uCentre: { value: THREE.Vector3 }
+    /** What the sun on a pane's outer face adds to it, at a noon sun square on — see SUN_ON_GLASS. */
+    uSunGlow: { value: number }
+    /** The sun's strength as a share of noon's. */
+    uSunStrength: { value: number }
   }
 }
 
@@ -341,6 +352,17 @@ export function glassMaterial(glow = 1.7): GlassMaterial {
       // A little under half. On in-glazing-nativity-side the shaded wall's
       // lancets sit at about 0.45 of the sunlit wall's in the same frame.
       uShadeGlow: { value: 0.45 },
+      // The sun standing on the pane's outer face, scattered through it. A
+      // window with the disc straight behind it blazes at the disc — that
+      // is uBlaze — but leaded antique glass is not clear, and the whole
+      // light glows with the sun on it: the Passion lancets on a December
+      // afternoon are the brightest things in any frame they are in, by
+      // stops, where at noon in June the same glass is sky. Four times the
+      // lit glow at a noon sun square on, which is what it takes for the
+      // eye to close down on that wall the way the photographs of it do —
+      // see render/meter.ts and SUN_ON_GLASS in render/washrig.ts.
+      uSunGlow: { value: 24 },
+      uSunStrength: { value: 1 },
     },
     vertexShader: GLASS_VERTEX,
     fragmentShader: GLASS_FRAGMENT,

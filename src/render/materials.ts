@@ -676,8 +676,27 @@ const INDOOR_LIGHT = /* glsl */ `
   // at four in the afternoon and green at ten in the morning, and the
   // canopy above it takes that colour on. A share rather than the whole,
   // because the floor is stone before it is a mirror.
+  //
   vec3 hearth = mix( ambient, luminance * bounce, uRoomWarmth )
     * mix( vec3( 1.0 ), glassRaw, uLoftTint );
+
+  // And how much sun is standing in the room. At half past one in December
+  // the floor and the lower walls are patched in orange from one aisle to
+  // the other, and a face standing among them — a shaft, a wall between two
+  // lights — is lit in the room's own colour from every side it has; at
+  // noon in June the same glass has the sun at a fifth of the incidence and
+  // the room is lit by sky. See SUN_ON_GLASS in render/washrig.ts.
+  //
+  // Standing faces only: the photograph of the central vault taken six
+  // minutes before the Passion wall's is cream, because what a soffit
+  // forty-five metres up sees is the lucernaris and the upper lights, and
+  // the gold that does reach a vault is the clerestory's — sfThrow's, which
+  // has its own share of sun. And toward the room's colour for the side
+  // that is lit, not the glass's: carried toward the Nativity glazing's own
+  // green, a June morning came back teal from the terraces down, where the
+  // photographs of that side are warm stone with green in the windows.
+  float sunIn = max( uWashSun.x, uWashSun.y );
+  float standWarmth = clamp( uRoomWarmth + uRoomSunWarmth * sunIn, 0.0, 1.0 );
 
   // And how much of the floor a face sees decides how coloured that light
   // is, not only how much of it there is.
@@ -768,8 +787,9 @@ const INDOOR_LIGHT = /* glsl */ `
   //
   // Every surface moves toward the photograph as the pooling comes off.
   vec3 roomTone = mix( ambient, luminance * bounce, uRoomWarmth );
-  vec3 room = roomTone * ( uRoomFloor * fromFloor + uRoomSky * fromAbove
-    + ( uRoomFloor + uRoomSky ) * standingShare );
+  vec3 standTone = mix( ambient, luminance * bounce, standWarmth );
+  vec3 room = roomTone * ( uRoomFloor * fromFloor + uRoomSky * fromAbove )
+    + standTone * ( uRoomFloor + uRoomSky ) * standingShare;
   vec3 window = luminance * glass * fromGlass;
 
   // And only where the surface actually stands in the room — see SHELTER.
@@ -899,6 +919,7 @@ uniform float uLoftTint;
 uniform float uLoftPool;
 uniform float uRoomHour;
 uniform float uRoomTilt;
+uniform float uRoomSunWarmth;
 uniform vec3 uGlassNativity;
 uniform vec3 uGlassPassion;
 `
@@ -933,6 +954,8 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uLoftPool: { value: number }
   uRoomHour: { value: number }
   uRoomTilt: { value: number }
+  /** How much warmer a standing face's light is per unit of sun on the glass — see SUN_ON_GLASS. */
+  uRoomSunWarmth: { value: number }
   uGlassNativity: { value: THREE.Color }
   uGlassPassion: { value: THREE.Color }
 }
@@ -1082,8 +1105,22 @@ export function roomUniforms(): RoomUniforms {
      * Four fifths rather than the whole way: the last fifth is what keeps
      * the canopy from being one flat hue, and a flat saturated ceiling is
      * a worse picture than a flat pale one.
+     *
+     * And down to a third, because "every frame of the nave" was every frame
+     * of the nave at the one hour it was fitted at. The author's own frame of
+     * the central vault straight up, at twenty past one in December, is
+     * cream — 0.38 saturated, EV 6.3 — six minutes before the Passion wall
+     * beside it was photographed on fire; the Commons frames of the vault in
+     * July are cream too, 0.27 and 0.38. At four fifths the same vault came
+     * out tan at 0.59 in both. The gold is real and it is local: it is the
+     * sun through the Passion glass, which now arrives as the sun and only
+     * where the sun is — see SUN_ON_GLASS in render/washrig.ts and
+     * uRoomSunWarmth below. What is left here is the colour of sandstone
+     * lit by sandstone, and the fill is no longer a stop too bright for it
+     * to survive: the eye is metered now, and a pale canopy is metered as
+     * a pale canopy.
      */
-    uRoomWarmth: { value: 0.8 },
+    uRoomWarmth: { value: 0.35 },
     /**
      * How much more fill there is indoors than out.
      *
@@ -1401,6 +1438,15 @@ export function roomUniforms(): RoomUniforms {
      * is a recalibration of the room's whole colour and not of its hour.
      */
     uRoomTilt: { value: 0.8 },
+    /**
+     * The sun in the room, on the faces standing in it — see the fill's
+     * own note on it. With the room's base gold where it now is, this puts
+     * back what December has and June does not: at the December frames'
+     * sun on the Passion glass, 0.7, a standing face is nine tenths of the
+     * way to the room's gold, and at June's noon, with the sun a tenth of
+     * the way onto the Nativity glazing, it hardly moves.
+     */
+    uRoomSunWarmth: { value: 0.8 },
     uGlassNativity: { value: unitLuminance(new THREE.Color(GLASS_EAST).convertSRGBToLinear()) },
     uGlassPassion: { value: unitLuminance(new THREE.Color(GLASS_WEST).convertSRGBToLinear()) },
   }
