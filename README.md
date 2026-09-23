@@ -252,7 +252,7 @@ to within one per cent.
 | The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
 | Two ways of being with a building: an orbit outside, a walk inside, and a door between them | `src/camera/viewer.ts` |
 | The interface — the way in, the way out, what the cursor does here, and the hour | `src/ui/controls.ts` |
-| The film — nine shots round the building and in, a minute and a half, dissolved and looped, the sun moving in each | `src/ui/film.ts` |
+| The film — nine shots round the building and in, forty-five seconds, dissolved and looped, the sun moving in each | `src/ui/film.ts` |
 | Figures, canopies, carved growth and cresting — the Nativity front's sculpture | `src/geometry/statuary.ts` |
 | The cover — Gaudí's hanging chains, dropped, settled and turned over while the stone is cut | `src/ui/cover.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
@@ -340,8 +340,8 @@ corner (or K, or `?film` in the address), asks nothing: the camera goes
 round the building and in on its own — across the pond as the morning
 arrives, round from the air, under the Passion front, in through the door
 with the vault opening overhead, down the nave at four o'clock, the shafts
-sweeping the crossing as the evening goes — nine shots and a minute and a
-half, dissolved, looped, with the sun moving inside every one of them.
+sweeping the crossing as the evening goes — nine shots and forty-five
+seconds, dissolved, looped, with the sun moving inside every one of them.
 The shots are the harness's own verified frames, run on a little; nothing
 in them is authored light.
 

@@ -13,7 +13,7 @@ import { YEAR, dayLabel } from '../light/sun.ts'
  * through the door with the vault opening overhead, the shafts sweeping
  * across the crossing as the evening goes — and the sun moves inside every
  * shot, because the one thing nothing else in this building can show is the
- * light *changing*. A minute and a half, and then it goes round again.
+ * light *changing*. Forty-five seconds, and then it goes round again.
  *
  * It is not the guided visit that was here before. That had stops and a rail
  * and asked to be followed; this has cuts and asks to be watched, and the
@@ -66,24 +66,30 @@ export interface Shot {
 }
 
 /** How long one frame gives way to the next. */
-const DISSOLVE_MS = 1500
+const DISSOLVE_MS = 750
 /** And how long the first one takes to arrive out of black. */
-const OPEN_MS = 2600
+const OPEN_MS = 1300
 /**
  * How far the hour moves before the sun is recomputed.
  *
  * A change of sun rebuilds the sky probe and re-runs both shadow maps, which
  * is not something to do sixty times a second. Two minutes of sun is a third
  * of a degree, which no shadow edge in the building shows, and at the pace
- * these shots run the clock it is a relight between one and seven times a
- * second — which the frame does not feel: on the morning shot, at seven,
- * switching the relights off altogether leaves the frame times where they
- * were.
+ * these shots run the clock it is a relight between two and a dozen times a
+ * second. The dozen is the morning over the pond, and there it is felt: the
+ * mean frame goes from 18 to 21 milliseconds. It is left there rather than
+ * coarsened, because at a sun ten degrees up a tower's shadow is four
+ * hundred metres long and a bigger step would move its tip in strides the
+ * eye can count.
  */
 const SUN_STEP = 0.03
-/** When the caption comes and goes, in seconds from either end of a shot. */
-const CAPTION_IN = 1.2
-const CAPTION_OUT = 1.8
+/**
+ * When the caption comes and goes, in seconds from either end of a shot.
+ * Halved with the shots and the dissolve, so a four-second shot still has
+ * its name up for two and a half of them.
+ */
+const CAPTION_IN = 0.6
+const CAPTION_OUT = 0.9
 /** How long the one instruction stays up. */
 const HINT_MS = 7000
 
@@ -200,17 +206,21 @@ function nativityDoor(viewer: Viewer): Doorway {
  * from the air, under the Passion front, in through the door, and then the
  * room at the hours the room was built for — and out by the Glory front.
  *
- * Ninety seconds, all told. It was fourteen shots and four minutes and forty
- * seconds, which is a film nobody stays for: every one of the fourteen held
- * long enough to be admired and half of them moved at less than a walk, so
- * the building went by at the pace of somebody standing in it. It keeps the
- * nine that are each something none of the others is — the pond had the
+ * Forty-five seconds, all told. It was fourteen shots and four minutes and
+ * forty seconds, which is a film nobody stays for: every one of the fourteen
+ * held long enough to be admired and half of them moved at less than a walk,
+ * so the building went by at the pace of somebody standing in it. It keeps
+ * the nine that are each something none of the others is — the pond had the
  * Nativity front already, the orbit had the flank, the vault from below had
- * the apse, the glazing had the wash — and runs each on its same path and
- * through its same hours in a third of the time. A move is now a move: a
- * dolly at two metres a second, a crane, an orbit that turns the building
- * a full side in a quarter of a minute, and the light going across each one
- * fast enough to be seen going.
+ * the apse, the glazing had the wash — and ran each on its same path and
+ * through its same hours in a third of the time, which was ninety seconds.
+ *
+ * And then in half of that again, every shot kept, each on the same path
+ * through the same hours at twice the speed — a dolly at four metres a
+ * second, the door walked at a run, an orbit that turns the building a full
+ * side in seven seconds, and the light crossing each one fast enough to be
+ * watched moving. The dissolve and the captions are halved with it, or a
+ * shot of four seconds would be a third dissolve.
  */
 export function shots(viewer: Viewer): Shot[] {
   const door = nativityDoor(viewer)
@@ -222,7 +232,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'Across the pond',
       day: 172,
       hours: [7.4, 9.6],
-      seconds: 10,
+      seconds: 5,
       fov: 56,
       shift: 0.45,
       // Along the strip the plaza keeps clear for the façade's own sightline
@@ -239,7 +249,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'Round the building',
       day: 264,
       hours: [16.4, 17.6],
-      seconds: 14,
+      seconds: 7,
       fov: 42,
       shift: 0.3,
       centre: [0, -19],
@@ -253,7 +263,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'Under the Passion front',
       day: 352,
       hours: [15.0, 15.5],
-      seconds: 8,
+      seconds: 4,
       fov: 64,
       shift: 0,
       from: [-78, 1.6, -36],
@@ -267,7 +277,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'The door',
       day: 172,
       hours: [9.5, 9.9],
-      seconds: 12,
+      seconds: 6,
       fov: [66, 74],
       shift: 0.45,
       walk: true,
@@ -282,7 +292,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'Down the nave',
       day: 262,
       hours: [15.9, 16.4],
-      seconds: 10,
+      seconds: 5,
       fov: 64,
       shift: 0.9,
       walk: true,
@@ -297,7 +307,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'The Passion glazing, four o’clock',
       day: 262,
       hours: [15.7, 16.3],
-      seconds: 8,
+      seconds: 4,
       fov: 62,
       shift: 1,
       walk: true,
@@ -309,7 +319,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'The vault, from below',
       day: 172,
       hours: [9.8, 10.3],
-      seconds: 9,
+      seconds: 4.5,
       fov: 74,
       shift: 0,
       walk: true,
@@ -321,7 +331,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'Evening at the crossing',
       day: 172,
       hours: [19.1, 20.3],
-      seconds: 10,
+      seconds: 5,
       fov: 74,
       shift: 0.5,
       walk: true,
@@ -333,7 +343,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'The Glory front',
       day: 110,
       hours: [12.8, 13.5],
-      seconds: 9,
+      seconds: 4.5,
       fov: 70,
       shift: 0.3,
       from: [30, 0.3, 124],

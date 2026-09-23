@@ -607,7 +607,7 @@ body:not(.named) .out { bottom: 104px; }
   max-width: 34ch;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 1100ms ease, transform 1100ms ease;
+  transition: opacity 550ms ease, transform 550ms ease;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
 }
 .film-caption.on { opacity: 1; transform: none; }
