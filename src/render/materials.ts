@@ -2179,15 +2179,63 @@ export function cityPatch(fill: CityUniforms): SurfacePatch {
  */
 const FOLIAGE_PARS = /* glsl */ `
 varying vec3 vLeafLocal;
+varying vec3 vCrownOut;
 uniform vec2 uCanopy;
 `
 
 const FOLIAGE_VERTEX_PARS = /* glsl */ `
 varying vec3 vLeafLocal;
+varying vec3 vCrownOut;
+uniform vec2 uCanopy;
 `
 
 const FOLIAGE_VERTEX = /* glsl */ `
   vLeafLocal = position;
+  // Out from the middle of the crown, in the world, in crown radii — see
+  // FOLIAGE_SURFACE. The instance's own scale is taken back out, because a
+  // tall tree is a bigger crown and not a longer normal.
+  mat3 crownFrame = mat3( modelMatrix );
+  #ifdef USE_INSTANCING
+    crownFrame = crownFrame * mat3( instanceMatrix );
+  #endif
+  vec3 crownOut = ( position - vec3( 0.0, uCanopy.x, 0.0 ) ) / max( uCanopy.y, 0.01 );
+  vCrownOut = crownFrame * crownOut / max( length( crownFrame[ 0 ] ), 1e-4 );
+`
+
+/**
+ * A crown is round, whatever it is cut from.
+ *
+ * Three quads crossed about the trunk, each shaded by its own flat normal,
+ * light up as three cards: one turned to the sun and pale, one turned away
+ * and nearly black, and a hard vertical seam down the middle of every tree
+ * where two of them cross. From the opening frame the nearest tree was a
+ * black half and a lime half, and every tree down the avenue was a small
+ * half-moon of the same. The leaf mask was doing its job at the edge and the
+ * lighting was undoing it across the middle.
+ *
+ * So a leaf is lit as if it sat on the side of the crown that faces you —
+ * the impostor sphere, the old answer for foliage drawn on cards. Not simply
+ * the direction out from the middle: every card passes through the middle,
+ * so that direction lies in the card's own plane and turns right round the
+ * centre, which drew a pinwheel with a point on it in the middle of the
+ * nearest tree. Across the screen it is the way out from the centre, and
+ * whatever of the unit sphere is left over points back at the eye — so the
+ * middle of a crown faces you and its rim faces sideways, as a ball does.
+ *
+ * None of the card's own normal is kept. A fifth of it was tried, for some
+ * grain across the lit side, and it put the seam straight back down the
+ * middle of every tree: the grain was already there in the ragged edge and
+ * the holes, which is where the leaf mask puts it.
+ */
+const FOLIAGE_SURFACE = /* glsl */ `
+{
+  vec3 sfOut = ( viewMatrix * vec4( vCrownOut, 0.0 ) ).xyz;
+  vec3 sfEye = normalize( vViewPosition );
+  vec3 sfAcross = sfOut - sfEye * dot( sfOut, sfEye );
+  float sfReach = min( dot( sfAcross, sfAcross ), 1.0 );
+  vec3 sfRound = normalize( sfAcross + sfEye * sqrt( 1.0 - sfReach ) );
+  normal = sfRound;
+}
 `
 
 const FOLIAGE_COLOUR = /* glsl */ `
@@ -2228,8 +2276,9 @@ export function foliagePatch(fill: CityUniforms, heart: number, radius: number):
     pars: `${GRAIN_PARS}\n${CITY_PARS}\n${FOLIAGE_PARS}`,
     vertex: { pars: FOLIAGE_VERTEX_PARS, body: FOLIAGE_VERTEX },
     colour: FOLIAGE_COLOUR,
+    surface: FOLIAGE_SURFACE,
     light: CITY_LIGHT,
-    key: 'foliage-1',
+    key: 'foliage-2',
   }
 }
 

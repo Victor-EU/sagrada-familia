@@ -40,6 +40,11 @@ export interface LegParams {
   lean: number
   /** Sideways splay of the head, metres. Positive is outboard. */
   splay: number
+  /**
+   * How much wider the section is across the front than it is deep. The
+   * legs photograph as broad prisms face-on and as blades from the side.
+   */
+  flat?: number
 }
 
 /**
@@ -51,7 +56,7 @@ export interface LegParams {
  * read as bone, which is the one thing everybody says about this front.
  */
 export function buildLeg(p: LegParams, sides = 7): THREE.BufferGeometry {
-  const rows = 14
+  const rows = 20
   const positions: number[] = []
 
   const at = (t: number): { centre: THREE.Vector3; radius: number } => {
@@ -61,23 +66,31 @@ export function buildLeg(p: LegParams, sides = 7): THREE.BufferGeometry {
       t * p.height,
       p.reach * (1 - t * p.lean),
     )
-    // Girth: foot to neck over the first half, neck to knuckle over the
-    // second, eased so the neck is a waist and not a corner.
+    // Girth, as a bone has it: a flare at the foot that is over in the first
+    // fifth, a long slender shaft, and a head that opens fast in the last
+    // quarter into what it carries. It used to be foot to neck over the first
+    // half and neck to knuckle over the second, which with the three girths
+    // within half a metre of each other was a straight prism — and from the
+    // steps under the Passion front six straight prisms are six planks. The
+    // photographs of that porch are all neck and knuckle.
     const radius =
-      t < 0.55
-        ? THREE.MathUtils.lerp(p.foot, p.neck, smooth(t / 0.55))
-        : THREE.MathUtils.lerp(p.neck, p.knuckle, smooth((t - 0.55) / 0.45))
+      t < 0.2
+        ? THREE.MathUtils.lerp(p.foot, p.neck, smooth(t / 0.2))
+        : t < 0.7
+          ? p.neck
+          : THREE.MathUtils.lerp(p.neck, p.knuckle, Math.pow((t - 0.7) / 0.3, 2))
     return { centre, radius }
   }
 
+  const flat = p.flat ?? 1
   const ringAt = (t: number): THREE.Vector3[] => {
     const { centre, radius } = at(t)
     return Array.from({ length: sides }, (_, i) => {
       const a = (i / sides) * Math.PI * 2 + Math.PI / sides
       return new THREE.Vector3(
-        centre.x + Math.cos(a) * radius,
+        centre.x + Math.cos(a) * radius * flat,
         centre.y,
-        centre.z + Math.sin(a) * radius,
+        centre.z + (Math.sin(a) * radius) / flat,
       )
     })
   }
@@ -158,22 +171,28 @@ export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
   for (let i = 0; i < legs; i++) {
     const u = legs === 1 ? 0 : (i / (legs - 1)) * 2 - 1
     // Head just inside the leading edge; foot wider and further out, so the
-    // leg leans inward as it climbs.
-    const headX = u * half * 0.93
-    const headZ = p.reach * 0.9
-    const footX = u * half * 1.16
-    const footZ = p.reach * 1.02
+    // leg leans inward as it climbs. The outer pair lean in by about twenty
+    // degrees, which is what `ex-passion-front` shows from the pavement — at
+    // eleven, where this stood, the six read as a colonnade and not as a
+    // tent's poles.
+    const headX = u * half * 0.86
+    const headZ = p.reach * 0.88
+    const footX = u * half * 1.28
+    const footZ = p.reach * 1.04
     const height = eavesAt(u) - p.slab * 0.4
     const leg = buildLeg({
       height,
       reach: footZ,
-      // Heavy at the foot and flared at the knuckle. A leg a metre across
-      // carrying a roof twelve metres out is a prop; these are piers.
-      foot: 1.95,
-      neck: 1.12,
-      knuckle: 1.5,
+      // Heavy at the foot and flared at the knuckle, slender between: a
+      // pier at each end and a bone in the middle. The head opens to twice
+      // the neck and more, so it meets the soffit as a spread and not as a
+      // post under a shelf.
+      foot: 2.1,
+      neck: 0.95,
+      knuckle: 2.3,
       lean: 1 - headZ / footZ,
       splay: headX - footX,
+      flat: 1.3,
     })
     leg.translate(footX, 0, 0)
     pieces.push(leg)
