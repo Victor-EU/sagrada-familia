@@ -704,6 +704,9 @@ function frame(): void {
   // The film writes the pose first, when it has it; the viewer then does
   // only what it still owns, which is the pupil.
   film.update(dt)
+  // What the last metered frame asked for, in the viewer's own units.
+  const metered = stage.meter.exposure
+  viewer.metered = metered === null ? null : metered / render.exposure
   viewer.update(dt)
   // The pupil, which the viewer moves as it crosses the threshold, and which
   // the panel's own exposure is the base of.

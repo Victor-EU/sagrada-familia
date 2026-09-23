@@ -167,6 +167,22 @@ const INSIDE_STOP = 0.867
 const OUTSIDE_STOP = 0.72
 /** Seconds for the pupil to catch up. */
 const ADAPT = 0.9
+/**
+ * Indoors, the stop is metered — see render/meter.ts — and this is how much
+ * of the meter's opinion the eye takes, and how far either way it will go
+ * for it.
+ *
+ * Not all of it. A camera gives the meter everything and so returns every
+ * frame at one brightness, which is right for a photograph and wrong for a
+ * visit: the evening crossing is darker than the noon nave and ought to
+ * look it. Most of it, though, because the thing a fixed stop could never
+ * do is the thing every photograph does — close down on a wall of lit glass
+ * until the room around it goes dark, and open up on a canopy with no sun
+ * in it until the stone reads as the pale stone it is.
+ */
+const METER_SHARE = 0.8
+const METER_OPEN = 2 ** 1.5
+const METER_CLOSE = 2 ** -2
 
 /** How close the orbit lets you come to the stone. */
 const MASSIF_CLEAR = 4
@@ -377,6 +393,11 @@ export class Viewer {
 
   /** Multiplier on the base exposure — see INSIDE_STOP. */
   eyeStop = OUTSIDE_STOP
+  /**
+   * What a camera held here would take as its stop, as the same multiplier,
+   * or null before the meter has read a frame. Set by the frame loop.
+   */
+  metered: number | null = null
 
   private relation: Relation = 'regard'
   /** The vertical field before the viewport's shape has its say. */
@@ -965,9 +986,16 @@ export class Viewer {
     else if (this.relation === 'regard') this.regard(dt)
     else this.inhabit(dt)
 
-    const want = this.indoors ? INSIDE_STOP : OUTSIDE_STOP
+    const want = this.indoors ? this.indoorStop() : OUTSIDE_STOP
     this.eyeStop += (want - this.eyeStop) * (1 - Math.exp(-dt / ADAPT))
     this.rig.refresh()
+  }
+
+  /** INSIDE_STOP, moved toward what the meter reads — see METER_SHARE. */
+  private indoorStop(): number {
+    if (this.metered === null || !Number.isFinite(this.metered)) return INSIDE_STOP
+    const asked = (this.metered / INSIDE_STOP) ** METER_SHARE
+    return INSIDE_STOP * THREE.MathUtils.clamp(asked, METER_CLOSE, METER_OPEN)
   }
 
   private fly(dt: number): void {

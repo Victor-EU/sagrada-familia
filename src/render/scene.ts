@@ -26,6 +26,7 @@ import { WashRig } from './washrig.ts'
 import { LAYER_CITY, LAYER_GLASS, LAYER_SKYLINE, SunRig, patchForSunlight } from './sunrig.ts'
 import { RoofMap } from './roof.ts'
 import { FilmPass, type FilmLook } from './film.ts'
+import { MeterPass } from './meter.ts'
 import { ShaftPass, type ShaftSettings } from './shafts.ts'
 import { SUN_DETAIL_LEVEL, type PassParticipant } from './field.ts'
 import { Sky } from '../light/sky.ts'
@@ -64,6 +65,8 @@ export interface Stage {
   figure: THREE.Mesh
   /** Stand-in for interreflection: warm from below, cool from above. */
   bounce: THREE.HemisphereLight
+  /** What a camera held here would be exposed at — see render/meter.ts. */
+  meter: MeterPass
   /** Unit vector toward the sun, in model space. */
   sunDirection: THREE.Vector3
   /**
@@ -469,6 +472,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   composer.addPass(occlusion)
   composer.addPass(new LayerGate(camera, LAYER_GLASS, true))
 
+  // Metered here: the scene, its air and its occlusion, and nothing the
+  // exposure itself goes on to decide — the bloom's threshold is in the
+  // film's units, so metering after it would be metering the meter.
+  const meter = new MeterPass()
+  composer.addPass(meter)
+
   // Bloom.
   //
   // Not a garnish, and not a filter over the top: it is the one thing every
@@ -516,6 +525,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     city,
     figure,
     bounce,
+    meter,
     sunDirection,
     passes,
     setSun,
@@ -646,6 +656,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       sun.dispose()
       shafts.dispose()
       bloom.dispose()
+      meter.dispose()
       film.dispose()
       roof.dispose()
       sceneTarget.dispose()
