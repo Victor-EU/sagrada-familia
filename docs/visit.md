@@ -312,3 +312,128 @@ clusters do read as boulders there. But the aim is already lifted and already
 along the axis — the reasons item 5 gave for it are not the reasons — so what
 is left is a choreography preference, and that is the author's call rather
 than a defect to fix from outside.
+
+---
+
+# A second visit, and what came of it
+
+*23 September 2026, at 9408153, then built on 2c6436e. The same brief as the
+first: go in cold, walk round it, go in, say where it held and where it let
+go — driven in the desktop browser pane at 1024 × 768, 1440 × 900 and a
+375 × 812 phone, and, once the pane had gone hidden, in headless Chrome over
+CDP. Every claim below was checked against the code, a photograph or a
+number before it was counted; two that were not the app are at the end.*
+
+## What held
+
+The cover and a three-second load; the opening frame, recognisable on a
+laptop and on a phone; the door marker, Enter, Escape home, a click to skip
+a flight; evening at the crossing, which is still the best thing in the
+model; and the transept vault from straight underneath.
+
+## What let go, and what was done
+
+**The room was one colour at every hour.** Measured frame-wide on the stone,
+the nave at nine and one and half past seven in June and at noon and four in
+December never left 0.34 – 0.57 saturated at 18 – 23 degrees of hue: a
+terracotta room. The nave photographs that are not December afternoons run
+0.17 – 0.20 at 25 – 34, and the December ones 0.68 – 0.99 at 26. Ablated one
+term at a time, nearly all of it was `uRoomWarmth` — the room's gold,
+applied whatever the sun was doing, while the sun and the wash rig between
+them moved the frame by less than a hundredth. The gold now follows which
+half of the glazing has the sun: `ROOM_LIGHT` with the Passion side lit,
+which is every frame the room was ever fitted at and so moves none of them,
+and `ROOM_LIGHT_EAST`, a pale cream, with the Nativity side lit. And the gold
+itself was salmon coming out — 16 and 17 degrees on `w` and `v` against 26
+in both photographs — because a warm light multiplied by a warm vault and a
+warm floor loses green faster than red; the constant going in is yellower so
+that what arrives is amber.
+
+| | before | after | photographs |
+| --- | --- | --- | --- |
+| landing, 21 Jun 10:00 | 0.39 · 18° | 0.15 · 30° | 0.17 – 0.20 · 25 – 34° |
+| nave, 21 Jun 09:00 | 0.34 · 21° | 0.17 · 34° | |
+| nave, 21 Jun 12:00 | 0.39 · 20° | 0.29 · 31° | |
+| `w`, 18 Dec 13:30 | 0.46 · 17° | 0.43 · 24° | 0.68 · 26° |
+| `v`, 18 Dec 14:55 | 0.59 · 16° | 0.57 · 25° | 0.99 · 26° |
+| `1`, 19 Sep 16:00 | 0.59 · 17° | 0.57 · 26° | 0.39 · 37° |
+
+Every luminance within half a per cent; four exterior viewpoints unchanged
+to three decimals.
+
+**Pale blocks up every column.** Hard-edged mint rectangles on the shafts
+and on every flat facet of every branch, the first thing on screen after the
+flight in. They were the clerestory throw: its gain was fitted on a soffit,
+which meets a heading fifteen degrees off level at a quarter cosine, and a
+standing face meets it at 0.97 — so at 21 June, ten o'clock, 86 per cent of
+its light landed on things that are not the vault, through a five-tap binary
+depth test. Gating it on how far a face turns downward took the shafts out
+and left the branch facets; it is now the vault stone's alone (`THROW_SHARE`
+in `render/materials.ts`), which keeps all of what the canopy was fitted
+with.
+
+**Step outside left you in the jambs.** The height was right; the standoff
+was measured from a door that stands at the back of a portal ten metres deep.
+It is forty metres now — where the film's own approach to that door begins —
+looking seventeen metres up the front.
+
+**Scroll had no useful end.** Fifteen ticks put the camera half a kilometre
+out, thirty-two metres up, behind a wall of roof. The orbit now stops at
+320 m and rises as it backs off, reaching about eighty-five metres at the
+limit: the whole building over Plaça de Gaudí and the Eixample.
+
+**The day could turn out the lights.** It changed under a fixed hour, and
+the scrubber runs six to nine whatever the day, so a June evening pressed on
+to December was black: forty per cent of December's scrubber is night. The
+hour now keeps its place between sunrise and sunset, and the track is bright
+across the daylight and dim outside it.
+
+**Nothing said where a click would go.** A ring now lies on the floor under
+the cursor where the walk would end, and stays at the destination until you
+arrive. The arrow keys turn on foot and Page Up and Page Down look up and
+down — there was no key anywhere that turned the view — and outside they
+turn and come closer the way a drag and the wheel do. H brings the line of
+controls back.
+
+**A phone had nothing to tap.** In portrait the landing looked thirty degrees
+up and the floor was the bottom twentieth of the frame, under the clock; it
+now lands at fifteen, and the line saying *tap the floor* comes back indoors.
+
+**Smaller.** The line of controls ran into the clock between 821 and 1140
+pixels wide, and now stands above it there. The corner button's slide out of
+the quote's way was a jump — two `transition` declarations, the second
+winning. Enter on a focused button also flew you in through a door. The dev
+readout counted every triangle eight times a second behind `display: none`;
+the panel and Tweakpane were in every visitor's download (1,028 kB, now
+882); a browser without WebGL 2 got "a few seconds" for ever; a lost context
+got a building with its light missing. The clock said *21 Sep* and the HUD
+*21 Sept*. The street trees were three cards lit as three cards, a black half
+and a lime half down every crown, and are lit as crowns. The Passion legs
+were three girths within half a metre of each other — six planks from the
+steps — and are bones: a flared foot, a slender neck, and a head that opens
+into the roof.
+
+## Withdrawn, on the evidence
+
+**Second-long freezes every three seconds.** The pane had gone hidden and was
+throttling `requestAnimationFrame`; measured again with it visible, and in
+headless Chrome, there were none.
+
+**W does nothing in the orbit.** Same cause: no frames were being drawn.
+
+## Left standing
+
+**The interior is darker than the daytime photographs.** The nave frame's
+median is 0.21 – 0.25 where `in-nave-axial-from-floor` is 0.50; this pass
+was about colour and left every luminance where the earlier passes fitted
+it. The December photographs are also far more saturated than anything the
+model gives them — 0.68 and 0.99 against 0.43 and 0.57.
+
+**The Passion portico may be too low.** From the elevation it stands at
+about a fifth of the towers' height where `ex-passion-front` puts its apex
+nearer the belfries' feet, but that photograph is a wide lens from close in
+and the porch is fifteen metres nearer it than the towers are. Worth a
+matched camera before anything is moved.
+
+**The world ends in a brown band.** From high on the orbit the ground stops
+short of the horizon.

@@ -197,7 +197,7 @@ to within one per cent.
 | Hyperboloid generator — surface + straight generators | `src/geometry/hyperboloid.ts` |
 | Photo-match overlay, letterboxed to the photo's aspect | `src/dev/overlay.ts` |
 | Live parameter panel, camera and geometry presets | `src/dev/params.ts`, `src/dev/presets.ts` |
-| Free-fly camera with vertical-line correction | `src/camera/freecam.ts` |
+| Free-fly camera with vertical-line correction | `src/camera/rig.ts`, `src/camera/viewer.ts` |
 | The four stones, and which order is cut from which | `src/render/materials.ts` |
 | The ambient indoors is the room; outdoors it is the sky | `src/render/materials.ts` |
 | Stone grain — two octaves on world position, laid in courses | `src/render/materials.ts` |
@@ -244,8 +244,8 @@ to within one per cent.
 | The building's bearing, measured off its footprint: 314.4° | `src/light/sun.ts` |
 | Three frames matched to the author's own December photographs | `src/dev/viewpoints.ts`, `reference/SOURCES.md` |
 | Three more at the lens the photographs use: twenty-four millimetres, eye height, up | `src/dev/viewpoints.ts` |
-| Walk and fly as one camera, with a continuous transition | `src/camera/freecam.ts` |
-| Two-thumb touch controls, with a stick that appears under the thumb | `src/camera/touch.ts` |
+| Walk and fly as one camera, with a continuous transition | `src/camera/viewer.ts` |
+| Touch: one finger to look, a tap to walk, two to rise and to pinch | `src/camera/viewer.ts` |
 | Envelope: a rectangle for the nave, a disc for the apse, a terrace you can climb | `src/camera/envelope.ts` |
 | Doors — a window with no glass in it, placed by the front in front of it | `src/plan/clerestory.ts`, `src/plan/church.ts` |
 | A podium you can climb: the skirt as a flight of steps round the footprint | `src/plan/floor.ts` |
@@ -264,6 +264,12 @@ to within one per cent.
 | The clerestory throwing up and inward, weighted by which side has the sun | `src/render/washrig.ts`, `src/render/scene.ts` |
 | Which half of the glazing has the sun on it, as one signed number | `src/render/washrig.ts` |
 | The room's own colour following the hour, not only the plan | `src/render/materials.ts` |
+| The clerestory lights the vault and nothing else — no more pale blocks up the columns | `src/render/washrig.ts`, `src/render/materials.ts` |
+| The room is gold when the Passion glazing is lit and pale stone when it is not | `src/render/materials.ts` |
+| Street trees lit as crowns, not as three crossed cards | `src/render/materials.ts` |
+| The Passion legs as bones: a flared foot, a slender neck, a head that opens into the roof | `src/geometry/portico.ts` |
+| A ring on the floor where a click will walk to | `src/ui/controls.ts`, `src/camera/viewer.ts` |
+| The day keeps the light, and the scrubber shows where the daylight is | `src/ui/controls.ts`, `src/light/sun.ts` |
 
 ## Running
 
@@ -290,7 +296,9 @@ screen says, and changes when it changes.
 | Outside | |
 | --- | --- |
 | drag | turn the building — about whatever was under the cursor |
-| scroll / pinch | come closer, back off |
+| scroll / pinch | come closer, back off — backing off rises over the roofs, out to 320 m |
+| ← → | turn the building, as a drag does |
+| ↑ ↓ | come closer, back off, as the wheel does |
 | double-click a door, or **Go inside** | fly to it and walk in |
 | Enter | the same, through the door you are looking at |
 | W A S D, space / C | free flight, for the viewer who would rather fly |
@@ -299,15 +307,19 @@ screen says, and changes when it changes.
 | Inside | |
 | --- | --- |
 | drag | look |
-| click the floor | walk there |
+| click the floor | walk there — a ring on the floor shows where, before and while |
 | scroll | a pace or two forward |
-| W A S D | walk; shift to hurry |
+| W A S D, ↑ ↓ | walk; shift to hurry |
+| ← → | turn |
+| Page Up / Page Down | look up, look down |
 | space / C | rise and settle; the height holds |
-| Escape, or **Step outside** | out through the nearest door |
+| Escape, or **Step outside** | out through the nearest door, to stand forty metres off its front |
 
 | Anywhere | |
 | --- | --- |
-| the scrubber | the hour of the day, and the whole model relit for it |
+| the scrubber | the hour of the day, and the whole model relit for it; the bright part of the track is daylight |
+| the day | midsummer, the equinoxes, midwinter — the hour moves with it to the same light, so an evening stays an evening |
+| H or ? | say again what the cursor does here |
 | P | the parameter panel and the readouts (also `?dev` in the address) |
 | O, X, `[` `]` | the reference photo, difference blend, its opacity — with the panel |
 | drop an image | load it as a reference |
@@ -337,30 +349,28 @@ The render adapts its resolution to the machine: it drops device pixels
 while frames are slow and takes them back when they have been fast for a
 while. The readout shows where it currently stands.
 
-On a touch device the left thumb walks — a stick appears where it lands, and
-deflection is proportional — the right thumb looks, and two fingers rise and
-fall together and pinch for speed. The render gets the whole screen on every
-device now, because nothing is standing beside it.
+On a touch device one finger turns the building outside and looks around
+inside, a tap on the floor walks there, a pinch comes closer, and two fingers
+dragged together rise and settle. Indoors on a phone the line saying so comes
+back once the quote has gone, and a window held upright lands looking less far
+up, so there is floor in the frame to tap. The render gets the whole screen on
+every device, because nothing is standing beside it.
 
-## Links
+If the browser will not start WebGL 2, or anything fails while the stone is
+being cut, the wait line says so instead of waiting for ever; if the graphics
+card lets go of the context later, the page offers to build it again.
 
-The address bar is the save format, and it holds everything a moment of this
-building needs: where the camera stands, where it looks, the lens, and the
-day and hour the sun is computed from.
+## The harness from the console
 
-```
-#at=4.2,1.65,17&look=-0.163,0.598&lens=68,0.62&sun=262,16
-```
-
-It is readable on purpose. `sun=262,16` is the nineteenth of September at
-four in the afternoon, and you can change it to `sun=172,9.6` by hand and get
-midsummer morning without going near the app. Pasting one into a tab that is
-already open moves the camera there, since the page does not reload for a
-hash. Decoding is all-or-nothing — the right hour at the wrong place is worse
-than no link at all.
+The address bar is just the address: a shared link opens the building the
+way it opens for everyone, from across the plaza. The two things it still
+reads are `?dev`, for the panel, and `?film`, for the film.
 
 `window.harness` exposes the camera, overlay, parameters and a `rebuild()` for
-driving the harness from the console.
+driving the harness from the console, `harness.viewer.setState({position,
+yaw, pitch, fov, shiftCorrection})` to stand somewhere, and `harness.shot(name)`
+to write the frame the renderer just drew to `reference/.shots` — it renders
+synchronously, so it works in a tab that is not being painted.
 
 ## The photo-match loop
 
