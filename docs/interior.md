@@ -934,3 +934,33 @@ this model has fewer and smaller ones than the building does.
 and 0.23 warm against a photographed 0.62 and 0.44. A wall beside a window
 is the surface the wash rig is *for*, which makes it the next thing to
 measure rather than the next thing to guess at.
+
+---
+
+# The stop is metered, and the gold is where the sun is
+
+*23 September 2026. The full record, with its tables, is the last section of
+`docs/visit.md`; this is what it changes about everything above.*
+
+Every exposure figure in this document was fitted with the indoor stop held
+constant: first on the December frames, then on `in-vault-wash-dec2025` over
+the centre of the canopy. That stop is now where the eye starts, not where
+it stays. The frame is metered like a camera meters it (`render/meter.ts`):
+open on a canopy with no sun on its glass, closed down on a wall of lit
+glass until the lancets keep their colour and the room goes dark round
+them. The author's own camera did exactly that across one afternoon, over
+three and a third stops. So a median in the tables above is a median at the
+fitted stop, and the frames without lit glass in them now sit about a stop
+higher, where the photographs of them are.
+
+The room's gold, fitted at four fifths on the canopy's evidence, is at a
+third. The evidence was one hour. The author's frame of the central vault at
+twenty past one in December is cream, and so are the Commons frames of the
+same vault in July. What December has, it now gets from the sun on the
+Passion glass: `uWashSun` in `render/washrig.ts`, not held at a total. It
+lights the glass and warms the faces standing in the room, and nothing
+overhead.
+
+The two items still open above stand. The contrast is better on the
+December frames, where the room now falls dark round the glass. The wall
+beside a window has not been measured again.

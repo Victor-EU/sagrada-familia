@@ -314,3 +314,24 @@ in front of a façade has to be told the same thing.
   patch needs its own key or it silently borrows another's shader.
 - Winding on the new belfry cells is derived from the handed normal, which
   is what made the first towers' inside-out mistake impossible to repeat.
+
+---
+
+# The Passion porch, measured — 23 September 2026
+
+The porch was built off `ex-passion-front`, which is from 2010 and predates
+the pediment. Read at its own lens, `ex-passion-front-up-dec2025` puts the
+pediment's 7.5 m cross from about 45 to 53 m and the gable under it at
+about 34 m, where the model had an arc at 18 m and a comb of four-metre
+blades. The porch is rebuilt to that: a gable from 17 to 34 m, the legs
+meeting it where it is, eighteen bones and a lettered cornice on it, and
+the cross. Method and figures are in the last section of `docs/visit.md`.
+
+The same frame says the four Passion towers stand in two pairs, the inner
+two about twice as far apart as each outer pair, where the model spaces
+them evenly a module apart. That is a change to the transept front, and it
+is left open here.
+
+And the horizon: the sky's below-horizon ground colour was showing past
+the edge of the plaza's disc from anywhere high on the orbit. The
+background now carries the haze down; the light probe keeps the ground.

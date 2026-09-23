@@ -270,6 +270,10 @@ to within one per cent.
 | The Passion legs as bones: a flared foot, a slender neck, a head that opens into the roof | `src/geometry/portico.ts` |
 | A ring on the floor where a click will walk to | `src/ui/controls.ts`, `src/camera/viewer.ts` |
 | The day keeps the light, and the scrubber shows where the daylight is | `src/ui/controls.ts`, `src/light/sun.ts` |
+| The eye is metered like a camera: open on a stone canopy, closed down on a wall of lit glass | `src/render/meter.ts`, `src/camera/viewer.ts` |
+| The sun on the glass, not held at a total — the Passion wall blazes in December and the room goes dark round it | `src/render/washrig.ts`, `src/geometry/glass.ts`, `src/render/materials.ts` |
+| The Passion porch at its measured height: a gable, eighteen bones, the charge on a cornice of prisms, the cross | `src/geometry/portico.ts`, `src/plan/shell.ts` |
+| The horizon is haze all the way down, not the sky's brown ground | `src/light/sky.ts` |
 
 ## Running
 
@@ -566,7 +570,11 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   exposes for the glass, a stop and a half under where the model stands, and
   the wash the Passion glass throws on the vault reads nine tenths saturated
   gold where the model throws a pale pink. That is the glass palette and the
-  indoor exposure together, and it is the next thing to decide.
+  indoor exposure together, and it is the next thing to decide. *Decided on
+  23 September 2026: the eye is metered, the Passion glass is gold rather
+  than salmon, and it knows how much sun is on it — see the last section of
+  `docs/visit.md`. That closes the exposure and about a third of the colour;
+  the rest is window area.*
 - Generators work in their own frame with `z` as the axis; the world is y-up and
   placement rotates. The mathematics stays clean.
 - Deferred from phase 0: wrap-lighting / thin-edge scattering on the plaster.
@@ -924,3 +932,23 @@ viewpoints**. A single photo can be satisfied by geometry that is wrong in depth
   faces of four hundred columns. With the room's own term finally reaching
   them, the stop comes back down an eighth of a stop onto the same
   photograph it was fitted against.
+- **A photograph's median is a metered median.** The author's own December
+  frames carry their exposures: EV 6.3 for the central vault straight up,
+  9.6 for the aisle vault an hour and a half later, and both came back within a
+  tenth of the same median. Every number this README records for "the
+  interior is darker than the photographs" was a fixed stop being compared
+  with a camera that was not holding one. The indoor eye meters now, and
+  the frames without lit glass in them came up a stop.
+- **What a meter protects is an area, not a pixel.** The first highlight
+  rule took the brightest pixel in each cell and every lamp on every capital
+  in the canopy closed the frame down as if it were a window; the cell
+  average never bound at all, because a lancet averaged into its stonework
+  is a quarter of white. Eight-pixel patches are the size that tells a
+  lancet from a lamp.
+- **A matched camera does not need the model to be right.** The porch was
+  measured off the photograph alone — the vanishing point of the towers for
+  the pitch, the published cross for the scale — because the model's own
+  towers could not be used: solved on their finials, no pavement camera
+  fits the photograph to within forty pixels, and that residual turned out
+  to be a finding of its own. The Passion towers stand in two pairs, not at
+  even spacing.

@@ -423,17 +423,206 @@ headless Chrome, there were none.
 
 ## Left standing
 
-**The interior is darker than the daytime photographs.** The nave frame's
-median is 0.21 – 0.25 where `in-nave-axial-from-floor` is 0.50; this pass
-was about colour and left every luminance where the earlier passes fitted
-it. The December photographs are also far more saturated than anything the
-model gives them — 0.68 and 0.99 against 0.43 and 0.57.
+~~**The interior is darker than the daytime photographs.**~~ **Answered.**
+*Struck 23 September 2026 — see "The four left standing" below.* The nave
+frame's median was 0.21 – 0.25 where `in-nave-axial-from-floor` is 0.50;
+this pass was about colour and left every luminance where the earlier
+passes fitted it.
 
-**The Passion portico may be too low.** From the elevation it stands at
+~~**The December photographs are far more saturated than the model.**~~
+**Partly answered** — 0.43 and 0.57 then, 0.51 and 0.65 now, against 0.67
+and 0.98. Below, with what is still between them.
+
+~~**The Passion portico may be too low.**~~ **It was, by twenty metres and a
+crown.** Measured at a matched camera, below. From the elevation it stood at
 about a fifth of the towers' height where `ex-passion-front` puts its apex
 nearer the belfries' feet, but that photograph is a wide lens from close in
-and the porch is fifteen metres nearer it than the towers are. Worth a
-matched camera before anything is moved.
+and the porch is fifteen metres nearer it than the towers are.
 
-**The world ends in a brown band.** From high on the orbit the ground stops
-short of the horizon.
+~~**The world ends in a brown band.**~~ **Answered**, below. From high on the
+orbit the ground stopped short of the horizon.
+
+---
+
+# The four left standing
+
+*23 September 2026, on d93e102. The four items above, taken one at a time,
+measured in headless Chrome over CDP against the photographs before anything
+moved and after. Every frame below is a fresh page load, the pupil left to
+settle for four seconds, and the same instrument as the second visit: median
+luminance, and median saturation and mean hue over the pixels between 8 and
+80 per cent. "Gold" is the share of the frame bright and saturated at once —
+value over 0.6, saturation over 0.35 — which in a December photograph is the
+lit glass and the stone it lights.*
+
+## The brightness was the exposure, and the exposure was a constant
+
+The author's own frames carry their exposures, and they settle what the
+photographs' medians are before anything is compared with them:
+
+| frame | what | time | EV 100 | median |
+| --- | --- | --- | --- | --- |
+| DSCF0491 | the pavement outside | 13:03 | 14.0 | 0.34 |
+| DSCF0500 | the central vault, straight up | 13:23 | 6.3 | 0.34 |
+| DSCF0512 | the Passion wall — `w` | 13:29 | 7.7 | 0.25 |
+| DSCF0524 | the Passion transept wall | 13:34 | 8.3 | 0.29 |
+| DSCF0638 | the aisle vault the wall throws onto — `v` | 14:55 | 9.6 | 0.24 |
+
+Three and a third stops between the brightest and the darkest room in one
+afternoon, handed back at medians within a tenth of each other. A median
+from a photograph is a metered median. The model's indoor stop was a
+constant, fitted on the frames full of lit glass, so every frame without
+any — the canopy, the nave, the landing the flight puts you in — sat a stop
+under every photograph of it.
+
+**The eye is metered now** (`render/meter.ts`). The scene's radiance, before
+the bloom and the film, is reduced to a 64 × 32 grid in two small passes and
+read back eight kilobytes at a time every fourth frame. The exposure is
+solved so the centre-weighted mean meets a key. Then the brightest three per
+cent of the frame, taken as eight-pixel patches, may not be pushed past a
+ceiling. Eight-pixel patches because a lancet is five or ten pixels wide and
+a lamp on a capital is two; weighted by the pixel, every lamp in the canopy
+closed the frame down as if it were a window. The viewer takes four fifths
+of what the meter asks for, within two stops down and one and a half up of
+the old constant, so dusk is still darker than noon.
+
+Two things this pass got wrong on the way and put right:
+
+- **The first key was fitted to a bug.** The second downsample took the
+  luminance of a red-only texel and read every cell at a fifth of its value.
+- **A ceiling on the cell means never binds.** The first highlight rule
+  looked at cell averages, where a lancet is averaged into its stonework and
+  a wall of glass comes to a quarter of white.
+
+## December's colour was the sun on the glass, and the glass was the wrong colour
+
+Counted, the difference was not a tint:
+
+| | gold share | its hue |
+| --- | --- | --- |
+| December photographs | 16 – 40 % | 27 – 32° |
+| the same frames, rendered | 1 – 5 % | 11 – 26° |
+
+Three causes, taken in order.
+
+- **The Passion glass was twelve degrees too red.** In all four comparisons
+  it was salmon and crimson where every photograph is gold and orange. The
+  sweep is moved up the circle (`SWEEP` in `geometry/glass.ts`).
+- **The glass did not know how much sun was on it.** A pane glowed at the
+  sky's value plus a disc on the exact line of sight to the sun, the same at
+  noon in June as in December with the sun square on it. The wash rig's side
+  weights are held at a total by design, so the room took in the same light
+  at every hour. `uWashSun` is now the sun on each glazed wall, not held at
+  anything: cos(elevation) · cos(bearing), times the sun's strength, 0.7 on
+  the Passion glass that December afternoon, 0.4 on a July one and a tenth
+  on the Nativity side at a June noon. It lights the glass, and the metered
+  eye then does what the camera did: it closes down on a wall of lit glass
+  and the room goes dark round it.
+- **The room's gold was everywhere.** The fill carried it at four fifths
+  whatever the sun was doing, so the central vault in December came out tan
+  at 0.59 saturated where its photograph, six minutes before the Passion
+  wall's, is cream at 0.38. The base is a third now. What the sun on the
+  glass adds, it adds to standing faces only: the floor and the lower walls
+  are what the December light patches, and a vault forty-five metres up sees
+  the lucernaris.
+
+| frame | photograph | before | after |
+| --- | --- | --- | --- |
+| `w` | 0.25 · 0.67 · gold 16 % | 0.29 · 0.43 · 4 % | 0.28 · **0.51** · **9 %** |
+| Passion transept wall, 13:34 | 0.29 · 0.98 · 36 % | 0.23 · 0.59 · 5 % | 0.23 · **0.65** · **10 %** |
+| Passion aisle, 14:55 † | 0.24 · 0.98 · 40 % | 0.35 · 0.51 · 12 % | 0.32 · **0.58** · **20 %** |
+| central vault, Dec 13:23 | 0.34 · 0.38 | 0.26 · 0.59 | **0.38 · 0.41** |
+| `in-nave-axial-canopy` | 0.38 · 0.38 | 0.21 · 0.52 | **0.37 · 0.32** |
+| `in-vault-overhead` | 0.41 · 0.27 | 0.24 · 0.35 | **0.38 · 0.18** |
+| `in-nave-axial-from-floor` | 0.46 · 0.22 | 0.26 · 0.52 | **0.41 · 0.36** |
+| `1`, against the canopy | 0.38 · 0.38 | 0.22 · 0.57 | **0.41 · 0.44** |
+| the landing, 21 Jun 10:00 | | 0.11 · 0.15 | **0.37** · 0.17 |
+
+*Median · saturation, and gold where it means something. † At (−16, 1.6, −8)
+toward (−24, 18, −8), which has the photograph's wall of lit lancets and
+vault in it. The curated `v` does not: it looks at columns and canopy, now
+meters as a stone frame at 0.37, and is no longer a fair stand-in for its
+photograph.*
+
+Every stone frame is now within a tenth of its photograph's median, and
+most within a tenth of its saturation. The gold on the December glass frames
+is the right hue, 25 – 37° against 29 – 32°, and twice what it was. Outside,
+nothing moved but the porch: five of six exterior viewpoints are unchanged
+to three decimals and the Passion elevation by six thousandths, which is
+the crown. The frame rate is unchanged within its own noise.
+
+Tried and taken out, because the frames said so:
+
+- **The sun as a share of the wash and the throw**, handed back at the
+  glass's own colour. It lit the faces turned to the glass, which from
+  anywhere a photograph stands are the faces turned away from the camera. At
+  three times the wash it moved no December frame in the third decimal, and
+  turned a June morning's canopy green.
+- **Standing faces tinted toward the lit glass's colour** as well as warmed.
+  It gave December nothing and made a June morning teal from the terraces
+  down.
+- **A higher bloom threshold** to clear the morning green below. It took
+  away half of December's gold with it, because the glow off lit glass is
+  where much of that gold lives.
+
+## The Passion porch was twenty metres short and had no crown
+
+The same photograph read at its own lens. `ex-passion-front-up-dec2025` is
+DSCF0491 uncropped, 26.5 mm on a 23.5 mm sensor, so 2,165 pixels of focal
+length. Each tower's axis, run from finial to ring, meets the others at
+about (930, −510), which puts the camera 62° up. The cross on the pediment
+is 7.5 m tall and the pediment's eighteen bones are 9 m, both published. The
+cross subtends 140 pixels, so it stands about 25 m out and runs from about
+45 to 53 m. The gable the bones stand on has its apex about twelve metres
+under it, and the rake in the 2010 frame puts the gable's hips at half the
+apex's height. From that camera the old porch was not in the picture at all:
+the frame's bottom edge was the façade's cornice.
+
+What was there was the porch before 2016, and not quite even that: an arced
+canopy edge at 18 – 20 m and a comb of thirty-two four-metre blades standing
+in for the pediment. The leading edge is now a gable, 17 m at the hips to
+34 m at the apex. The six legs meet it wherever it is, so the middle pair
+stand half as tall again, with their girth scaled to suit. On it stand
+eighteen bones of ten metres, fanning. They carry a cornice of hexagonal
+prisms, a letter to a prism, IESUS NAZARENUS up one rake and REX IUDAEORUM
+down the other, and the cross stands over the apex to about 55 m.
+
+Found on the way and not moved: **the four Passion towers are not evenly
+spaced.** In both frames the inner pair's finials stand about twice as far
+apart as each outer pair — 284 pixels against about 158 in the 26 mm frame,
+296 against 134 in the 2010 one. The model spaces all four a module apart,
+and a camera solved on its finials leaves 43 to 70 pixels of residual
+whatever it does. The porch reads narrower than the photographs for that
+reason, and it is a change to the whole transept front, not to the porch.
+
+## The horizon was the sky's own ground
+
+The plaza is a disc 1,800 m across and the fog has taken it to the
+horizon's colour by 1,750. What showed beyond its edge was the sky shader's
+ground, a brown, from the edge up to the horizon: from 90 m up, three
+degrees of it. The ground is there for a reason — it is half of what an
+exterior surface is lit by — so the sky is now drawn twice. Once with the
+ground, for the light probe, and once with the haze carried on down, for the
+background. Nothing the model is lit by changed.
+
+## Left standing
+
+**December is still short of its photographs.** 0.51 – 0.65 saturated
+against 0.67 – 0.98, and 9 – 20 % gold against 16 – 40 %. What is between
+them now is mostly glass. The photographs' Passion wall is more window than
+wall and the model's is lancets in stone, the gap `interior.md` has
+recorded since its fifth pass. The air costs `w` about 0.08 of saturation,
+but taking it out costs everything the air was fitted for.
+
+**A June morning facing the Nativity glass is now green.** `3`, the crossing
+floor and the apse move from 71°, 53° and 90° to 111°, 100° and 124°. It is
+the same mechanism as December: the sun stands on that glass, the eye closes
+down on it, and the frame takes the glass's colour. It is the scheme's own
+logic, a cool morning and a warm afternoon. But there is no photograph in
+the set of that wall with the morning sun on it to say how far, so it is
+recorded rather than tuned.
+
+**`v` no longer shows its photograph.** Re-aim it into the Passion aisle,
+or retire it for the frame above.
+
+**The Passion towers' spacing** — above.
