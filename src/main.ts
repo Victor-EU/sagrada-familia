@@ -21,6 +21,7 @@ import { censusFrame, censusLight, type FrameCensus, type LightCensus } from './
 import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
 import { Controls } from './ui/controls.ts'
+import { Film } from './ui/film.ts'
 import {
   BUILDING_BEARING_DEG,
   barcelonaTime,
@@ -414,7 +415,18 @@ function setDev(on: boolean): void {
  * how to get back out, what the cursor does here, and what time it is. See
  * ui/controls.ts.
  */
-const controls = new Controls(viewer, stageEl, sun, applySun)
+/**
+ * And the one thing that asks nothing of anybody: the film. It takes the
+ * camera and the clock, plays the building as a sequence of shots, and gives
+ * both back the moment a hand touches anything. The dissolve between shots
+ * needs the frame as drawn, which the drawing buffer does not keep, so it is
+ * drawn again on demand — see ui/film.ts.
+ */
+const film = new Film(viewer, stageEl, sun, applySun, () => {
+  stage.render()
+  return stage.renderer.domElement
+})
+const controls = new Controls(viewer, stageEl, sun, applySun, film)
 
 /**
  * The keys, which are all seconds to the mouse.
@@ -430,7 +442,20 @@ window.addEventListener('keydown', (event) => {
   // A panel field has the focus: these are characters, not shortcuts.
   if (event.target instanceof HTMLInputElement) return
 
+  // Any key stops the film, and does nothing else: Escape while it plays is
+  // a request to be given the building back, not to be flown home from it.
+  // The viewer's own key listener has already run, so a W pressed here both
+  // stops the film and starts the walk.
+  if (film.playing) {
+    film.stop()
+    return
+  }
+
   switch (event.key) {
+    case 'k':
+    case 'K':
+      film.play()
+      return
     case 'Escape':
       if (viewer.travelling) viewer.skip()
       else if (viewer.mode === 'inhabit') viewer.stepOut()
@@ -482,6 +507,8 @@ declare global {
       goTo: (index: number) => void
       viewer: Viewer
       controls: Controls
+      /** The film — `film.go(n)` cuts to a shot. See ui/film.ts. */
+      film: Film
       /** What is in this frame, by surface — see dev/probe.ts. */
       census: () => FrameCensus | null
       /** What the light is doing — see dev/probe.ts. */
@@ -532,6 +559,7 @@ window.harness = {
   goTo,
   viewer,
   controls,
+  film,
   census: () => (built ? censusFrame(stage, [built.field.group]) : null),
   light: () => censusLight(stage),
   shot,
@@ -594,6 +622,9 @@ function frame(): void {
   timer.update()
   const dt = Math.min(timer.getDelta(), 0.1)
 
+  // The film writes the pose first, when it has it; the viewer then does
+  // only what it still owns, which is the pupil.
+  film.update(dt)
   viewer.update(dt)
   // The pupil, which the viewer moves as it crosses the threshold, and which
   // the panel's own exposure is the base of.
@@ -618,6 +649,11 @@ function frame(): void {
       document.body.classList.add('named')
     }, 7000)
     controls.begin()
+    // `?film` in the address opens on the film rather than on the plaza —
+    // for a screen in a corner, or for sending somebody the building with
+    // nothing to learn first. Started here, on the first drawn frame, so its
+    // opening fade is from the cover and not from a blank page.
+    if (new URLSearchParams(location.search).has('film')) film.play()
     const at = (name: string): number =>
       Math.round(performance.getEntriesByName(name, 'mark')[0]?.startTime ?? 0)
     console.debug(
@@ -656,7 +692,8 @@ function frame(): void {
       `pos   ${p.x.toFixed(2)}  ${p.y.toFixed(2)}  ${p.z.toFixed(2)}`,
       `look  yaw ${deg(cam.yaw)}°   pitch ${deg(cam.pitch)}°`,
       `lens  ${stage.camera.fov.toFixed(1)}° fov   shift ${(cam.shiftCorrection * 100).toFixed(0)}%`,
-      `move  ${viewer.mode}${viewer.travelling ? ' (travelling)' : ''}  ` +
+      `move  ${viewer.mode}${viewer.travelling ? ' (travelling)' : ''}` +
+        `${film.playing ? ` (film ${film.shots.indexOf(film.shot) + 1}/${film.shots.length})` : ''}  ` +
         `${viewer.height.toFixed(1)} m above the floor  ` +
         `eye ${(render.exposure * viewer.eyeStop).toFixed(2)}`,
       `mesh  ${Math.round(tris).toLocaleString()} tris  ${draws} draws  ` +

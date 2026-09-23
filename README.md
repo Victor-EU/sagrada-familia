@@ -252,6 +252,7 @@ to within one per cent.
 | The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
 | Two ways of being with a building: an orbit outside, a walk inside, and a door between them | `src/camera/viewer.ts` |
 | The interface — the way in, the way out, what the cursor does here, and the hour | `src/ui/controls.ts` |
+| The film — fourteen shots round the building and in, dissolved and looped, the sun moving in each | `src/ui/film.ts` |
 | Figures, canopies, carved growth and cresting — the Nativity front's sculpture | `src/geometry/statuary.ts` |
 | The cover — Gaudí's hanging chains, dropped, settled and turned over while the stone is cut | `src/ui/cover.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
@@ -315,6 +316,22 @@ screen says, and changes when it changes.
 The curated viewpoints are the regression harness rather than a visit: they
 move the camera without telling the interface, so they live behind the same
 switch as the panel.
+
+## The film
+
+Every control above asks something of you. **Watch the film**, in the top
+corner (or K, or `?film` in the address), asks nothing: the camera goes
+round the building and in on its own — across the pond as the morning
+arrives, up to the Nativity front, round from the air, onto the terraces,
+in through the door with the vault opening overhead, down the nave at four
+o'clock, the shafts sweeping the crossing as the evening goes — fourteen
+shots, dissolved, looped, with the sun moving inside every one of them.
+The shots are the harness's own verified frames, run on a little; nothing
+in them is authored light.
+
+Any key or click stops it and hands you the building exactly where the
+film had it — a walk if that is indoors, an orbit if not — with the clock
+at whatever hour the shot had reached.
 
 The render adapts its resolution to the machine: it drops device pixels
 while frames are slow and takes them back when they have been fast for a

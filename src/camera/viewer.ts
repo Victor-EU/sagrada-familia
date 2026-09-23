@@ -326,6 +326,15 @@ export class Viewer {
   private relation: Relation = 'regard'
   /** The vertical field before the viewport's shape has its say. */
   private baseFov = REGARD_FOV
+  /**
+   * Whether something else has the wheel — see ui/film.ts.
+   *
+   * While it does, the pose is written from outside every frame and nothing
+   * here moves it: no orbit, no walk, no hold, no flight. What this still
+   * owns is the pupil, because where the camera is standing decides what the
+   * eye is open to whoever put it there.
+   */
+  private taken = false
 
   // Regarding.
   /**
@@ -413,6 +422,36 @@ export class Viewer {
     return this.legs.length > 0
   }
 
+  get possessed(): boolean {
+    return this.taken
+  }
+
+  /**
+   * Hand the camera to something else, or take it back.
+   *
+   * Taking it drops whatever was in progress — a flight, a walk to a clicked
+   * point, a drag still settling — because none of it can be resumed into a
+   * pose somebody else has been writing. Giving it back leaves the pose
+   * alone; the caller says where it stands through `setState`, which works
+   * out the relation from the position the way a link does.
+   */
+  possess(on: boolean): void {
+    if (this.taken === on) return
+    this.taken = on
+    const wasFlying = this.legs.length > 0
+    this.legs = []
+    this.legAt = 0
+    this.velocity.set(0, 0, 0)
+    this.goal = null
+    this.lift = 0
+    this.liftWanted = 0
+    this.pending.azimuth = 0
+    this.pending.elevation = 0
+    this.pending.zoom = 0
+    if (on) this.keys.clear()
+    if (wasFlying) this.onTravel?.(false)
+  }
+
   /** Whether the camera is in the room rather than out on the plaza. */
   get indoors(): boolean {
     const e = this.envelope
@@ -432,7 +471,7 @@ export class Viewer {
   }
 
   /** The vertical field that gives this viewport at least MIN_ACROSS across. */
-  private widen(base: number): number {
+  widen(base: number): number {
     const { width, height } = this.rig.viewport
     const aspect = width / Math.max(1, height)
     if (aspect >= 1) return base
@@ -849,7 +888,9 @@ export class Viewer {
   // ----------------------------------------------------------- the frame ---
 
   update(dt: number): void {
-    if (this.legs.length > 0) this.fly(dt)
+    if (this.taken) {
+      // Somebody else's pose. Only the pupil below is ours.
+    } else if (this.legs.length > 0) this.fly(dt)
     else if (this.relation === 'regard') this.regard(dt)
     else this.inhabit(dt)
 
@@ -1404,7 +1445,7 @@ export class Viewer {
       // release is retargeted to the stage — so the button under the finger
       // never received its click, and the one thing on screen asking to be
       // pressed did nothing when it was.
-      if (fromControl(event)) return
+      if (fromControl(event) || this.taken) return
       // Capture is a nicety — the release below is bound to the same element
       // and fires anyway — and it throws outright on a pointer id that is no
       // longer active, which synthetic events and some pen hardware manage.
@@ -1478,7 +1519,7 @@ export class Viewer {
     })
 
     el.addEventListener('dblclick', (event) => {
-      if (this.relation !== 'regard' || this.legs.length > 0) return
+      if (this.relation !== 'regard' || this.legs.length > 0 || this.taken) return
       if (fromControl(event)) return
       const hit = this.pick(event.clientX, event.clientY)
       this.enter(hit ? this.doorToward(hit) : null)
@@ -1488,7 +1529,7 @@ export class Viewer {
       'wheel',
       (event) => {
         event.preventDefault()
-        if (this.legs.length > 0) return
+        if (this.legs.length > 0 || this.taken) return
         if (this.relation === 'regard') {
           const hit = this.pick(event.clientX, event.clientY)
           // Only the building re-centres the turn. A wheel tick over the gap

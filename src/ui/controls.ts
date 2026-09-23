@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Relation, Viewer } from '../camera/viewer.ts'
+import type { Film } from './film.ts'
 
 /**
  * The interface, such as it is.
@@ -23,6 +24,13 @@ import type { Relation, Viewer } from '../camera/viewer.ts'
  *    a press — this building's two glazings face the summer sunrise and the
  *    winter sunset, so a model with no winter in it is missing half its
  *    argument.
+ *
+ * And a fifth, which is the opposite of the other four: **the film**. Every
+ * control above asks the viewer to do something. This one is for the viewer
+ * who would rather be shown — press it and the camera goes round the
+ * building and in on its own, the sun moving in every shot, until a hand
+ * touches anything. See ui/film.ts. While it runs, the other four go, because
+ * a film with a scrubber on it is a player and not a film.
  */
 export interface SunSetting {
   dayOfYear: number
@@ -68,6 +76,7 @@ export class Controls {
   private readonly dial: HTMLInputElement
   private readonly hourLabel: HTMLElement
   private readonly dayButton: HTMLButtonElement
+  private readonly play: HTMLButtonElement
 
   private readonly point = new THREE.Vector3()
   private hintTimer = 0
@@ -77,8 +86,26 @@ export class Controls {
     private readonly host: HTMLElement,
     private readonly sun: SunSetting,
     private readonly applySun: () => void,
+    private readonly film: Film,
   ) {
     this.root = el('div', 'ui')
+
+    this.play = el('button', 'play') as HTMLButtonElement
+    this.play.type = 'button'
+    this.play.innerHTML = '<span class="mark"></span><span>Watch the film</span>'
+    this.play.title =
+      'Sit back: the camera goes round the building and in, and the sun moves. ' +
+      'Any key or click stops it. (K)'
+    this.play.addEventListener('click', () => {
+      this.play.blur()
+      this.film.play()
+    })
+    film.onChange = (playing) => {
+      this.root.classList.toggle('film', playing)
+      // Handed back: say what the cursor does wherever the film left you,
+      // because it may be a different side of the wall from where it began.
+      if (!playing) this.say(this.viewer.mode)
+    }
 
     this.way = el('button', 'way') as HTMLButtonElement
     this.way.type = 'button'
@@ -136,7 +163,7 @@ export class Controls {
     this.dial.addEventListener('change', () => this.dial.blur())
     this.clock.append(this.dayButton, this.hourLabel, this.dial)
 
-    this.root.append(this.way, this.out, this.hint, this.clock)
+    this.root.append(this.way, this.out, this.hint, this.clock, this.play)
     this.host.append(this.root)
 
     this.showHour()
@@ -186,7 +213,7 @@ export class Controls {
     // refreshed from the sun rather than remembered from the last drag.
     this.showHour()
     const inside = this.viewer.mode === 'inhabit'
-    const outside = !inside && !this.viewer.travelling
+    const outside = !inside && !this.viewer.travelling && !this.film.playing
     this.root.classList.toggle('inside', inside)
     this.out.textContent = inside ? 'Step outside' : 'Go inside'
     if (!outside) {

@@ -436,3 +436,144 @@ body:not(.named) .out { bottom: 104px; }
   #intro .name, #intro .quote { animation-delay: 0ms; animation-duration: 400ms; }
   #intro .wait { animation: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   The film — see src/ui/film.ts.
+
+   Drawn inside the stage, so the bars letterbox the render and nothing else,
+   and the dissolve is exactly the frame that was there. Nothing here takes
+   the pointer: the film stops on the press, wherever it lands, and the press
+   goes on to the building.
+   --------------------------------------------------------------------------- */
+
+.film-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  font: 13px/1.6 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+
+/* The bars come in from the edges when the film starts and leave the same
+   way. Seven per cent each: a 16:9 window becomes a little over 2:1, which
+   is the shape a film is, and the frame the shots were composed for. */
+.film-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7%;
+  background: #000;
+  transition: transform 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.film-bar.top { top: 0; transform: translateY(-100%); }
+.film-bar.bottom { bottom: 0; transform: translateY(100%); }
+#stage.film .film-bar { transform: none; }
+
+/* The frame that was, going. Opacity alone; the script sets the timing. */
+.film-dissolve {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  will-change: opacity;
+}
+
+/* A title card, in the type the building's own name is set in. */
+.film-caption {
+  position: absolute;
+  left: 30px;
+  bottom: calc(7% + 26px);
+  max-width: 34ch;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 1100ms ease, transform 1100ms ease;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+}
+.film-caption.on { opacity: 1; transform: none; }
+.film-title {
+  margin: 0;
+  font: 400 clamp(1.15rem, 2.2vw, 1.7rem)/1.2 "Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
+  color: var(--warm);
+}
+.film-when {
+  margin: 6px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: #b8a894;
+}
+
+/* The one instruction, where the line of controls usually is. */
+.film-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(7% + 28px);
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--scrim);
+  color: #a99a88;
+  font-size: 11.5px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 800ms ease;
+}
+.film-hint.on { opacity: 1; }
+.film-hint strong { color: var(--warm); font-weight: 500; }
+
+/* No cursor over a film. The first press brings it back with everything else. */
+#stage.film, body.walking #stage.film { cursor: none; }
+
+/* The way into it: a press in the top corner, the one corner nothing else
+   uses. Goes with the rest of the interface while the film has the screen. */
+.play {
+  position: absolute;
+  right: 30px;
+  top: 26px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  appearance: none;
+  padding: 8px 16px 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 230, 210, 0.25);
+  background: var(--scrim);
+  color: var(--warm);
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: opacity 400ms ease, visibility 400ms, border-color 160ms ease;
+}
+.play:hover { border-color: var(--gold); }
+.play .mark {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent var(--gold);
+}
+.ui.film .play,
+.ui.film .way,
+.ui.film .out,
+.ui.film .hint-line,
+.ui.film .clock {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (max-width: 820px) {
+  .play { right: 18px; top: 18px; padding: 7px 12px 7px 10px; }
+  .play span:last-child { display: none; }
+  .play { gap: 0; }
+  .film-caption { left: 18px; bottom: calc(7% + 18px); max-width: calc(100% - 36px); }
+  .film-hint { bottom: calc(7% + 64px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film-bar { transition: none; }
+  .film-caption { transition: opacity 400ms ease; transform: none; }
+}
