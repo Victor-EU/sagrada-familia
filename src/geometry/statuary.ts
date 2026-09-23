@@ -301,9 +301,10 @@ export interface CrestParams {
  * The horizontals on this front were flat bands, and a flat band a hundred
  * metres long is the one thing a Gaudí façade never has. Standing a row of
  * little pointed gables on each of them costs sixteen triangles apiece and
- * turns a line into a comb — the same argument the Passion porch's own comb
- * makes, one scale down, and the reason both fronts saw-tooth against
- * whatever is behind them instead of ruling a pencil line across it.
+ * turns a line into a comb — the same argument the stepped cornice on the
+ * Passion porch's crown makes, one scale down, and the reason both fronts
+ * saw-tooth against whatever is behind them instead of ruling a pencil line
+ * across it.
  */
 export function buildCresting(p: CrestParams): THREE.BufferGeometry {
   const pieces: THREE.BufferGeometry[] = []

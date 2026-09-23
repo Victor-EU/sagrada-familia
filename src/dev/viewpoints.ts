@@ -316,7 +316,8 @@ export const VIEWPOINTS: Viewpoint[] = [
       'Aimed lower than it was: this frame was set when the porch was a ' +
       'shelf sixteen metres up and it pointed over the top of it, which is ' +
       'not the photograph — the photograph is mostly porch. Aimed *at* the ' +
-      'comb on the leading edge rather than past it, because the viewer ' +
+      'leading edge rather than past it — the gable, with the crown of ' +
+      'bones standing on it above the frame’s middle — because the viewer ' +
       'will not stand somewhere it has been asked to look through: give it ' +
       'a point behind the canopy and it steps back thirty metres and rises ' +
       'to the terraces to get a clear line, which is the right instinct and ' +

@@ -13,9 +13,10 @@ import { mergeOrEmpty } from './window.ts'
  *
  *  - The **Passion** portico is six splayed legs shaped like bone — wide at
  *    the pavement, necked in the middle, knuckled where they meet what they
- *    carry — holding a flat canopy well clear of the wall, with a shallow
- *    raking gable of stone blades standing on it. It is skeletal and it is
- *    meant to be: the whole front is stripped of ornament on purpose.
+ *    carry — holding a gabled canopy well clear of the wall, and on the
+ *    gable a crown of eighteen more bones carrying the charge on a cornice
+ *    of hexagonal prisms, with the cross over all of it. It is skeletal and
+ *    it is meant to be: the whole front is stripped of ornament on purpose.
  *  - The **Nativity** porch is the reverse: three deep portals, each under a
  *    steep gabled hood on brackets, and every surface between them crusted
  *    with growth. The sculpture is out of scope and would be a lie to fake,
@@ -119,8 +120,10 @@ export function buildLeg(p: LegParams, sides = 7): THREE.BufferGeometry {
 export interface PorticoParams {
   /** Width of the front the portico stands across. */
   width: number
-  /** Height of the canopy's front edge at the middle of the span. */
+  /** Height of the canopy's front edge at the middle of the span: the gable's apex. */
   eaves: number
+  /** Height of the front edge at the two ends of the span. */
+  hip: number
   /** Height of the canopy where it meets the wall. */
   ridge: number
   /** How far the front edge stands out from the wall. */
@@ -129,9 +132,11 @@ export interface PorticoParams {
   legs: number
   /** Thickness of the canopy. */
   slab: number
-  /** Blades standing on the leading edge, and how tall they are. */
-  blades: number
-  bladeRise: number
+  /** Bones in the crown standing on the gable, and how tall they stand. */
+  bones: number
+  crown: number
+  /** The cross over the apex. */
+  cross: number
 }
 
 /**
@@ -156,17 +161,26 @@ export interface PorticoParams {
  *    behind it out of the sky's way. The old version projected far enough to
  *    cast a shadow and then held nothing in it, because the roof was a metre
  *    and a bit thick and the wall stood a couple of metres back.
- *  - The comb of raking prisms along the leading edge, which is the one
- *    detail of this porch anybody photographs. Thirty-odd of them, not
- *    thirteen.
+ *  - The leading edge is a **gable**, not a shelf. It was built as an arc
+ *    eighteen metres up with a comb of four-metre blades along it, which is
+ *    what the porch was before 2016 and not quite even then. What stands
+ *    there now is the pediment: eighteen bones of nine metres raking up off
+ *    the gable to a cornice of hexagonal prisms that carries the charge a
+ *    letter to a prism, and a cross of seven and a half metres over the
+ *    apex — both figures published. Measured off the author's own
+ *    `ex-passion-front-up-dec2025` at the lens it was taken with: the tower
+ *    axes put the camera sixty-two degrees up, the cross then stands
+ *    twenty-five metres out and runs from about 45 to 53 m, and the gable's
+ *    apex is about twelve metres under it. From the same camera the old
+ *    porch was not in the frame at all.
  */
 export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
   const pieces: THREE.BufferGeometry[] = []
   const legs = Math.max(2, Math.round(p.legs))
   const half = p.width / 2
 
-  /** The leading edge, as an arc: highest in the middle, dipping at the ends. */
-  const eavesAt = (u: number): number => p.eaves - (p.eaves - p.ridge) * 0.18 * u * u
+  /** The leading edge, as a gable: straight rakes from the hips to the apex. */
+  const eavesAt = (u: number): number => THREE.MathUtils.lerp(p.eaves, p.hip, Math.min(1, Math.abs(u)))
 
   for (let i = 0; i < legs; i++) {
     const u = legs === 1 ? 0 : (i / (legs - 1)) * 2 - 1
@@ -179,7 +193,10 @@ export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
     const headZ = p.reach * 0.88
     const footX = u * half * 1.28
     const footZ = p.reach * 1.04
-    const height = eavesAt(u) - p.slab * 0.4
+    const height = eavesAt(u * 0.86) - p.slab * 0.4
+    // Under a gable the middle pair stand half as tall again as the outer
+    // pair, and a bone that long at the girth of a short one is a stick.
+    const girth = Math.sqrt(height / 18)
     const leg = buildLeg({
       height,
       reach: footZ,
@@ -187,9 +204,9 @@ export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
       // pier at each end and a bone in the middle. The head opens to twice
       // the neck and more, so it meets the soffit as a spread and not as a
       // post under a shelf.
-      foot: 2.1,
-      neck: 0.95,
-      knuckle: 2.3,
+      foot: 2.1 * girth,
+      neck: 0.95 * girth,
+      knuckle: 2.3 * girth,
       lean: 1 - headZ / footZ,
       splay: headX - footX,
       flat: 1.3,
@@ -199,36 +216,75 @@ export function buildPassionPortico(p: PorticoParams): THREE.BufferGeometry {
   }
 
   pieces.push(canopy(p, eavesAt))
-  pieces.push(comb(p, eavesAt))
-  pieces.push(titulus(p, eavesAt))
+  pieces.push(crown(p, eavesAt))
   return mergeOrEmpty(pieces)
 }
 
 /**
- * The charge, cut along the leading edge of the roof.
+ * The pediment: eighteen bones on the gable, the cornice they carry, the
+ * charge cut into it and the cross on top.
  *
- * Set flat and then dropped onto the arc — the leading edge falls nearly two
- * metres from the middle of the span to the hips, and a straight line of
- * letters on it parts company with the stone at both ends. One pass over the
- * finished geometry, the same trick the tower bands use to follow a star
- * section, and the line lies on the edge it is cut into.
+ * The bones fan — each leans out from the middle a little more than the one
+ * inside it, and back toward the wall by a metre and a half — so the row
+ * reads as ribs rather than as a fence. The cornice is a prism to a letter,
+ * each standing at the height of the gable under it plus the bones, which
+ * steps the top edge the way the photographs show it rather than drawing it
+ * as a line. The apex prism carries no letter; the cross stands on it.
  */
-function titulus(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferGeometry {
-  const text = 'IESUS NAZARENUS REX IUDAEORUM'
+function crown(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferGeometry {
+  const pieces: THREE.BufferGeometry[] = []
   const half = p.width / 2
-  const tracking = 0.2
-  const cap = (p.width * 0.8) / Math.max(1, textWidth(text, tracking))
-  const line = buildInscription({ text, size: cap, tracking, weight: 0.12, relief: 0.24 })
-  line.translate(-(textWidth(text, tracking) * cap) / 2, 0, 0)
-  const pos = line.getAttribute('position') as THREE.BufferAttribute
-  for (let i = 0; i < pos.count; i++) {
-    const u = pos.getX(i) / half
-    // Under the comb, on the face of the slab, standing out of it.
-    pos.setXYZ(i, pos.getX(i), pos.getY(i) + eavesAt(u) - p.slab * 0.66, pos.getZ(i) + p.reach * 1.0)
+  const front = p.reach * 0.97
+  const bones = Math.max(2, Math.round(p.bones))
+  for (let i = 0; i < bones; i++) {
+    const u = ((i + 0.5) / bones) * 2 - 1
+    const bone = buildLeg({
+      height: p.crown,
+      reach: front,
+      foot: 0.62,
+      neck: 0.34,
+      knuckle: 0.8,
+      lean: 1.5 / front,
+      splay: u * 1.4,
+      flat: 1.15,
+    })
+    bone.translate(u * half * 0.94, eavesAt(u) - p.slab * 0.2, 0)
+    pieces.push(bone)
   }
-  pos.needsUpdate = true
-  line.computeBoundingSphere()
-  return line
+
+  // IESUS NAZARENUS up the left rake, REX IUDAEORUM down the right, the apex
+  // between them — padded so the two rakes carry the same number of prisms.
+  const left = 'IESUS NAZARENUS '
+  const right = ' REX IUDAEORUM'.padEnd(left.length, ' ')
+  const cells = [...left, '', ...right]
+  const radius = (p.width / cells.length) * 0.62
+  const depth = 1.9
+  const back = front - 1.5
+  const cap = radius * 1.05
+  for (const [k, ch] of cells.entries()) {
+    const u = (k / (cells.length - 1)) * 2 - 1
+    const x = u * half * 0.96
+    const y = eavesAt(u) + p.crown + radius * 0.55
+    const prism = new THREE.CylinderGeometry(radius, radius, depth, 6)
+    prism.rotateX(Math.PI / 2)
+    prism.translate(x, y, back)
+    pieces.push(prism)
+    if (ch.trim()) {
+      const w = textWidth(ch, 0) * cap
+      const letter = buildInscription({ text: ch, size: cap, tracking: 0, weight: 0.16, relief: 0.2 })
+      letter.translate(x - w / 2, y - cap / 2, back + depth / 2)
+      pieces.push(letter)
+    }
+  }
+
+  // The cross, square in section, its arms a little over half its height.
+  const foot = eavesAt(0) + p.crown + radius * 1.4
+  const post = new THREE.BoxGeometry(0.9, p.cross, 0.9)
+  post.translate(0, foot + p.cross / 2, back)
+  const arm = new THREE.BoxGeometry(p.cross * 0.52, 0.9, 0.9)
+  arm.translate(0, foot + p.cross * 0.68, back)
+  pieces.push(post, arm)
+  return mergeOrEmpty(pieces)
 }
 
 /**
@@ -279,33 +335,6 @@ function canopy(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferG
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
   return geometry
-}
-
-/**
- * The comb along the leading edge.
- *
- * A row of prisms standing on the edge of the roof and raking back over it,
- * each one throwing a wedge of shadow onto the slope behind. What it buys is
- * a line of alternating light and dark right where the porch meets the sky,
- * which is the single most recognisable thing about this front at the range
- * the pavement viewpoints stand at.
- */
-function comb(p: PorticoParams, eavesAt: (u: number) => number): THREE.BufferGeometry {
-  const pieces: THREE.BufferGeometry[] = []
-  const blades = Math.max(2, Math.round(p.blades))
-  const half = p.width / 2
-  for (let i = 0; i < blades; i++) {
-    const t = (i + 0.5) / blades
-    const u = t * 2 - 1
-    // Tallest over the middle of the span, running out toward the hips.
-    const rise = p.bladeRise * (0.62 + 0.38 * Math.cos(u * Math.PI * 0.5))
-    const blade = new THREE.BoxGeometry((p.width / blades) * 0.46, rise, p.slab * 1.5)
-    blade.translate(0, rise / 2, 0)
-    blade.rotateX(-0.62)
-    blade.translate(u * half * 0.99, eavesAt(u), p.reach * 0.96)
-    pieces.push(blade)
-  }
-  return mergeOrEmpty(pieces)
 }
 
 export interface HoodParams {

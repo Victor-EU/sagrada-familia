@@ -174,7 +174,7 @@ export const NATIVITY_STONE = 0x9a8b7a
 export const PASSION_STONE = 0xc4ac86
 
 /**
- * The new white stone: the Passion portico, the Glory front, the blades.
+ * The new white stone: the Passion portico and its crown, the Glory front.
  *
  * Subirachs' portico is deliberately not the colour of the wall behind it —
  * it is pale, near-neutral, and it is the one thing on that front that throws

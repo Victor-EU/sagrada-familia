@@ -604,13 +604,22 @@ export function buildShell(
           // spans the four towers' feet; a narrower one reads as a canopy
           // bolted on rather than as the front itself.
           width: width * 0.98,
-          eaves: s.portalHeight * 0.9,
-          ridge: s.portalHeight * 1.4,
+          // A gable, measured off `ex-passion-front-up-dec2025` at its own
+          // lens — see buildPassionPortico. The apex twelve metres under the
+          // cross and the hips at half its height, which is the rake the
+          // 2010 frame shows; the roof climbs back from it to the wall.
+          eaves: 34,
+          hip: 17,
+          ridge: 36,
           reach: s.porchReach * 1.26,
           legs: 6,
           slab: 1.6,
-          blades: 32,
-          bladeRise: 4,
+          // Eighteen bones of nine metres and a cross of seven and a half,
+          // both published; the crown stands a metre over the bones for the
+          // heads they open into.
+          bones: 18,
+          crown: 10,
+          cross: 7.5,
         }),
       )
     }
