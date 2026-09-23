@@ -8,12 +8,12 @@ import { YEAR, dayLabel } from '../light/sun.ts'
  *
  * Everything else in this app asks something of the viewer: turn it, come
  * closer, find the door, walk. This asks nothing. Press play and the camera
- * goes round the building and in, the way a film would — a slow dolly across
- * the pond as the morning arrives, a walk up to the Nativity front, the
- * approach through the door with the vault opening overhead, the shafts
- * sweeping across the crossing as the evening goes — and the sun moves
- * inside every shot, because the one thing nothing else in this building can
- * show is the light *changing*.
+ * goes round the building and in, the way a film would — a dolly across the
+ * pond as the morning arrives, round the towers from the air, the approach
+ * through the door with the vault opening overhead, the shafts sweeping
+ * across the crossing as the evening goes — and the sun moves inside every
+ * shot, because the one thing nothing else in this building can show is the
+ * light *changing*. A minute and a half, and then it goes round again.
  *
  * It is not the guided visit that was here before. That had stops and a rail
  * and asked to be followed; this has cuts and asks to be watched, and the
@@ -75,7 +75,10 @@ const OPEN_MS = 2600
  * A change of sun rebuilds the sky probe and re-runs both shadow maps, which
  * is not something to do sixty times a second. Two minutes of sun is a third
  * of a degree, which no shadow edge in the building shows, and at the pace
- * these shots run the clock it is a relight every half second or so.
+ * these shots run the clock it is a relight between one and seven times a
+ * second — which the frame does not feel: on the morning shot, at seven,
+ * switching the relights off altogether leaves the frame times where they
+ * were.
  */
 const SUN_STEP = 0.03
 /** When the caption comes and goes, in seconds from either end of a shot. */
@@ -193,9 +196,21 @@ function nativityDoor(viewer: Viewer): Doorway {
 }
 
 /**
- * The shots, in the order you would walk it: from across the square, up to
- * the fronts, round from the air, onto the roof, in through the door, and
- * then the room at the hours the room was built for.
+ * The shots, in the order you would walk it: from across the square, round
+ * from the air, under the Passion front, in through the door, and then the
+ * room at the hours the room was built for — and out by the Glory front.
+ *
+ * Ninety seconds, all told. It was fourteen shots and four minutes and forty
+ * seconds, which is a film nobody stays for: every one of the fourteen held
+ * long enough to be admired and half of them moved at less than a walk, so
+ * the building went by at the pace of somebody standing in it. It keeps the
+ * nine that are each something none of the others is — the pond had the
+ * Nativity front already, the orbit had the flank, the vault from below had
+ * the apse, the glazing had the wash — and runs each on its same path and
+ * through its same hours in a third of the time. A move is now a move: a
+ * dolly at two metres a second, a crane, an orbit that turns the building
+ * a full side in a quarter of a minute, and the light going across each one
+ * fast enough to be seen going.
  */
 export function shots(viewer: Viewer): Shot[] {
   const door = nativityDoor(viewer)
@@ -207,7 +222,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'Across the pond',
       day: 172,
       hours: [7.4, 9.6],
-      seconds: 24,
+      seconds: 10,
       fov: 56,
       shift: 0.45,
       // Along the strip the plaza keeps clear for the façade's own sightline
@@ -220,28 +235,11 @@ export function shots(viewer: Viewer): Shot[] {
         [0, 68, -26],
       ],
     }),
-    dolly({
-      title: 'The Nativity front',
-      day: 172,
-      hours: [9.6, 10.1],
-      seconds: 18,
-      fov: 72,
-      shift: 0.35,
-      walk: true,
-      // The same clear strip, from the edge of the pond to the foot of the
-      // steps. A head above eye height, to see over the water.
-      from: [108, 3.0, -8],
-      to: [94, 3.0, -12],
-      look: [
-        [10, 106, -26],
-        [10, 92, -26],
-      ],
-    }),
     orbit({
       title: 'Round the building',
       day: 264,
       hours: [16.4, 17.6],
-      seconds: 32,
+      seconds: 14,
       fov: 42,
       shift: 0.3,
       centre: [0, -19],
@@ -252,21 +250,10 @@ export function shots(viewer: Viewer): Shot[] {
       look: [0, 62, -19],
     }),
     dolly({
-      title: 'The flank from the street, December',
-      day: 352,
-      hours: [15.4, 15.9],
-      seconds: 14,
-      fov: 46,
-      shift: 0,
-      from: [-177, 1.7, 80],
-      to: [-170, 1.7, 73],
-      look: [-18, 62, -12],
-    }),
-    dolly({
       title: 'Under the Passion front',
       day: 352,
       hours: [15.0, 15.5],
-      seconds: 16,
+      seconds: 8,
       fov: 64,
       shift: 0,
       from: [-78, 1.6, -36],
@@ -277,33 +264,25 @@ export function shots(viewer: Viewer): Shot[] {
       ],
     }),
     dolly({
-      title: 'On the terraces',
-      day: 172,
-      hours: [8.3, 8.8],
-      seconds: 16,
-      fov: 72,
-      shift: 0.4,
-      from: [18.5, 33.4, 15],
-      to: [18.5, 33.4, 7],
-      look: [3, 96, -36],
-    }),
-    dolly({
       title: 'The door',
       day: 172,
       hours: [9.5, 9.9],
-      seconds: 26,
+      seconds: 12,
       fov: [66, 74],
       shift: 0.45,
       walk: true,
-      from: axis(46, 1.65),
-      to: axis(-30, 1.65),
+      // From the foot of the steps rather than the far side of the street:
+      // the whole seventy-six metres at this length would be a sprint, and
+      // the street added nothing the pond had not shown.
+      from: axis(28, 1.65),
+      to: axis(-24, 1.65),
       look: [axis(-8, 18), axis(-60, 30)],
     }),
     dolly({
       title: 'Down the nave',
       day: 262,
       hours: [15.9, 16.4],
-      seconds: 24,
+      seconds: 10,
       fov: 64,
       shift: 0.9,
       walk: true,
@@ -318,7 +297,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'The Passion glazing, four o’clock',
       day: 262,
       hours: [15.7, 16.3],
-      seconds: 16,
+      seconds: 8,
       fov: 62,
       shift: 1,
       walk: true,
@@ -326,26 +305,11 @@ export function shots(viewer: Viewer): Shot[] {
       to: [5, 1.65, 3.4],
       look: [-9.4, 13, -2],
     }),
-    dolly({
-      title: 'The wash on the vault',
-      day: 352,
-      hours: [14.8, 15.2],
-      seconds: 14,
-      fov: 47,
-      shift: 0,
-      walk: true,
-      from: [-1, 1.65, -4],
-      to: [-3, 1.65, -4],
-      look: [
-        [-20, 34, -4],
-        [-20, 52, -4],
-      ],
-    }),
     spin({
       title: 'The vault, from below',
       day: 172,
       hours: [9.8, 10.3],
-      seconds: 20,
+      seconds: 9,
       fov: 74,
       shift: 0,
       walk: true,
@@ -354,22 +318,10 @@ export function shots(viewer: Viewer): Shot[] {
       yaw: [1.2, 1.9],
     }),
     dolly({
-      title: 'Into the apse',
-      day: 172,
-      hours: [10, 10.4],
-      seconds: 18,
-      fov: 70,
-      shift: 0.5,
-      walk: true,
-      from: [0, 1.65, -30],
-      to: [0, 1.65, -40],
-      look: [0, 44, -60],
-    }),
-    dolly({
       title: 'Evening at the crossing',
       day: 172,
       hours: [19.1, 20.3],
-      seconds: 26,
+      seconds: 10,
       fov: 74,
       shift: 0.5,
       walk: true,
@@ -381,7 +333,7 @@ export function shots(viewer: Viewer): Shot[] {
       title: 'The Glory front',
       day: 110,
       hours: [12.8, 13.5],
-      seconds: 18,
+      seconds: 9,
       fov: 70,
       shift: 0.3,
       from: [30, 0.3, 124],
