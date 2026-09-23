@@ -780,6 +780,9 @@ uniform float uThrowBias;
 uniform float uThrowGain;
 uniform float uThrowBlur;
 uniform vec2 uThrowSide;
+// Per stone, not per rig: how much of the clerestory this material takes.
+// Set in render/materials.ts — see THROW_SHARE there.
+uniform float uThrowShare;
 uniform mat4 uLoftMatrix;
 uniform sampler2D uLoftDepth;
 uniform float uLoftSoft;
@@ -868,8 +871,9 @@ vec3 sfWash( const in vec3 shadingNormal, const in vec3 world ) {
  * clerestory head, out over the aisle roof behind it, and onto the vault.
  * A soffit is edge-on to the horizontal pair and takes nothing from them;
  * tilted, the dot product turns positive for anything whose face has a
- * downward component, which is the whole canopy and the top of every shaft
- * under it.
+ * downward component, which is the whole canopy — and every upright face
+ * that can see a clerestory, at four times the canopy's cosine, which is why
+ * only the vault's own stone takes it. See THROW_SHARE in materials.ts.
  *
  * Where the floor's light is one broad tone from underneath, this arrives
  * from a particular window and carries its colour and its pattern — the gold
@@ -877,7 +881,9 @@ vec3 sfWash( const in vec3 shadingNormal, const in vec3 world ) {
  * this, and it is not something a term with no direction in it can produce.
  */
 vec3 sfThrow( const in vec3 shadingNormal, const in vec3 world ) {
-  return uThrowGain * (
+  // The canopy's light and nobody else's — see THROW_SHARE in materials.ts.
+  if ( uThrowShare <= 0.0 ) return vec3( 0.0 );
+  return uThrowShare * uThrowGain * (
     uThrowSide.x * sfWashFrom(
       uThrowDepthA, uThrowTintA, uThrowMatrixA, uThrowDirA,
       uThrowSoft, uThrowBias, uThrowBlur, shadingNormal, world

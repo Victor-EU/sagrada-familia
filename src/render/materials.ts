@@ -526,6 +526,12 @@ const INDOOR_LIGHT = /* glsl */ `
   // because most of what a column flank faces across the equator is not the
   // vault or the floor but the next column.
   float standingShare = uRoomStand * lateral * 0.5;
+
+  // The room's own colour, by which half of the glazing has the sun — see
+  // ROOM_LIGHT_EAST. uWashTilt is −1 when the Passion wall is lit, which is
+  // every frame this room was fitted against, so there it is uRoomBounce
+  // exactly.
+  vec3 bounce = mix( uRoomBounce, uRoomBounceEast, clamp( 0.5 + 0.5 * uWashTilt, 0.0, 1.0 ) );
   float fromFloor = max( 0.0, -roomNormal.y );
   float fromAbove = max( 0.0, roomNormal.y );
 
@@ -670,7 +676,7 @@ const INDOOR_LIGHT = /* glsl */ `
   // at four in the afternoon and green at ten in the morning, and the
   // canopy above it takes that colour on. A share rather than the whole,
   // because the floor is stone before it is a mirror.
-  vec3 hearth = mix( ambient, luminance * uRoomBounce, uRoomWarmth )
+  vec3 hearth = mix( ambient, luminance * bounce, uRoomWarmth )
     * mix( vec3( 1.0 ), glassRaw, uLoftTint );
 
   // And how much of the floor a face sees decides how coloured that light
@@ -761,7 +767,7 @@ const INDOOR_LIGHT = /* glsl */ `
   //   | 0      | 0.56      | 0.39       | 0.40     |  wall 0.62 / 0.44 |
   //
   // Every surface moves toward the photograph as the pooling comes off.
-  vec3 roomTone = mix( ambient, luminance * uRoomBounce, uRoomWarmth );
+  vec3 roomTone = mix( ambient, luminance * bounce, uRoomWarmth );
   vec3 room = roomTone * ( uRoomFloor * fromFloor + uRoomSky * fromAbove
     + ( uRoomFloor + uRoomSky ) * standingShare );
   vec3 window = luminance * glass * fromGlass;
@@ -875,6 +881,7 @@ export interface ShelterUniforms extends Record<string, THREE.IUniform> {
 
 const INDOOR_PARS = /* glsl */ `
 uniform vec3 uRoomBounce;
+uniform vec3 uRoomBounceEast;
 uniform float uRoomWarmth;
 uniform float uRoomGain;
 uniform float uRoomFloor;
@@ -904,6 +911,7 @@ function unitLuminance(colour: THREE.Color): THREE.Color {
 
 export interface RoomUniforms extends Record<string, THREE.IUniform> {
   uRoomBounce: { value: THREE.Color }
+  uRoomBounceEast: { value: THREE.Color }
   uRoomWarmth: { value: number }
   uRoomGain: { value: number }
   uRoomFloor: { value: number }
@@ -963,7 +971,58 @@ export interface RoomUniforms extends Record<string, THREE.IUniform> {
  * this cannot yet have is variation, and that is a missing source rather
  * than a missing colour.
  */
-export const ROOM_LIGHT = 0xffc27a
+/**
+ * And yellower going in than it looks coming out.
+ *
+ * The frames this was fitted on held their luminance and missed their hue:
+ * measured frame-wide on the stone, `w` and `v` came out at 16 and 17
+ * degrees against 26 in both photographs, and `1` at 17 against 37 — salmon
+ * and terracotta where the photographs are amber. Not the grade: with the
+ * film at identity the hue is 18. Not the glass or the stone: a yellower
+ * Passion glazing moves it two degrees and grey stone one. It is the light
+ * itself, multiplied in linear light by a warm vault and a warm floor on
+ * its way to the eye, and every multiply by a warm colour takes green out
+ * faster than red. So the constant is set where it has to be for what
+ * arrives to be amber: at this value the three frames read 24, 25 and 26,
+ * with every luminance unchanged to two decimals, since the colour is held
+ * at unit luminance either way.
+ */
+export const ROOM_LIGHT = 0xffe244
+
+/**
+ * The colour of the light inside when the gold is not in it — the Nativity
+ * half lit, the Passion half in its own shadow.
+ *
+ * ROOM_LIGHT is the room with the Passion glazing lit — and every photograph
+ * that colour was fitted against was taken with it lit: the December
+ * afternoons, the nave at four o'clock. It was then the room's colour at
+ * every hour of the day, so a June morning with the sun on the green and
+ * blue Nativity side came out the same terracotta as a December afternoon,
+ * and measured across five hours in two seasons the nave never left 0.34 to
+ * 0.57 saturated at 18 to 23 degrees of hue. The photographs of this nave
+ * that are not December afternoons run 0.17 to 0.20 saturated, and one of
+ * them is on the cool side of grey.
+ *
+ * So the room has a second colour, and the hour chooses between them by
+ * the same signed number the rest of the room reads: which half of the
+ * glazing has the sun standing outside it. With the Nativity side lit the
+ * light that fills the room has come through green and blue glass and off
+ * pale stone, and what the photographs show it arriving as is pale warm
+ * grey. Past noon the gold comes back, and at every hour a frame in this
+ * model was ever fitted at — all of them with the Passion side lit — it is
+ * exactly what it was.
+ *
+ * A cream and not a grey, which is not what the argument says and is what
+ * the screen needs. Swept on the June landing and on the nave at nine, a
+ * neutral here came back slate-teal: a fifth of the sky probe is still in
+ * the mix, the floor carries a share of the green glass above it, and the
+ * grade cools the shadows. Pale grey on the stone takes a warm cream going
+ * in. At this value both frames land at 0.15 and 0.17 saturated and 30 and
+ * 34 degrees, against 0.17 to 0.20 and 25 to 34 in the photographs of the
+ * nave that are not December afternoons — and 0.34 to 0.39, at 18 to 21,
+ * before.
+ */
+export const ROOM_LIGHT_EAST = 0xf8dcb4
 
 /**
  * The two halves of the room, measured off the photographs.
@@ -987,6 +1046,7 @@ export const GLASS_WEST = 0xffb14a
 export function roomUniforms(): RoomUniforms {
   return {
     uRoomBounce: { value: unitLuminance(new THREE.Color(ROOM_LIGHT).convertSRGBToLinear()) },
+    uRoomBounceEast: { value: unitLuminance(new THREE.Color(ROOM_LIGHT_EAST).convertSRGBToLinear()) },
     /**
      * Not all the way, and much less far than it was.
      *
@@ -1601,6 +1661,31 @@ const FILL_SCALE: Partial<Record<StoneName, number>> = {
 }
 
 /**
+ * Which stones the clerestory lights — see sfThrow in render/washrig.ts.
+ *
+ * The canopy, and only the canopy. The throw's gain was fitted on a soffit,
+ * which meets a heading fifteen degrees off level at a quarter cosine; a
+ * shaft or a branch flank standing upright meets it at 0.97. So every column
+ * and every branch in the building that could see a clerestory was taking
+ * four times the canopy's share, at a gain nobody had fitted for it — at 21
+ * June, ten o'clock, 86 per cent of the throw's light landed on things that
+ * are not the vault. Through a five-tap binary depth test on a nearest map
+ * that is not light but a stencil: hard-edged pale blocks up every shaft and
+ * across every flat facet of every branch, the first thing anybody saw on
+ * walking in.
+ *
+ * Gating on how far a face turns downward was tried first and was not
+ * enough. It took the shafts out and left the undersides of the branches,
+ * which are low-poly and flat-faced, so each facet took one value and the
+ * blocks moved up a storey. What the throw was built for is the vault, and
+ * the vault is its own stone; everything else is already lit by these same
+ * windows through the horizontal pair, which is what that pair is.
+ */
+const THROW_SHARE: Partial<Record<StoneName, number>> = {
+  vault: 1,
+}
+
+/**
  * The masonry, and it is the claim that this building is made of pieces.
  *
  * Every exterior surface in every reference photograph is laid stone, and at
@@ -1946,10 +2031,11 @@ export function stonePatch(
 ): SurfacePatch {
   const indoors = INDOORS.includes(name)
   const fillScale = { uFillScale: { value: FILL_SCALE[name] ?? 1 } }
+  const throwShare = { uThrowShare: { value: THROW_SHARE[name] ?? 0 } }
   const laid = masonryUniforms(name, indoors)
   return {
     uniforms: indoors
-      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale, ...laid }
+      ? { ...grain, ...room, ...wash, ...outdoor, ...shelter, ...fillScale, ...throwShare, ...laid }
       : { ...grain, ...outdoor, ...shelter, ...fillScale, ...laid },
     pars: indoors
       ? `${GRAIN_PARS}\n${INDOOR_PARS}\n${WASH_PARS}\n${OUTDOOR_PARS}\n${SHELTER_PARS}\n${MASONRY_PARS}`
