@@ -31,6 +31,7 @@ uniform vec3 uGround;
 uniform vec3 uSunColor;
 uniform float uHaloStrength;
 uniform float uDiscStrength;
+uniform float uHazeBelow;
 varying vec3 vDirection;
 
 void main() {
@@ -49,13 +50,25 @@ void main() {
   // Forward scattering: a broad halo the whole sky near the sun shares, and
   // the disc itself at roughly its true half-degree.
   float halo = pow( max( cosAngle, 0.0 ), 6.0 );
-  float disc = smoothstep( 0.99988, 0.99996, cosAngle );
+  // Not below the horizon, where the one thing in the way of it is the
+  // earth — and where, for the eye, this is now air rather than ground.
+  float disc = smoothstep( 0.99988, 0.99996, cosAngle ) * step( 0.0, up );
   sky += uSunColor * halo * uHaloStrength;
   sky += uSunColor * disc * uDiscStrength;
 
   // Below the horizon is ground, not sky. It matters: it is half of what an
   // exterior surface sees, and it is what keeps undersides from going black.
-  sky = mix( uGround, sky, smoothstep( -0.04, 0.012, up ) );
+  //
+  // For the light. For the eye it is the wrong answer, because every
+  // direction below the horizon that the eye can see the sky in at all is
+  // one that has passed over the edge of the plaza's disc — ground two
+  // kilometres off and more, which the fog has already taken to the
+  // horizon's own colour at seventeen hundred and fifty. So the background
+  // is drawn with the air carried on down, and the ground stays in the
+  // probe: from high on the orbit the world used to stop in a brown band
+  // between the disc's edge and the horizon.
+  float ground = 1.0 - smoothstep( -0.04, 0.012, up );
+  sky = mix( sky, uGround, ground * ( 1.0 - uHazeBelow ) );
 
   gl_FragColor = vec4( sky, 1.0 );
 }
@@ -138,6 +151,7 @@ export class Sky {
         uSunColor: { value: PALETTE.day.sun.clone() },
         uHaloStrength: { value: 0.34 },
         uDiscStrength: { value: 40 },
+        uHazeBelow: { value: 0 },
       },
       vertexShader: SKY_VERTEX,
       fragmentShader: SKY_FRAGMENT,
@@ -156,7 +170,7 @@ export class Sky {
     this.pmrem.compileCubemapShader()
   }
 
-  /** Sharp cubemap, for `scene.background`. */
+  /** Sharp cubemap, for `scene.background` — haze below the horizon, not ground. */
   get background(): THREE.Texture {
     return this.cubeTarget.texture
   }
@@ -191,10 +205,15 @@ export class Sky {
     u.uSunDirection.value.copy(sunDirection)
     u.uDiscStrength.value = 40 * (day + dusk * 0.5)
 
+    // Twice: once with the ground in it, for the light, and once with the
+    // haze carried below the horizon, for the eye — see uHazeBelow. The
+    // prefilter has finished with the first by the time the second is drawn.
+    u.uHazeBelow.value = 0
     this.cubeCamera.update(renderer, this.scene)
-
     const next = this.pmrem.fromCubemap(this.cubeTarget.texture, this.envTarget)
     this.envTarget = next
+    u.uHazeBelow.value = 1
+    this.cubeCamera.update(renderer, this.scene)
 
     // Extinction through the atmosphere: the sun loses most of its blue and
     // much of its strength in the last ten degrees above the horizon.
