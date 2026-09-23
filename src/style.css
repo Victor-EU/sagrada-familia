@@ -205,6 +205,41 @@ body.dev #hud, body.dev #hint { display: block; }
   animation: waiting 1.6s ease-in-out infinite alternate;
 }
 #intro.built .wait { display: none; }
+/* No building to show: the wait line says why, and stops promising. */
+#intro.failed .wait {
+  animation: none;
+  opacity: 1;
+  color: var(--warm);
+  max-width: 34ch;
+}
+
+/* The graphics card let go — see main.ts. Over everything, because nothing
+   under it is still true. */
+.lost {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(14, 13, 11, 0.86);
+  color: var(--warm);
+  font: 13px/1.6 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+.lost p { margin: 0; }
+.lost button {
+  appearance: none;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: none;
+  color: var(--warm);
+  font: inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
 @keyframes waiting {
   from { opacity: 0.35; }
   to { opacity: 1; }

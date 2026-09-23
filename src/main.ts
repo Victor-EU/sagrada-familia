@@ -18,7 +18,7 @@ import { Viewer } from './camera/viewer.ts'
 import type { CameraRig } from './camera/rig.ts'
 import { PhotoOverlay } from './dev/overlay.ts'
 import { censusFrame, censusLight, type FrameCensus, type LightCensus } from './dev/probe.ts'
-import { buildPanel, type RenderFlags, type SunFlags, type ViewFlags } from './dev/params.ts'
+import type { RenderFlags, SunFlags, ViewFlags } from './dev/params.ts'
 import { VIEWPOINTS, applyViewpoint } from './dev/viewpoints.ts'
 import { Controls } from './ui/controls.ts'
 import { Film } from './ui/film.ts'
@@ -39,6 +39,32 @@ const overlayImg = document.querySelector<HTMLImageElement>('#overlay')!
 const stageEl = document.querySelector<HTMLDivElement>('#stage')!
 const hudEl = document.querySelector<HTMLDivElement>('#hud')!
 const introEl = document.querySelector<HTMLDivElement>('#intro')!
+
+/**
+ * Say so, when there is no building to show.
+ *
+ * Everything below runs before the first frame, and none of it could fail
+ * visibly: a browser without WebGL 2, or an exception anywhere in generating
+ * the model, left the page on "Cutting the stone · a few seconds" with the
+ * line still pulsing, for as long as anybody cared to wait. The wait line is
+ * the one thing on screen that promises something, so it is the thing that
+ * takes the promise back.
+ */
+function failed(message: string): void {
+  // The first reason stands: a WebGL failure is rethrown, and the generic
+  // handler below would otherwise say something vaguer over the top of it.
+  if (introEl.classList.contains('built') || introEl.classList.contains('failed')) return
+  introEl.classList.add('failed')
+  const wait = introEl.querySelector<HTMLElement>('.wait')
+  if (wait) wait.textContent = message
+}
+const NO_WEBGL =
+  'This browser would not start WebGL 2, which the building is drawn with — ' +
+  'it may be switched off in the browser’s settings.'
+const BROKE =
+  'Something went wrong while the stone was being cut. Reloading the page usually gets past it.'
+window.addEventListener('error', () => failed(BROKE))
+window.addEventListener('unhandledrejection', () => failed(BROKE))
 
 /**
  * Let the page paint before the building is generated.
@@ -90,8 +116,36 @@ const FUNNEL_BASE_HEIGHT = 2.6
 /** Keeps the funnel clear of the tree while both are on screen. */
 const FUNNEL_OFFSET_X = 16
 
-const stage = createStage(canvas)
+const stage = (() => {
+  try {
+    return createStage(canvas)
+  } catch (error) {
+    failed(NO_WEBGL)
+    throw error
+  }
+})()
 performance.mark('stage')
+
+/**
+ * And when the graphics card lets go of it afterwards.
+ *
+ * It does: a laptop switching GPUs, a driver reset, a tab that has been
+ * asleep on a phone. The renderer gets the context back on its own, but
+ * not the shadow maps, the wash rig or anything else drawn once and kept,
+ * so the frame that came back was the building with its light missing.
+ * The honest thing is to say what happened and build it again.
+ */
+canvas.addEventListener('webglcontextlost', (event) => {
+  event.preventDefault()
+  const note = document.createElement('div')
+  note.className = 'lost'
+  note.innerHTML =
+    '<p>The graphics card let go of the building.</p>' +
+    '<button type="button">Build it again</button>'
+  note.querySelector('button')!.addEventListener('click', () => location.reload())
+  document.body.append(note)
+})
+canvas.addEventListener('webglcontextrestored', () => location.reload())
 /**
  * The camera, and the two ways of being with a building it offers — see
  * camera/viewer.ts. Bound to the stage rather than the canvas so that screen
@@ -376,15 +430,23 @@ function goTo(index: number): void {
   if (viewpoint) applyViewpoint(viewpoint, viewer, sun, applySun)
 }
 
-type Panel = ReturnType<typeof buildPanel>
+type Panel = ReturnType<typeof import('./dev/params.ts').buildPanel>
 let panel: Panel | null = null
 
-/** Build the instrument the first time it is actually asked for. */
-function openPanel(): Panel {
-  panel ??= buildPanel({
-    plan, hyper, view, render, sun, cam: viewer, overlay,
-    rebuild, applyView, applyRender, applySun, goTo,
-  })
+/**
+ * Build the instrument the first time it is actually asked for — and fetch
+ * it then, too. The panel is Tweakpane and four hundred lines of bindings,
+ * all of it for the person building the model, and it was in the one script
+ * every visitor downloads whether or not they ever press P.
+ */
+async function openPanel(): Promise<Panel> {
+  if (!panel) {
+    const { buildPanel } = await import('./dev/params.ts')
+    panel ??= buildPanel({
+      plan, hyper, view, render, sun, cam: viewer, overlay,
+      rebuild, applyView, applyRender, applySun, goTo,
+    })
+  }
   return panel
 }
 
@@ -392,11 +454,18 @@ function setDev(on: boolean): void {
   dev = on
   document.body.classList.toggle('dev', on)
   if (on) {
-    const p = openPanel()
-    p.expanded = window.innerWidth >= NARROW
+    void openPanel().then((p) => {
+      p.expanded = window.innerWidth >= NARROW
+      showPanel()
+    })
   }
+  showPanel()
+}
+
+/** The panel's own wrapper follows the switch, however late it arrived. */
+function showPanel(): void {
   const wrapper = document.querySelector<HTMLElement>('.tp-dfwv')
-  if (wrapper) wrapper.style.display = on ? '' : 'none'
+  if (wrapper) wrapper.style.display = dev ? '' : 'none'
   layout()
 }
 
@@ -678,7 +747,10 @@ function frame(): void {
   }
 
   const now = performance.now()
-  if (now - hudAt > 120) {
+  // Only while it can be seen. Counting the model's triangles walks every
+  // mesh in it, and this ran eight times a second behind a readout that is
+  // display: none for everybody who has not pressed P.
+  if (dev && now - hudAt > 120) {
     hudAt = now
     const p = stage.camera.position
     const nave = plan.bands[0]!
