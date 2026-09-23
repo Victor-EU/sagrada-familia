@@ -190,6 +190,25 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * how the clock came to say 21 Sep while the readout beside it said 21 Sept:
  * two ways of writing one date, a centimetre apart.
  */
+/**
+ * The same light on another day.
+ *
+ * An hour is a position in the day, not a number: ten to nine on a June
+ * evening is the last of the light, and ten to nine in December is the
+ * middle of the night. Given an hour on one day, this is the hour on another
+ * that stands at the same fraction of the daylight, sunrise to sunset — and,
+ * outside the daylight, the same distance from the nearer edge, so dusk
+ * stays dusk. The scrubber uses it to change the day under a fixed light,
+ * and the film uses it to play its summer day again in winter.
+ */
+export function sameLight(hour: number, from: number, to: number, year = YEAR): number {
+  const a = daylight(year, from)
+  const b = daylight(year, to)
+  if (hour <= a.rise) return b.rise - (a.rise - hour)
+  if (hour >= a.set) return b.set + (hour - a.set)
+  return b.rise + ((hour - a.rise) / (a.set - a.rise)) * (b.set - b.rise)
+}
+
 export function dayLabel(year: number, dayOfYear: number): string {
   const d = new Date(Date.UTC(year, 0, Math.round(dayOfYear)))
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`

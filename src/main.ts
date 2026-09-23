@@ -386,11 +386,19 @@ function applyRender(): void {
 
 let solar: SolarPosition = solarPosition(barcelonaTime(YEAR, sun.dayOfYear, sun.hour))
 
+/**
+ * Frames still to come that will carry a relight: the wide shadow map on the
+ * next render and the near one on the render after — see render/scene.ts.
+ * The resolution pacer leaves them out of its average, below.
+ */
+let relit = 0
+
 function applySun(): void {
   stage.sky.brightness = sun.skyBrightness
   const when = barcelonaTime(YEAR, sun.dayOfYear, sun.hour)
   solar = solarPosition(when)
   stage.setSun(sunDirection(solar, sun.bearingDeg))
+  relit = 2
   stage.sun.uniforms.uSunRadiance.value.multiplyScalar(sun.intensity)
 }
 
@@ -489,10 +497,24 @@ function showPanel(): void {
  * needs the frame as drawn, which the drawing buffer does not keep, so it is
  * drawn again on demand — see ui/film.ts.
  */
-const film = new Film(viewer, stageEl, sun, applySun, () => {
-  stage.render()
-  return stage.renderer.domElement
-})
+/**
+ * `?film` in the address opens on the film rather than on the plaza — for a
+ * screen in a corner, or for sending somebody the building with nothing to
+ * learn first. A screen in a corner gets touched, so a film opened this way
+ * comes back on its own once the hand has gone.
+ */
+const FILM_AT_START = new URLSearchParams(location.search).has('film')
+const film = new Film(
+  viewer,
+  stageEl,
+  sun,
+  applySun,
+  () => {
+    stage.render()
+    return stage.renderer.domElement
+  },
+  { kiosk: FILM_AT_START },
+)
 const controls = new Controls(viewer, stageEl, sun, applySun, film)
 
 /**
@@ -709,7 +731,17 @@ function frame(): void {
   // frame is drawn into the canvas it is shown in. Not on the first frame:
   // that one compiles every shader in the building and says nothing about
   // the frames that follow.
-  if (painted) pace(dt)
+  //
+  // And not on a frame that carries a relight. Those are two shadow passes
+  // the number of pixels has nothing to do with, and the film relights
+  // several times a second — so the pacer read the film as a slow machine
+  // and walked a Retina screen down toward one pixel per pixel in the first
+  // shot, where it stayed, because six quick seconds never came while the
+  // sun was moving.
+  if (painted) {
+    if (relit > 0) relit--
+    else pace(dt)
+  }
 
   // The film writes the pose first, when it has it; the viewer then does
   // only what it still owns, which is the pupil.
@@ -717,6 +749,7 @@ function frame(): void {
   // What the last metered frame asked for, in the viewer's own units.
   const metered = stage.meter.exposure
   viewer.metered = metered === null ? null : metered / render.exposure
+  viewer.meterReadings = stage.meter.readings
   viewer.update(dt)
   // The pupil, which the viewer moves as it crosses the threshold, and which
   // the panel's own exposure is the base of.
@@ -736,16 +769,20 @@ function frame(): void {
     // The corner button rides above the attribution while the attribution is
     // on screen and settles into its own place when it goes — see
     // `body:not(.named)` in style.css.
-    window.setTimeout(() => {
+    //
+    // Unless the film was asked for: then the name goes with the cover. It
+    // stood over the film's own caption, and the quote over its hint, for
+    // the first seven seconds of every loop that opened that way.
+    const named = (): void => {
       introEl.classList.add('gone')
       document.body.classList.add('named')
-    }, 7000)
+    }
+    if (FILM_AT_START) named()
+    else window.setTimeout(named, 7000)
     controls.begin()
-    // `?film` in the address opens on the film rather than on the plaza —
-    // for a screen in a corner, or for sending somebody the building with
-    // nothing to learn first. Started here, on the first drawn frame, so its
-    // opening fade is from the cover and not from a blank page.
-    if (new URLSearchParams(location.search).has('film')) film.play()
+    // The film, if asked for: started here, on the first drawn frame, so
+    // its opening fade is from the cover and not from a blank page.
+    if (FILM_AT_START) film.play()
     const at = (name: string): number =>
       Math.round(performance.getEntriesByName(name, 'mark')[0]?.startTime ?? 0)
     console.debug(

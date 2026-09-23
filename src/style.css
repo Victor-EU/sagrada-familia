@@ -642,6 +642,11 @@ body:not(.named) .out { bottom: 104px; }
 }
 .film-hint.on { opacity: 1; }
 .film-hint strong { color: var(--warm); font-weight: 500; }
+.film-hint .touch { display: none; }
+@media (pointer: coarse) {
+  .film-hint .pointer { display: none; }
+  .film-hint .touch { display: inline; }
+}
 
 /* No cursor over a film. The first press brings it back with everything else. */
 #stage.film, body.walking #stage.film { cursor: none; }

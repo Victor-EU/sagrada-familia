@@ -252,7 +252,8 @@ to within one per cent.
 | The plaza as ground — the same plan at its outside faces, keeping you out | `src/camera/envelope.ts` |
 | Two ways of being with a building: an orbit outside, a walk inside, and a door between them | `src/camera/viewer.ts` |
 | The interface — the way in, the way out, what the cursor does here, and the hour | `src/ui/controls.ts` |
-| The film — nine shots round the building and in, forty-five seconds, dissolved and looped, the sun moving in each | `src/ui/film.ts` |
+| The film — one day in ten shots, about a minute, dissolved and looped, the sun moving in each; winter the second time round | `src/ui/film.ts` |
+| The room's sound, made on the spot for the film | `src/ui/ambience.ts` |
 | Figures, canopies, carved growth and cresting — the Nativity front's sculpture | `src/geometry/statuary.ts` |
 | The cover — Gaudí's hanging chains, dropped, settled and turned over while the stone is cut | `src/ui/cover.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
@@ -337,17 +338,24 @@ switch as the panel.
 
 Every control above asks something of you. **Watch the film**, in the top
 corner (or K, or `?film` in the address), asks nothing: the camera goes
-round the building and in on its own — across the pond as the morning
-arrives, round from the air, under the Passion front, in through the door
-with the vault opening overhead, down the nave at four o'clock, the shafts
-sweeping the crossing as the evening goes — nine shots and forty-five
-seconds, dissolved, looped, with the sun moving inside every one of them.
-The shots are the harness's own verified frames, run on a little; nothing
-in them is authored light.
+round the building and in on its own, and the sun moves inside every shot.
+It is one day — dawn across the pond, in by the Nativity door as the
+morning arrives, the vault, the east glazing lit mid-morning, out to the
+Glory front at midday, the nave and the west glazing through the
+afternoon, the crossing as the evening goes from a camera that stands still
+for it, and out under the Passion front to rise away as the sun sets. Ten
+shots and about a minute, dissolved and looped; the clock only ever goes
+forward, and the second time round it is midwinter on the same path, at the
+same fraction of the day. The shots are the harness's own verified frames,
+run on a little; nothing in them is authored light. The film has a sound —
+the air of a large stone room, made on the spot rather than recorded — and
+nothing else in the app does.
 
-Any key or click stops it and hands you the building exactly where the
+Any key, click or tap stops it and hands you the building exactly where the
 film had it — a walk if that is indoors, an orbit if not — with the clock
-at whatever hour the shot had reached.
+at whatever hour the shot had reached. Opened with `?film`, for a screen in
+a corner, it comes back on its own once the screen has been left alone for
+a while.
 
 The render adapts its resolution to the machine: it drops device pixels
 while frames are slow and takes them back when they have been fast for a

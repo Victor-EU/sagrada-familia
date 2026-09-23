@@ -132,6 +132,13 @@ export class MeterPass extends Pass {
    * the key, or null before the first reading has come back.
    */
   exposure: number | null = null
+  /**
+   * How many readings have come back. A reading is of the frame it was
+   * asked for, which by the time it arrives is a frame or two old — so
+   * anyone who has just changed the picture waits for this to move twice
+   * before believing `exposure` is of the new one. See the film's pupil.
+   */
+  readings = 0
   /** The key and the clip it is solved against — see METER_KEY. */
   key = METER_KEY
   clip = METER_CLIP
@@ -211,6 +218,7 @@ export class MeterPass extends Pass {
       .readRenderTargetPixelsAsync(this.grid, 0, 0, GRID_X, GRID_Y, this.bytes)
       .then(() => {
         this.exposure = this.solve()
+        this.readings++
       })
       .catch(() => {
         // A lost context, or a browser without fences. The eye keeps the

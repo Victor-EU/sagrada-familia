@@ -183,6 +183,13 @@ const ADAPT = 0.9
 const METER_SHARE = 0.8
 const METER_OPEN = 2 ** 1.5
 const METER_CLOSE = 2 ** -2
+/**
+ * And outdoors, only for the film — see `pupilTarget`. Half a stop either
+ * way: enough to open in a porch or hold on at dusk, not enough to turn a
+ * sunset back into an afternoon.
+ */
+const METER_OUT_OPEN = 2 ** 0.5
+const METER_OUT_CLOSE = 2 ** -0.5
 
 /** How close the orbit lets you come to the stone. */
 const MASSIF_CLEAR = 4
@@ -398,6 +405,8 @@ export class Viewer {
    * or null before the meter has read a frame. Set by the frame loop.
    */
   metered: number | null = null
+  /** How many readings the meter has returned — see render/meter.ts. */
+  meterReadings = 0
 
   private relation: Relation = 'regard'
   /** The vertical field before the viewport's shape has its say. */
@@ -986,16 +995,40 @@ export class Viewer {
     else if (this.relation === 'regard') this.regard(dt)
     else this.inhabit(dt)
 
-    const want = this.indoors ? this.indoorStop() : OUTSIDE_STOP
-    this.eyeStop += (want - this.eyeStop) * (1 - Math.exp(-dt / ADAPT))
+    // The pupil — unless somebody else has it. The film sets the stop per
+    // shot and eases it on its own terms, because a cut is a new exposure,
+    // and a walker's second of adaptation running under a six-second shot
+    // was a fade of a stop and a half that nobody had asked for; see
+    // ui/film.ts.
+    if (!this.taken) {
+      const want = this.pupilTarget()
+      this.eyeStop += (want - this.eyeStop) * (1 - Math.exp(-dt / ADAPT))
+    }
     this.rig.refresh()
   }
 
-  /** INSIDE_STOP, moved toward what the meter reads — see METER_SHARE. */
-  private indoorStop(): number {
-    if (this.metered === null || !Number.isFinite(this.metered)) return INSIDE_STOP
-    const asked = (this.metered / INSIDE_STOP) ** METER_SHARE
-    return INSIDE_STOP * THREE.MathUtils.clamp(asked, METER_CLOSE, METER_OPEN)
+  /** The stop a side of the wall opens on, before the meter has a say. */
+  stopFor(indoors: boolean): number {
+    return indoors ? INSIDE_STOP : OUTSIDE_STOP
+  }
+
+  /**
+   * Where the pupil is heading: the stop for this side of the wall, moved
+   * toward what the meter reads — see METER_SHARE. Indoors it goes most of
+   * the way. Outdoors the stop is fixed, because the exterior is exposed for
+   * the sunlit stone the way a photograph is and a meter handed the plaza
+   * would close down on the sky — unless `outdoorsMetered`, which the film
+   * asks for, and then it goes half a stop either way: a porch, a dusk.
+   */
+  pupilTarget(outdoorsMetered = false): number {
+    const indoors = this.indoors
+    const base = this.stopFor(indoors)
+    if (!indoors && !outdoorsMetered) return base
+    if (this.metered === null || !Number.isFinite(this.metered)) return base
+    const asked = (this.metered / base) ** METER_SHARE
+    return indoors
+      ? base * THREE.MathUtils.clamp(asked, METER_CLOSE, METER_OPEN)
+      : base * THREE.MathUtils.clamp(asked, METER_OUT_CLOSE, METER_OUT_OPEN)
   }
 
   private fly(dt: number): void {

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Relation, Viewer } from '../camera/viewer.ts'
-import { YEAR, dayLabel, daylight } from '../light/sun.ts'
+import { YEAR, dayLabel, daylight, sameLight } from '../light/sun.ts'
 import type { Film } from './film.ts'
 
 /**
@@ -57,28 +57,16 @@ const LAST_HOUR = 21
 const DAYS = [80, 172, 264, 355]
 
 /**
- * The same light on another day.
- *
- * The day used to change under a fixed hour, and the scrubber runs six to
- * nine whatever the day — so ten to nine on a June evening, pressed on to
- * September or to December, was the middle of the night: black, with nothing
- * lit, which is what anybody pressing the day for the first time at the end
- * of the most beautiful hour in the model got. Forty per cent of December's
- * scrubber is dark. What was asked for was the building in winter, not the
- * building at twenty to nine in winter; so the hour keeps its place in the
- * day, sunrise to sunset, and an evening stays an evening.
- *
- * Outside the daylight — before sunrise, after sunset — it keeps its distance
- * from the nearer edge instead, so dusk stays dusk.
+ * The same light on another day, on the scrubber's own terms: to a tenth of
+ * an hour, and never off the track. The reasoning is with `sameLight` in
+ * light/sun.ts — it lived here until the film wanted it too.
  */
-function sameLight(hour: number, from: number, to: number): number {
-  const a = daylight(YEAR, from)
-  const b = daylight(YEAR, to)
-  let h: number
-  if (hour <= a.rise) h = b.rise - (a.rise - hour)
-  else if (hour >= a.set) h = b.set + (hour - a.set)
-  else h = b.rise + ((hour - a.rise) / (a.set - a.rise)) * (b.set - b.rise)
-  return THREE.MathUtils.clamp(Math.round(h * 10) / 10, FIRST_HOUR, LAST_HOUR)
+function sameHour(hour: number, from: number, to: number): number {
+  return THREE.MathUtils.clamp(
+    Math.round(sameLight(hour, from, to) * 10) / 10,
+    FIRST_HOUR,
+    LAST_HOUR,
+  )
 }
 
 /** How far over a door the way-in marker floats. */
@@ -175,7 +163,7 @@ export class Controls {
       // it, to the same light on the new day — see `sameLight`.
       const here = this.sun.dayOfYear
       const next = DAYS.find((d) => d > here) ?? DAYS[0]!
-      this.sun.hour = sameLight(this.sun.hour, here, next)
+      this.sun.hour = sameHour(this.sun.hour, here, next)
       this.sun.dayOfYear = next
       this.dayButton.blur()
       this.applySun()

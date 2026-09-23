@@ -553,6 +553,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // The building does not move, so the two sun passes only run when the
       // sun or the geometry has actually changed. Everything else is a plain
       // forward render.
+      let relit = false
       if (dirty || roofDirty) {
         for (const participant of passes) participant.prepareForSun(SUN_DETAIL_LEVEL)
         if (roofDirty) {
@@ -563,6 +564,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
           const radiance = sun.uniforms.uSunRadiance.value
           sun.render(renderer, scene, camera, sunDirection, radiance)
           dirty = false
+          relit = true
         }
       }
       if (wash.stale) {
@@ -574,7 +576,15 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // of detail the other two use, and only once the camera has left the
       // middle of it — about every twenty seconds of walking, against every
       // frame of a drag of the hour slider, which the rig already carried.
-      if (sun.nearStale(camera.position)) {
+      //
+      // And not on the frame the wide map was just re-run: a relight was
+      // both shadow passes in one frame, and the film relights several
+      // times a second. Spread over two frames, each is half as long. The
+      // near map is one frame behind the sun for that frame, which is a
+      // third of a degree, and no shadow in the building shows it. (A stall
+      // measured on these frames in headless Chrome turned out to be the
+      // harness and not the pass; the split is kept because it is right.)
+      if (!relit && sun.nearStale(camera.position)) {
         for (const participant of passes) participant.prepareForSun(SUN_DETAIL_LEVEL)
         sun.renderNear(renderer, scene, camera.position)
       }

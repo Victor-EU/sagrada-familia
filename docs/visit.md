@@ -626,3 +626,89 @@ recorded rather than tuned.
 or retire it for the frame above.
 
 **The Passion towers' spacing** — above.
+
+
+---
+
+# The film, reviewed from first principles
+
+*23 September 2026, at a1d85ab. Not a visit: one loop of the film, played in
+headless Chrome at 1440 × 900 and again on a 390 × 844 phone, with the
+state sampled four times a second, a screenshot every half second, and a
+click into every shot to see what the hand-off gives. Then the question
+asked cold: the app exists so that people can be in this building — what
+does a film have to do to serve that, and does this one?*
+
+## What the film was
+
+Nine shots, forty-five seconds, from four seasons: the clock jumped seven
+times in forty-five seconds and never once went forward for two shots
+running, in a film whose stated premise is that the light *changes*. The
+camera never stopped moving, at four to nine metres a second on foot and a
+hundred in the air, and the sun ran at up to twenty-six minutes a second
+with a minute counter ticking under the title to say so. The walker's pupil
+kept adapting under the cuts, so the Passion glazing shot dimmed by a stop
+and a half over its four seconds and the vault brightened by as much over
+its four and a half. Opened with `?film`, the page's own name and quote sat
+over the film's caption and hint for the first seven seconds; a touch
+stopped it for good; the hint offered a click and a key to a phone. And it
+was silent.
+
+## What it is now
+
+One day, forward only: dawn across the pond, in by the Nativity door as the
+morning arrives, the east glazing lit, the vault, out to the Glory front at
+midday — the room is flat from eleven to one, swept hour by hour, and only
+warms when the Passion side takes the sun — the nave and the west glazing
+through the afternoon, the crossing from a camera that stands still for
+ninety minutes of sunset, and out under the Passion front to rise away as
+the sun goes. Ten shots, sixty-three seconds, and the second time round it
+is midwinter on the same path at the same fraction of the day. A cut is a
+new exposure: the stop snaps to the side of the wall it is on, takes the
+meter's reading of the new frame under the dissolve once a reading of that
+frame is actually in — the first one back is still of the frame before —
+and drifts slowly after; through the door it looks three and a half
+seconds ahead and opens on the way in. The two shadow passes of a relight
+go on consecutive frames and the resolution pacer ignores both. The film
+has a sound, the air of a stone room made on the spot; `?film` hides the
+intro, resumes after seventy-five seconds untouched, and says *tap* to a
+finger. The caption clock keeps ten-minute time.
+
+| | before | after |
+| --- | --- | --- |
+| clock jumps backward, per loop | 7 | 0 |
+| fastest walk indoors | 8.7 m/s (the door) | 4 m/s (the door) |
+| stop moved within one interior shot | up to 1.7 stops | under half a stop, after the dissolve |
+| exposure at a cut | walker's adaptation, over a second | snapped, then the meter under the dissolve |
+| hand-off, all shots | correct | correct |
+
+## Withdrawn, on the evidence
+
+**The interior shots stall three to eight times a second on relights.**
+The first pass measured p95 frame times of 53 to 86 ms on the interior
+shots against 20 ms outside and blamed the relight, which re-runs both
+shadow maps. It was the harness. The same frozen interior pose measured
+17 ms p95 one minute and 110 ms the next with nothing changed; the stalls
+appeared with no relights at all, indoors and out, went away while a
+WebAudio context was running, and doubled when a second Chromium opened on
+the machine. Headless Chrome's frame pacing is not the app's, and no visible
+display was available to this session to measure the real one. The split
+of the two shadow passes across frames and the pacer's exclusion of relit
+frames are kept, because both are correct on their own terms; neither is
+claimed as a measured improvement. What the record does show is that a
+Retina screen walks its pixel ratio down during the first shot and does not
+recover it while the sun is moving, which the pacer change addresses.
+
+## Left standing
+
+- **The porch is dark for a second and a half.** The Nativity portal is ten
+  metres deep, the pupil now opens on the way through it, and the frames
+  are still a dark cave with a lit slot: that is the sky fill under a porch,
+  which is the lighting model's and not the film's.
+- **The Nativity glazing at ten is a wall of green.** Physically that is the
+  morning sun through Vila-Grau's cool glass, and the winter loop shows the
+  same frame pale for contrast; whether the summer one is too saturated is a
+  question for the glass, against a photograph.
+- **The sound is synthetic.** There is no recording of the building here
+  and none was invented; a real room tone, recorded in the nave, would
+  replace one function.
