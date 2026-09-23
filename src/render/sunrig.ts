@@ -87,8 +87,25 @@ export class SunRig {
   private readonly centre = new THREE.Vector3()
   private radius = 30
 
-  /** Depth-bias distance in metres, scaled by slope at the receiver. */
-  offset = 0.06
+  /**
+   * Depth bias, in texels of whichever map is being read, scaled by slope at
+   * the receiver.
+   *
+   * In texels and not in metres, because acne is a matter of how much world
+   * one texel covers, and the wide map's texel is not a constant: it is
+   * fitted to the model and to the ground its shadow reaches, so it is 9 cm
+   * at a June noon and 28 cm at seven in the morning, when the towers throw
+   * their shadows three hundred metres across the city. This was six
+   * centimetres when the model was a nave and the texel a few centimetres;
+   * the towers and the city tripled the texel at a low sun and the bias
+   * stayed where it was, so every morning and evening the plaza came out in
+   * rings and every lit wall in a fine hatch — and both redrew themselves
+   * each time the sun moved, which in the film is seven times a second.
+   * Half a texel face-on, and the tangent of the tilt on top of it — see
+   * sfSunlight. Lit stone outside comes up by a per cent or two where the
+   * hatch had been darkening it; the interior's medians do not move.
+   */
+  offset = 0.5
 
   /**
    * The near map, and why there is one.
@@ -182,11 +199,11 @@ export class SunRig {
       uSunDirWorld: { value: new THREE.Vector3(0, 1, 0) },
       uSunRadiance: { value: new THREE.Color(0, 0, 0) },
       uSunTexel: { value: new THREE.Vector2(1 / resolution, 1 / resolution) },
-      uSunOffset: { value: this.offset },
+      uSunOffset: { value: 0 },
       uSunNearMatrix: { value: new THREE.Matrix4() },
       uSunNearDepth: { value: nearDepth },
       uSunNearTexel: { value: new THREE.Vector2(1 / nearResolution, 1 / nearResolution) },
-      uSunNearOffset: { value: this.offset },
+      uSunNearOffset: { value: 0 },
       uSunNearOn: { value: 0 },
     }
   }
@@ -301,7 +318,7 @@ export class SunRig {
       .copy(sunDirection)
       .transformDirection(view.matrixWorldInverse)
     this.uniforms.uSunRadiance.value.copy(radiance)
-    this.uniforms.uSunOffset.value = this.offset
+    this.uniforms.uSunOffset.value = this.offset * this.texelSize.wide
     // The sun has moved, so whatever the near map holds is of another hour.
     this.nearValid = false
   }
@@ -388,11 +405,14 @@ export class SunRig {
       camera.projectionMatrix,
       camera.matrixWorldInverse,
     )
-    // Acne is a function of how much world a texel covers, so the finer map
-    // carries a proportionally smaller bias — keeping the wide map's would
-    // detach every shadow in the near field from the thing casting it.
-    const wideTexel = (2 * r) / this.resolution
-    this.uniforms.uSunNearOffset.value = Math.max(0.004, this.offset * (texel / wideTexel))
+    // The same share of its own texel as the wide map, which being four times
+    // finer is a bias four times smaller — the wide map's would detach every
+    // shadow in the near field from the thing casting it. It was once taken
+    // as a fraction of the wide map's bias, which tied it to the wide map's
+    // texel: a low sun coarsens that one, so this shrank to a fifth of a
+    // texel on a map that had not changed at all, and the ground round the
+    // camera came up in rings.
+    this.uniforms.uSunNearOffset.value = this.offset * texel
     this.uniforms.uSunNearOn.value = 1
     this.nearCentre.copy(eye)
     this.nearValid = true
@@ -471,14 +491,18 @@ vec3 sfSunlight( const in vec3 shadingNormal ) {
   // Slope-scaled offset along the light direction. The rig is orthographic, so
   // stepping toward the sun in world space is exactly a depth bias, and
   // scaling it by grazing angle is what keeps the twisted columns clean.
-  // The quadratic covers ordinary slopes. The sixth power is for the plaza
-  // under a sun ten degrees up: a texel of the map lands on a plane that
-  // shallow as a metre-long footprint, and the plane's own depth changes by
-  // more than the bias across that footprint, which came out as stripes of
-  // shadow across the whole ground. The high power leaves everything under
-  // forty degrees of slope alone.
-  float slope = 1.0 - facing;
-  float slopeScale = 1.0 + 6.0 * slope * slope + 24.0 * pow( slope, 6.0 );
+  //
+  // By the tangent, because that is what acne is: a surface tilted away from
+  // the sun changes depth by one texel times the tangent of its tilt across
+  // one texel of the map, and the nine taps reach a texel either side, so
+  // the bias has to clear the tangent a texel and a half over. A polynomial
+  // in the slope stood in for it before and fell short in the middle — a
+  // plaza under a sun thirty-five degrees up got two-thirds of what it
+  // needed and came up in bands, and so did every wall the sun raked. Held
+  // at twelve, which is a sun five degrees off the plane: past that the
+  // surface is barely lit and a bias that long would lift shadows off it.
+  float tilt = min( sqrt( max( 1.0 - facing * facing, 0.0 ) ) / facing, 12.0 );
+  float slopeScale = 1.0 + 3.0 * tilt;
   float grazing = uSunOffset * slopeScale;
 
   vec4 clip = uSunMatrix * vec4( vSunWorld + uSunDirWorld * grazing, 1.0 );

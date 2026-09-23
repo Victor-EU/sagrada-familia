@@ -223,7 +223,7 @@ const render: RenderFlags = {
   bounce: 0.16,
   // The envelope's share of the sky — see OUTDOOR_INDIRECT in materials.ts.
   skyFill: 2.1,
-  sunOffset: 0.06,
+  sunOffset: 0.5,
   sunNear: true,
   // Stone under a nearly uniform probe has little shading of its own, so this
   // is not a subtle effect here — it is most of the form in the vaults.
