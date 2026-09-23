@@ -701,6 +701,16 @@ function frame(): void {
   timer.update()
   const dt = Math.min(timer.getDelta(), 0.1)
 
+  // The resolution, before anything is drawn. A new ratio resizes the canvas
+  // and resizing a canvas clears it: done after the render, the browser
+  // showed the cleared buffer, and every step was a black frame — four in the
+  // first five seconds of the film on a Retina screen, where the ratio walks
+  // down from two while the opening shot finds its cost. Done first, the
+  // frame is drawn into the canvas it is shown in. Not on the first frame:
+  // that one compiles every shader in the building and says nothing about
+  // the frames that follow.
+  if (painted) pace(dt)
+
   // The film writes the pose first, when it has it; the viewer then does
   // only what it still owns, which is the pupil.
   film.update(dt)
@@ -743,10 +753,6 @@ function frame(): void {
         `model ${at('built') - at('stage')} ms, ` +
         `first frame ${at('first-frame') - at('built')} ms after that`,
     )
-  } else {
-    // Not the first frame: that one compiles every shader in the building
-    // and says nothing about the frames that follow.
-    pace(dt)
   }
 
   const now = performance.now()
