@@ -171,7 +171,30 @@ const ADAPT = 0.9
 /** How close the orbit lets you come to the stone. */
 const MASSIF_CLEAR = 4
 const MIN_DISTANCE = 4
-const MAX_DISTANCE = 600
+/**
+ * How far the orbit lets you back off.
+ *
+ * Six hundred metres was a limit on the arithmetic, not on the view: fifteen
+ * wheel ticks from the front steps put the camera half a kilometre out and
+ * thirty-two metres up, with the cathedral a speck on the horizon and the
+ * whole frame in front of it flat Eixample roof. Nothing verified in this
+ * model is further out than the film's orbit, at two hundred and seventy.
+ */
+const MAX_DISTANCE = 320
+/**
+ * And the further back, the higher: backing off rises over the roofs.
+ *
+ * A dolly keeps its line of sight, and the line of sight from a camera at
+ * roof height to a pivot half way up a tower runs across a kilometre of
+ * rooftop, all of it in the bottom half of the frame. The film's orbit sits
+ * ninety-six metres up at two hundred and seventy out, which is where the
+ * roofs stop being the subject. Past RISE_FROM from the middle of the
+ * building, backing off lifts the camera's floor RISE_SLOPE metres for every
+ * metre out, by turning about the pivot — the frame tips down to keep the
+ * building where it was on screen, the way it does on a drag.
+ */
+const RISE_FROM = 140
+const RISE_SLOPE = 0.3
 /**
  * How far away a picked point may be and still mean anything.
  *
@@ -188,6 +211,38 @@ const MIN_ELEVATION = THREE.MathUtils.degToRad(-85)
 
 /** Where a flight pauses outside a door before going in. */
 const DOOR_STANDOFF = 16
+/**
+ * Where stepping out leaves you, measured from the door.
+ *
+ * Not DOOR_STANDOFF. Sixteen metres is a waypoint for a flight on its way in
+ * and a fine one, but it is measured from the door, and the Nativity door is
+ * at the back of a portal that stands ten metres proud of it — so stepping
+ * out left you four metres from the carving with the jambs filling the frame,
+ * looking up at the underside of a porch, with nothing of the building you
+ * had just left in view. Forty is where the film's own approach to that door
+ * starts and where the author's frame under the Passion front stands: the
+ * portal whole, and the towers going up out of the top of the frame.
+ */
+const STEP_OUT = 40
+/** How far up the front stepping out looks, above eye height, at STEP_OUT. */
+const STEP_OUT_LOOK = 17
+/** Movement, on the arrow keys: radians a second to turn on foot or round. */
+const KEY_TURN = 1.3
+/** And how fast the arrows come closer or back off outside, per second. */
+const KEY_DOLLY = 0.9
+
+/**
+ * Whether the viewer has asked for less movement.
+ *
+ * A flight through a door is five seconds of the whole frame swinging and
+ * sliding, which is precisely what this setting exists to turn off. Asked at
+ * the moment of the flight rather than once, because it can change while
+ * the page is open.
+ */
+const REDUCED_MOTION =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null
 /** And how far in it lands: clear of the first pair of columns, under the
  *  canopy rather than in the doorway looking at it. */
 const DOOR_ENTRY = 14
@@ -382,6 +437,7 @@ export class Viewer {
   private liftWanted = 0
   /** Where a click on the floor is taking us, if anywhere. */
   private goal: THREE.Vector3 | null = null
+  private readonly dest = new THREE.Vector3()
   private goalSpeed = 0
 
   // Travelling.
@@ -468,6 +524,12 @@ export class Viewer {
   setViewportSize(width: number, height: number): void {
     this.rig.setViewportSize(width, height)
     this.rig.fov = this.widen(this.baseFov)
+  }
+
+  /** Whether the window is taller than it is wide — a phone held upright. */
+  get portrait(): boolean {
+    const { width, height } = this.rig.viewport
+    return width < height
   }
 
   /** The vertical field that gives this viewport at least MIN_ACROSS across. */
@@ -695,8 +757,15 @@ export class Viewer {
     // just walked into — and the floor is what you click to cross it, so an
     // arrival that shows none of it hands the viewer a room they cannot walk
     // in until they think to look down. Thirty degrees holds both.
+    //
+    // Less on a window held upright. A phone's frame is taller than it is
+    // wide and the vertical field is the full seventy-four degrees, so the
+    // vault is in shot a long way below thirty — and at thirty on a portrait
+    // screen the floor was the bottom twentieth of the frame, under the clock
+    // and the way out, which left the only way to walk on a phone with
+    // nothing to tap.
     const on = inside.clone().addScaledVector(n, -34)
-    on.y = inside.y + 20
+    on.y = inside.y + (this.portrait ? 9 : 20)
     const arrival = aimAt(inside, on, this.widen(INHABIT_FOV), INHABIT_SHIFT)
 
     const reach = here.distanceTo(stage)
@@ -728,6 +797,7 @@ export class Viewer {
     this.baseFov = INHABIT_FOV
     this.setRelation('inhabit')
     this.onTravel?.(true)
+    if (REDUCED_MOTION?.matches) this.skip()
   }
 
   /** The massif with the flight's margin round it. */
@@ -849,32 +919,33 @@ export class Viewer {
 
     const n = new THREE.Vector3(door.nx, 0, door.nz)
     const mouth = new THREE.Vector3(door.x, 0, door.z)
-    const stage = mouth.clone().addScaledVector(n, DOOR_STANDOFF)
-    stage.y = (e.floorAt(stage.x, stage.z) ?? this.plazaY) + EYE_HEIGHT + 1.2
+    const stage = mouth.clone().addScaledVector(n, STEP_OUT)
 
-    // Standing on the step, with the front over you. It used to go on from
-    // here — a second leg out to two and a half times the building's own
-    // depth and six metres up, which is two hundred metres of plaza and an
-    // orbit looking at the whole church from across the city. That is a fine
-    // place to be and it is not what the button says: *step outside* promises
-    // the top of the flight with the door at your back, which is where anyone
-    // who has ever left a cathedral has stood. The orbit is one wheel tick
-    // away, and now it is the viewer who decides how far back to go.
+    // Out on the plaza, turned round to the front you came out of. It used to
+    // go on from here — a second leg out to two and a half times the
+    // building's own depth and six metres up, which is two hundred metres of
+    // plaza and an orbit looking at the whole church from across the city.
+    // That is a fine place to be and it is not what the button says: *step
+    // outside* promises the front of the building you were just inside, near
+    // enough that the door is still a door. Then it stood on the step itself,
+    // which was too near — see STEP_OUT. The orbit is a wheel tick away in
+    // either direction, and it is the viewer who decides how far back to go.
     //
     // Standing height, not the flight's hovering `stage.y`: this is a place
     // to be, not a waypoint to pass through.
     stage.y = (e.floorAt(stage.x, stage.z) ?? this.plazaY) + EYE_HEIGHT
     // Up the front, but not so far up that the door goes out of frame — at
-    // sixteen metres out, eight metres up is a little over a quarter turn
-    // from level, which holds the portal and the towers over it together.
-    const lookUp = mouth.clone().setY(stage.y + 8)
+    // forty metres out, seventeen metres up is about twenty-three degrees,
+    // which holds the portal and the belfries' feet together. See STEP_OUT.
+    const lookUp = mouth.clone().setY(stage.y + STEP_OUT_LOOK)
     const arrival = aimAt(stage, lookUp, this.widen(REGARD_FOV), REGARD_SHIFT)
 
-    this.legs = [leg(here, stage, this.aim(), arrival, 1.8)]
+    this.legs = [leg(here, stage, this.aim(), arrival, 2.4)]
     this.legAt = 0
     this.baseFov = REGARD_FOV
     this.setRelation('regard')
     this.onTravel?.(true)
+    if (REDUCED_MOTION?.matches) this.skip()
   }
 
   /** Arrive now. A flight is a courtesy, not a toll. */
@@ -964,6 +1035,7 @@ export class Viewer {
   // --------------------------------------------------------------- orbit ---
 
   private regard(dt: number): void {
+    this.arrows(dt)
     // Flying with the keys is free movement, and it is still the only way to
     // get your nose right up against a portal. The orbit then takes whatever
     // the camera has ended up looking at as its new centre, so the next drag
@@ -1040,6 +1112,28 @@ export class Viewer {
       MAX_DISTANCE,
     )
     p.copy(this.pivot).addScaledVector(this.offset, wanted / distance)
+    if (amount > 0) this.riseOver(wanted, amount)
+  }
+
+  /**
+   * Backing off, come up over the roofs — see RISE_FROM.
+   *
+   * Only on the way out, and only ever up: a viewer who then drags down to a
+   * low line across the rooftops is asking for that frame and gets it.
+   */
+  private riseOver(distance: number, amount: number): void {
+    const s = this.surroundings
+    const p = this.rig.position
+    const out = Math.hypot(p.x - this.heart.x, p.z - this.heart.z)
+    if (!s || out <= RISE_FROM) return
+    const floor = s.roofs + (out - RISE_FROM) * RISE_SLOPE
+    if (p.y >= floor) return
+    const now = Math.asin(THREE.MathUtils.clamp((p.y - this.pivot.y) / distance, -1, 1))
+    const wanted = Math.asin(THREE.MathUtils.clamp((floor - this.pivot.y) / distance, -1, 1))
+    // In proportion to how far this frame backed off, so the rise is a swing
+    // spread over the dolly rather than a jump — a wheel notch is about 0.16
+    // of this, which closes about three fifths of the gap.
+    this.turnAbout(0, (wanted - now) * (1 - Math.exp(-amount * 6)))
   }
 
   /**
@@ -1167,6 +1261,7 @@ export class Viewer {
   // ---------------------------------------------------------------- walk ---
 
   private inhabit(dt: number): void {
+    this.arrows(dt)
     if (this.freeMove(dt, WALK_SPEED)) this.goal = null
 
     if (this.goal) {
@@ -1228,11 +1323,14 @@ export class Viewer {
     const wants = this.step.set(0, 0, 0)
     const ahead = level ? this.rig.ahead(this.offset) : this.rig.forward(this.offset)
 
-    if (k.has('KeyW') || k.has('ArrowUp')) wants.add(ahead)
-    if (k.has('KeyS') || k.has('ArrowDown')) wants.sub(ahead)
+    // The arrows are not WASD — see `arrows`. Up and down still walk, on
+    // foot, because that is what they mean to anybody who has walked with
+    // them; outside they come closer, which is what the wheel does there.
+    if (k.has('KeyW') || (level && k.has('ArrowUp'))) wants.add(ahead)
+    if (k.has('KeyS') || (level && k.has('ArrowDown'))) wants.sub(ahead)
     const beside = this.rig.beside(this.sideways)
-    if (k.has('KeyD') || k.has('ArrowRight')) wants.add(beside)
-    if (k.has('KeyA') || k.has('ArrowLeft')) wants.sub(beside)
+    if (k.has('KeyD')) wants.add(beside)
+    if (k.has('KeyA')) wants.sub(beside)
 
     const up = k.has('Space')
     const down = k.has('KeyC') || k.has('KeyZ')
@@ -1259,6 +1357,29 @@ export class Viewer {
     wants.normalize().multiplyScalar(speed * boost)
     this.velocity.lerp(wants, 1 - Math.exp(-dt * (level ? 22 : 9)))
     return true
+  }
+
+  /**
+   * The arrow keys, which do what the pointer does here.
+   *
+   * They used to be a second WASD, and left and right stepped sideways — so
+   * there was no key anywhere that turned the view, and a visitor on a
+   * keyboard alone could walk the nave and never look round in it. On foot,
+   * left and right turn and Page Up and Page Down look up and down, which is
+   * the vault; outside, left and right turn the building the way a drag does
+   * and up and down come closer and back off the way the wheel does.
+   */
+  private arrows(dt: number): void {
+    const k = this.keys
+    const turn = (k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)
+    if (this.relation === 'inhabit') {
+      const tilt = (k.has('PageUp') ? 1 : 0) - (k.has('PageDown') ? 1 : 0)
+      if (turn !== 0 || tilt !== 0) this.rig.turn(turn * KEY_TURN * dt, tilt * KEY_TURN * 0.6 * dt)
+      return
+    }
+    if (turn !== 0) this.pending.azimuth += turn * KEY_TURN * dt
+    const closer = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0)
+    if (closer !== 0) this.zoom(-closer * KEY_DOLLY * dt)
   }
 
   /** Keep the walker's feet on the floor and their shoulders out of the stone. */
@@ -1318,6 +1439,34 @@ export class Viewer {
     const floor = e.floorAt(p.x, p.z)
     if (floor === null) return
     p.y = THREE.MathUtils.lerp(p.y, floor + EYE_HEIGHT + this.lift, 1 - Math.exp(-dt * 9))
+  }
+
+  /**
+   * Where a click at this point of the screen would walk to, standing on the
+   * floor — or null if it would not walk anywhere.
+   *
+   * For the mark the interface draws under the cursor: a click on the floor
+   * is the main way to cross this room and nothing on screen said so once
+   * the line of controls had gone. This is the click's own arithmetic asked
+   * in advance, so the mark is exactly where the walk will end — pulled back
+   * to the wall under a window, and absent where a click would do nothing.
+   */
+  walkTarget(clientX: number, clientY: number): THREE.Vector3 | null {
+    if (this.relation !== 'inhabit' || this.legs.length > 0 || this.taken) return null
+    const hit = this.pick(clientX, clientY, true)
+    if (!hit) return null
+    const target = this.reachable(hit)
+    if (!target) return null
+    const p = this.rig.position
+    if (Math.hypot(target.x - p.x, target.z - p.z) < 0.8) return null
+    target.y -= EYE_HEIGHT
+    return target
+  }
+
+  /** Where a walk to a clicked point is heading, on the floor, while it is. */
+  get destination(): THREE.Vector3 | null {
+    if (!this.goal) return null
+    return this.dest.set(this.goal.x, this.goal.y - EYE_HEIGHT, this.goal.z)
   }
 
   // --------------------------------------------------------------- input ---
@@ -1552,6 +1701,8 @@ export class Viewer {
     window.addEventListener('keydown', (event) => {
       if (event.target instanceof HTMLInputElement) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
+      // Space on a focused button presses the button; it is not also a rise.
+      if (event.target instanceof HTMLButtonElement && event.code === 'Space') return
       this.keys.add(event.code)
     })
     window.addEventListener('keyup', (event) => this.keys.delete(event.code))

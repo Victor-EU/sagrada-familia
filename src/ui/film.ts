@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Viewer } from '../camera/viewer.ts'
 import { BODY_RADIUS, type Doorway } from '../camera/envelope.ts'
-import { dayLabel } from '../light/sun.ts'
+import { YEAR, dayLabel } from '../light/sun.ts'
 
 /**
  * The film.
@@ -65,8 +65,6 @@ export interface Shot {
   frame(t: number, out: Frame): void
 }
 
-/** Any year does; the sun repeats to well inside a pixel. */
-const YEAR = 2026
 /** How long one frame gives way to the next. */
 const DISSOLVE_MS = 1500
 /** And how long the first one takes to arrive out of black. */

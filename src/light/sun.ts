@@ -37,6 +37,9 @@ export const SITE = {
  */
 export const BUILDING_BEARING_DEG = 314.4
 
+/** Any year does; the sun repeats to well inside a pixel. */
+export const YEAR = 2026
+
 const DEG = Math.PI / 180
 
 export interface SolarPosition {
@@ -177,12 +180,45 @@ export function barcelonaTime(year: number, dayOfYear: number, hour: number): Da
   return isSummerTime(guess) ? new Date(local - 2 * 3600000) : guess
 }
 
-/** Calendar label for a day number, for the HUD. */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * Calendar label for a day number — the clock, the film's title card and the
+ * HUD all say the day with this.
+ *
+ * Spelt out here rather than asked of the browser's locale data, which is
+ * how the clock came to say 21 Sep while the readout beside it said 21 Sept:
+ * two ways of writing one date, a centimetre apart.
+ */
 export function dayLabel(year: number, dayOfYear: number): string {
-  const d = new Date(Date.UTC(year, 0, dayOfYear))
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
+  const d = new Date(Date.UTC(year, 0, Math.round(dayOfYear)))
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+/**
+ * Sunrise and sunset on a day, as Barcelona wall-clock hours.
+ *
+ * For the clock, which has to know where the day is on it: a scrubber that
+ * runs six in the morning to nine at night is fifteen hours of daylight in
+ * June and nine in December, and the other six of December's are black.
+ * Found rather than computed in closed form — the altitude is already here,
+ * and a sign change bisected twenty times is a second of arc.
+ */
+export function daylight(year: number, dayOfYear: number): { rise: number; set: number } {
+  const up = (hour: number): number => solarPosition(barcelonaTime(year, dayOfYear, hour)).altitude
+  const edge = (from: number, to: number): number => {
+    let a = from
+    let b = to
+    const rising = up(a) < 0
+    for (let i = 0; i < 20; i++) {
+      const mid = (a + b) / 2
+      if (up(mid) < 0 === rising) a = mid
+      else b = mid
+    }
+    return (a + b) / 2
+  }
+  // Solar noon in Barcelona is a little before one in winter and a little
+  // before two in summer; the sun is up at both on every day of the year.
+  const noon = isSummerTime(barcelonaTime(year, dayOfYear, 12)) ? 13.9 : 12.9
+  return { rise: edge(0, noon), set: edge(noon, 24) }
 }

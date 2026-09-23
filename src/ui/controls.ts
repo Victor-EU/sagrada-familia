@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Relation, Viewer } from '../camera/viewer.ts'
+import { YEAR, dayLabel, daylight } from '../light/sun.ts'
 import type { Film } from './film.ts'
 
 /**
@@ -55,17 +56,45 @@ const LAST_HOUR = 21
  */
 const DAYS = [80, 172, 264, 355]
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-/** A day number as a date, so the control says a date and not an ordinal. */
-function dayName(dayOfYear: number): string {
-  const when = new Date(Date.UTC(2001, 0, 1))
-  when.setUTCDate(Math.round(dayOfYear))
-  return `${when.getUTCDate()} ${MONTHS[when.getUTCMonth()]}`
+/**
+ * The same light on another day.
+ *
+ * The day used to change under a fixed hour, and the scrubber runs six to
+ * nine whatever the day — so ten to nine on a June evening, pressed on to
+ * September or to December, was the middle of the night: black, with nothing
+ * lit, which is what anybody pressing the day for the first time at the end
+ * of the most beautiful hour in the model got. Forty per cent of December's
+ * scrubber is dark. What was asked for was the building in winter, not the
+ * building at twenty to nine in winter; so the hour keeps its place in the
+ * day, sunrise to sunset, and an evening stays an evening.
+ *
+ * Outside the daylight — before sunrise, after sunset — it keeps its distance
+ * from the nearer edge instead, so dusk stays dusk.
+ */
+function sameLight(hour: number, from: number, to: number): number {
+  const a = daylight(YEAR, from)
+  const b = daylight(YEAR, to)
+  let h: number
+  if (hour <= a.rise) h = b.rise - (a.rise - hour)
+  else if (hour >= a.set) h = b.set + (hour - a.set)
+  else h = b.rise + ((hour - a.rise) / (a.set - a.rise)) * (b.set - b.rise)
+  return THREE.MathUtils.clamp(Math.round(h * 10) / 10, FIRST_HOUR, LAST_HOUR)
 }
 
 /** How far over a door the way-in marker floats. */
 const MARKER_HEIGHT = 8
+
+/**
+ * The mark on the floor where a click will walk to, in metres across and in
+ * points round. About a stride near to: big enough to read as a place to
+ * stand, small enough to say which flagstone. Further off it grows with the
+ * distance — MARK_SPREAD of it — because a stride twenty metres away, seen
+ * along the floor, is a sliver ten pixels wide.
+ */
+const MARK_RADIUS = 0.45
+const MARK_SPREAD = 0.04
+const MARK_POINTS = 36
+const SVG = 'http://www.w3.org/2000/svg'
 
 export class Controls {
   private readonly root: HTMLElement
@@ -77,9 +106,15 @@ export class Controls {
   private readonly hourLabel: HTMLElement
   private readonly dayButton: HTMLButtonElement
   private readonly play: HTMLButtonElement
+  private readonly floorMark: SVGSVGElement
+  private readonly floorRing: SVGPolygonElement
 
   private readonly point = new THREE.Vector3()
   private hintTimer = 0
+  /** The day the scrubber's daylight was last drawn for. */
+  private shaded = -1
+  /** Where a mouse is resting over the stage, if one is. */
+  private hover: { x: number; y: number } | null = null
 
   constructor(
     private readonly viewer: Viewer,
@@ -135,10 +170,13 @@ export class Controls {
     this.dayButton.type = 'button'
     this.dayButton.title = 'Midsummer, midwinter, and the two equinoxes'
     this.dayButton.addEventListener('click', () => {
-      // On round the four. From anywhere else — a link can carry any day of
-      // the year — the next one after wherever it stands.
+      // On round the four. From anywhere else — the panel can set any day of
+      // the year — the next one after wherever it stands. And the hour with
+      // it, to the same light on the new day — see `sameLight`.
       const here = this.sun.dayOfYear
-      this.sun.dayOfYear = DAYS.find((d) => d > here) ?? DAYS[0]!
+      const next = DAYS.find((d) => d > here) ?? DAYS[0]!
+      this.sun.hour = sameLight(this.sun.hour, here, next)
+      this.sun.dayOfYear = next
       this.dayButton.blur()
       this.applySun()
       this.showHour()
@@ -163,7 +201,26 @@ export class Controls {
     this.dial.addEventListener('change', () => this.dial.blur())
     this.clock.append(this.dayButton, this.hourLabel, this.dial)
 
-    this.root.append(this.way, this.out, this.hint, this.clock, this.play)
+    // The mark on the floor. Drawn, not rendered: it is the interface
+    // saying where a click goes, like the ring on the door, and it has no
+    // business in the shadow maps, the wash rig or the air.
+    this.floorMark = document.createElementNS(SVG, 'svg')
+    this.floorMark.classList.add('floor-mark')
+    this.floorMark.setAttribute('aria-hidden', 'true')
+    this.floorRing = document.createElementNS(SVG, 'polygon')
+    this.floorMark.append(this.floorRing)
+    // Only a mouse hovers. A finger is on the glass or it is not, so on a
+    // touch screen the mark shows where a tap is walking to and nothing else.
+    host.addEventListener('pointermove', (event) => {
+      const over = event.target instanceof Element && event.target.closest('button')
+      this.hover =
+        event.pointerType === 'mouse' && !over ? { x: event.clientX, y: event.clientY } : null
+    })
+    host.addEventListener('pointerleave', () => {
+      this.hover = null
+    })
+
+    this.root.append(this.floorMark, this.way, this.out, this.hint, this.clock, this.play)
     this.host.append(this.root)
 
     this.showHour()
@@ -194,11 +251,30 @@ export class Controls {
 
   /** Put the hour the sun is actually at back on the dial. */
   showHour(): void {
-    this.dayButton.textContent = dayName(this.sun.dayOfYear)
+    this.dayButton.textContent = dayLabel(YEAR, this.sun.dayOfYear)
     const h = Math.floor(this.sun.hour)
     const m = Math.round((this.sun.hour - h) * 60)
     this.hourLabel.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
     if (document.activeElement !== this.dial) this.dial.value = String(this.sun.hour)
+    if (this.shaded !== this.sun.dayOfYear) this.shadeDaylight()
+  }
+
+  /**
+   * Draw the day on the scrubber: bright between sunrise and sunset, dim
+   * outside it.
+   *
+   * The track was one even line from six to nine, which says nothing about
+   * where the light is — and in December six of those fifteen hours are dark.
+   * A viewer dragging into the night should see that they are about to, not
+   * find out when the building goes black.
+   */
+  private shadeDaylight(): void {
+    this.shaded = this.sun.dayOfYear
+    const { rise, set } = daylight(YEAR, this.sun.dayOfYear)
+    const at = (hour: number): string =>
+      `${(THREE.MathUtils.clamp((hour - FIRST_HOUR) / (LAST_HOUR - FIRST_HOUR), 0, 1) * 100).toFixed(1)}%`
+    this.dial.style.setProperty('--rise', at(rise))
+    this.dial.style.setProperty('--set', at(set))
   }
 
   /**
@@ -212,6 +288,7 @@ export class Controls {
     // panel sets the hour directly — so the reading is
     // refreshed from the sun rather than remembered from the last drag.
     this.showHour()
+    this.markFloor()
     const inside = this.viewer.mode === 'inhabit'
     const outside = !inside && !this.viewer.travelling && !this.film.playing
     this.root.classList.toggle('inside', inside)
@@ -245,18 +322,82 @@ export class Controls {
     this.root.classList.toggle('stranded', false)
   }
 
-  /** Say what the cursor does here. It is different on each side of the wall. */
+  /**
+   * Where a click on the floor goes.
+   *
+   * Clicking the floor is the main way across this room, and the only one a
+   * phone has, and the line saying so is on screen for nine seconds after you
+   * land. Past that the cursor was a plain arrow over a plain floor and
+   * nothing anywhere said the floor would do anything. So the floor answers
+   * the cursor: a ring where the walk would end — pulled back to the wall
+   * under a window, absent over the vault — and, once clicked, the same ring
+   * staying where you are going until you are there.
+   */
+  private markFloor(): void {
+    const v = this.viewer
+    let at: THREE.Vector3 | null = null
+    let going = false
+    if (v.mode === 'inhabit' && !v.travelling && !this.film.playing) {
+      at = v.destination
+      going = at !== null
+      if (!at && this.hover && !this.host.classList.contains('dragging')) {
+        at = v.walkTarget(this.hover.x, this.hover.y)
+      }
+    }
+    if (!at) {
+      this.floorMark.classList.remove('on')
+      return
+    }
+
+    const rect = this.host.getBoundingClientRect()
+    const camera = v.rig.camera
+    const eye = v.rig.position
+    const radius = Math.max(MARK_RADIUS, Math.hypot(at.x - eye.x, at.z - eye.z) * MARK_SPREAD)
+    const points: string[] = []
+    for (let i = 0; i < MARK_POINTS; i++) {
+      const a = (i / MARK_POINTS) * Math.PI * 2
+      this.point
+        .set(at.x + Math.cos(a) * radius, at.y + 0.02, at.z + Math.sin(a) * radius)
+        .project(camera)
+      // Any of it behind the eye and the ring is not a ring on screen.
+      if (this.point.z > 1) {
+        this.floorMark.classList.remove('on')
+        return
+      }
+      const x = (this.point.x * 0.5 + 0.5) * rect.width
+      const y = (-this.point.y * 0.5 + 0.5) * rect.height
+      points.push(`${x.toFixed(1)},${y.toFixed(1)}`)
+    }
+    this.floorRing.setAttribute('points', points.join(' '))
+    this.floorMark.classList.toggle('going', going)
+    this.floorMark.classList.add('on')
+  }
+
+  /** Say again what the cursor does here — the H key, for whoever missed it. */
+  remind(): void {
+    if (!this.film.playing) this.say(this.viewer.mode)
+  }
+
+  /**
+   * Say what the cursor does here. It is different on each side of the wall,
+   * and different under a finger — see `.pointer` and `.touch` in style.css,
+   * which show one or the other by what the device has, not how wide it is.
+   */
   private say(relation: Relation): void {
     document.body.classList.toggle('walking', relation === 'inhabit')
     this.hint.innerHTML =
       relation === 'regard'
         ? '<strong>drag</strong> to turn it &middot; ' +
-          '<strong>scroll</strong> to come closer &middot; ' +
-          '<strong>double-click</strong> a door to go in'
+          '<span class="pointer"><strong>scroll</strong></span>' +
+          '<span class="touch"><strong>pinch</strong></span> to come closer &middot; ' +
+          '<span class="pointer"><strong>double-click</strong> a door to go in</span>' +
+          '<span class="touch"><strong>go inside</strong> at a door</span>'
         : '<strong>drag</strong> to look &middot; ' +
-          '<strong>click the floor</strong> to walk there &middot; ' +
-          '<strong>space</strong> to rise &middot; ' +
-          '<strong>esc</strong> to step out'
+          '<span class="pointer"><strong>click the floor</strong></span>' +
+          '<span class="touch"><strong>tap the floor</strong></span> to walk there &middot; ' +
+          '<span class="pointer"><strong>space</strong> to rise &middot; ' +
+          '<strong>esc</strong> to step out</span>' +
+          '<span class="touch"><strong>two fingers</strong> to rise</span>'
     this.hint.classList.add('on')
     window.clearTimeout(this.hintTimer)
     this.hintTimer = window.setTimeout(() => this.hint.classList.remove('on'), 9000)

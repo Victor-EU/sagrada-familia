@@ -24,6 +24,7 @@ import { Controls } from './ui/controls.ts'
 import { Film } from './ui/film.ts'
 import {
   BUILDING_BEARING_DEG,
+  YEAR,
   barcelonaTime,
   dayLabel,
   isSummerTime,
@@ -210,9 +211,6 @@ const sun: SunFlags = {
   intensity: 3,
   skyBrightness: 1,
 }
-
-/** Any year does; the sun repeats to well inside a pixel. */
-const YEAR = 2026
 
 // The stones. A piece asks for the one it is cut from; see render/materials.ts.
 const stones = stage.stones
@@ -451,10 +449,22 @@ window.addEventListener('keydown', (event) => {
     return
   }
 
+  // A button with the focus answers Enter and Space itself, with a click.
+  // Answered here as well, Enter on the film's button started the film *and*
+  // a flight in through the nearest door.
+  if (event.target instanceof HTMLButtonElement && (event.key === 'Enter' || event.key === ' ')) {
+    return
+  }
+
   switch (event.key) {
     case 'k':
     case 'K':
       film.play()
+      return
+    case 'h':
+    case 'H':
+    case '?':
+      controls.remind()
       return
     case 'Escape':
       if (viewer.travelling) viewer.skip()
