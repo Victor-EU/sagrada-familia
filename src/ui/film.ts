@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import type { Viewer } from '../camera/viewer.ts'
 import { BODY_RADIUS, type Doorway } from '../camera/envelope.ts'
 import { YEAR, dayLabel, sameLight } from '../light/sun.ts'
-import { Ambience } from './ambience.ts'
 
 /**
  * The film.
@@ -433,7 +432,6 @@ export class Film {
   private readonly when: HTMLElement
   private readonly hint: HTMLElement
   private hintTimer = 0
-  private readonly ambience = new Ambience()
 
   private readonly frame: Frame = { position: new THREE.Vector3(), target: new THREE.Vector3() }
   /** The same shot a couple of seconds on, for the pupil. */
@@ -529,7 +527,6 @@ export class Film {
     window.addEventListener('wheel', this.interrupt, true)
     this.black()
     this.begin(0)
-    this.ambience.start()
     this.hint.classList.add('on')
     window.clearTimeout(this.hintTimer)
     this.hintTimer = window.setTimeout(() => this.hint.classList.remove('on'), HINT_MS)
@@ -548,7 +545,6 @@ export class Film {
     window.clearTimeout(this.hintTimer)
     this.dissolve.style.transition = 'none'
     this.dissolve.style.opacity = '0'
-    this.ambience.stop()
     this.viewer.possess(false)
     // Handed over where it stands. The viewer works out from the position
     // whether this is a room to walk or a building to turn, and takes the
@@ -581,7 +577,6 @@ export class Film {
     }
     const t = this.elapsed / shot.seconds
     this.pose(t, dt)
-    this.ambience.setIndoors(this.viewer.indoors)
 
     const show = this.elapsed > CAPTION_IN && shot.seconds - this.elapsed > CAPTION_OUT
     if (show !== this.captionOn) {

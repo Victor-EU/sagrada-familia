@@ -253,7 +253,6 @@ to within one per cent.
 | Two ways of being with a building: an orbit outside, a walk inside, and a door between them | `src/camera/viewer.ts` |
 | The interface — the way in, the way out, what the cursor does here, and the hour | `src/ui/controls.ts` |
 | The film — one day in ten shots, about a minute, dissolved and looped, the sun moving in each; winter the second time round | `src/ui/film.ts` |
-| The room's sound, made on the spot for the film | `src/ui/ambience.ts` |
 | Figures, canopies, carved growth and cresting — the Nativity front's sculpture | `src/geometry/statuary.ts` |
 | The cover — Gaudí's hanging chains, dropped, settled and turned over while the stone is cut | `src/ui/cover.ts` |
 | Light census: whether there is any modelling in this frame, in numbers | `src/dev/probe.ts` |
@@ -347,9 +346,9 @@ for it, and out under the Passion front to rise away as the sun sets. Ten
 shots and about a minute, dissolved and looped; the clock only ever goes
 forward, and the second time round it is midwinter on the same path, at the
 same fraction of the day. The shots are the harness's own verified frames,
-run on a little; nothing in them is authored light. The film has a sound —
-the air of a large stone room, made on the spot rather than recorded — and
-nothing else in the app does.
+run on a little; nothing in them is authored light. It is silent for now:
+a synthetic room tone was tried and cut, and a recording free to use is
+still to be found.
 
 Any key, click or tap stops it and hands you the building exactly where the
 film had it — a walk if that is indoors, an orbit if not — with the clock

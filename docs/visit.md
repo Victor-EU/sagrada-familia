@@ -669,10 +669,9 @@ meter's reading of the new frame under the dissolve once a reading of that
 frame is actually in — the first one back is still of the frame before —
 and drifts slowly after; through the door it looks three and a half
 seconds ahead and opens on the way in. The two shadow passes of a relight
-go on consecutive frames and the resolution pacer ignores both. The film
-has a sound, the air of a stone room made on the spot; `?film` hides the
-intro, resumes after seventy-five seconds untouched, and says *tap* to a
-finger. The caption clock keeps ten-minute time.
+go on consecutive frames and the resolution pacer ignores both. `?film`
+hides the intro, resumes after seventy-five seconds untouched, and says
+*tap* to a finger. The caption clock keeps ten-minute time.
 
 | | before | after |
 | --- | --- | --- |
@@ -709,6 +708,8 @@ recover it while the sun is moving, which the pacer change addresses.
   morning sun through Vila-Grau's cool glass, and the winter loop shows the
   same frame pale for contrast; whether the summer one is too saturated is a
   question for the glass, against a photograph.
-- **The sound is synthetic.** There is no recording of the building here
-  and none was invented; a real room tone, recorded in the nave, would
-  replace one function.
+- **There is no sound.** A synthetic room tone — pink noise through a
+  seven-second tail — went in with this pass and came out the same evening
+  (it is in the history at 45d5790): the film should not have a sound that
+  is not the building's. A recording free to use is still to be found, and
+  a player for it is a smaller thing than the synthesis was.
